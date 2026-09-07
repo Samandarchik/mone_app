@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/core/auth/session.dart';
 import 'package:uz_ai_dev/core/context_extension.dart';
+import 'package:uz_ai_dev/core2/ui/widgets/core_entry_menu.dart';
 import 'package:uz_ai_dev/ombor/provider/ombor_provider.dart';
 import 'package:uz_ai_dev/ombor/ui/ombor_category_products_ui.dart';
 import 'package:uz_ai_dev/ombor/ui/ombor_low_stock_ui.dart';
@@ -79,6 +80,8 @@ class _OmborHomeUiState extends State<OmborHomeUi>
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         actions: [
+          // Ombor 2.0 (mone_core) hujjatlari — perms bo'yicha.
+          const CoreEntryMenu(),
           // Ishlab chiqarish buyurtmalari (shef → ombor masalliq berish).
           IconButton(
             onPressed: () {

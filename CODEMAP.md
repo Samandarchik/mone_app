@@ -26,7 +26,8 @@ qayerda va «falon vazifa uchun qayerga qarash» kerak.
 | `lib/production/` | ishlab chiqarish + sklad qoldig'i + tannarx + narx tarixi + inventarizatsiya (акт). `ombor`/`admin`/`bugalter`/`shef` uchun umumiy | `StockInventoryPage`, `InventoryHistoryPage`, vidjetlar (`stock_widgets`, `production_order_widgets`, `cost_sheet`, `price_history_sheet`). Provider: `StockProvider`, `Base/Ombor/Admin/BugalterProductionProvider` |
 | `lib/shef/` | `shef`: ishlab chiqarish buyurtmasi yaratish, bosqichlarni qabul/rad, полуфабрикат limiti | `ShefHomeUi`, `ShefCreateOrderUi`, `ShefOrderDetailUi`. Provider: `ShefProvider` |
 | `lib/bugalter/` | `bugalter` (hisobchi): narxlangan buyurtmalar, mahsulot soni/summasini tuzatish + tahrirlar tarixi, yuk keltiruvchiga pul berish | `BugalterHomeUi`, `BugalterProductionUi`, `BugalterEditsUi`, `EditHistoryTile` (`ui/widgets/edit_history.dart`). Provider: `BugalterProvider` |
-| `lib/core/` | umumiy yadro: DI, tarmoq, lokal saqlash, endpointlar, birlik konverti, media | `di.dart`, `urls.dart` (`AppUrls`), `dio_settings.dart`, `order_socket.dart`, `qty_units.dart`, `piece_weight.dart` (nomdan «1шт=Xгр»), `context_extension.dart`, `media/*` (kamera/video) |
+| `lib/core/` | umumiy yadro: DI, tarmoq, lokal saqlash, endpointlar, birlik konverti, media | `di.dart`, `urls.dart` (`AppUrls`), `config/server_config.dart` (`ServerConfig` — runtime base_url/core_url), `widgets/server_settings_dialog.dart`, `dio_settings.dart`, `order_socket.dart`, `qty_units.dart`, `piece_weight.dart` (nomdan «1шт=Xгр»), `context_extension.dart`, `media/*` (kamera/video) |
+| `lib/core2/` | **Ombor 2.0** — `mone_core` (`/api/v2`, port 1020) hujjat oqimlari; SH5 o'rnini bosuvchi. Mavjud ekranlar bilan PARALLEL ishlaydi | `CoreHubUi` (grid), `DocsListUi`/`DocFormUi`/`DocDetailUi`, `StockUi`/`StockCardUi`, `DictSkladsUi`/`DictGoodsUi`/`DictCorrsUi`, `RecipesUi`, `PermsUi`/`CoreUsersUi`, `SalePointsUi`/`ApiKeysUi`/`WebhooksUi`, `ReportsUi`, `SyncStatusUi`. Providerlar: `CoreSession`, `CoreDictProvider`, `CoreDocsProvider`, `CoreStockProvider`. 8-bo'limga qara |
 | (root) `lib/` | kirish + marshrutlash | `main.dart`, `splash_screen.dart` (rolga yo'naltirish), `login_page.dart`, `check_version.dart` |
 
 ---
@@ -67,7 +68,8 @@ hisoblama — o'sha helperlarni chaqir.
 | **DI (GetIt)** | `lib/core/di/di.dart` | `setupInit()` — `SharedPreferences`, `BaseStorage`/`TokenStorage`, `Dio` singletonlari. `main()` dan birinchi chaqiriladi. `sl<T>()` bilan olinadi |
 | **Global providerlar** | `lib/main.dart` | `MultiProvider` ro'yxati (7-bo'limga qara). Yangi global provider shu yerga qo'shiladi |
 | **Marshrutlash** | `lib/splash_screen.dart` | token+role bo'yicha mos Home'ga (`context.pushReplacement`). `lib/core/context_extension.dart` — `push`/`pushReplacement`/`pushAndRemove` qisqartmalari (nomli route YO'Q) |
-| **Endpointlar** | `lib/core/constants/urls.dart` | `AppUrls` — BARCHA API manzillari. Yangi endpoint SHU YERGA. `baseUrl` lokalda `localhost:1010` bo'lishi mumkin (test uchun — o'zgartirma) |
+| **Endpointlar** | `lib/core/constants/urls.dart` | `AppUrls` — BARCHA v1 API manzillari, hammasi `static String get` (const EMAS — `baseUrl` runtime). Yangi endpoint SHU YERGA. `coreUrl`/`coreApi` — mone_core (`/api/v2`) |
+| **Server manzili (runtime)** | `lib/core/config/server_config.dart` | `ServerConfig` — `base_url` (v1, default prod domen) va `core_url` (v2, default `http://localhost:1020`) SharedPreferences'da; `setupInit()` da yuklanadi; `save()` → `revision` notifier (Dio baseUrl yangilanadi). `normalize()`: «localhost:1020»/IP → http, domen → https. Dialog: `core/widgets/server_settings_dialog.dart` (`showServerSettingsDialog`) — login ⚙, admin menyu «Server sozlamalari», Ombor 2.0 hub; «Tekshirish» = `GET $coreUrl/api/v2/health` |
 | **Dio + token** | `lib/core/network/dio_settings.dart` | `AppDioClient.createDio()` — `Bearer` token interceptor, `X-Qty-Unit: milli` header (гр/мл kontrakti), faqat-debug logger |
 | **WebSocket** | `lib/core/network/order_socket.dart` | `OrderSocket` (singleton) — buyurtma/targovli-pul/ishlab-chiqarish real-time hodisalari; auto-reconnect |
 | **Xato matni** | `lib/core/network/error_handler.dart` | `parseDioError()` — DioException → o'qiladigan matn |
@@ -129,7 +131,7 @@ hisoblama — o'sha helperlarni chaqir.
 
 ## 6. Providerlar (global — `lib/main.dart` da ro'yxatlangan)
 
-`MultiProvider` da ro'yxatlangan 13 ta global `ChangeNotifier`. Har biri nima ushlaydi:
+`MultiProvider` da ro'yxatlangan 13 + 4 (Ombor 2.0) ta global `ChangeNotifier`. Har biri nima ushlaydi:
 
 | Provider | Fayl | Nima ushlaydi |
 |---|---|---|
@@ -146,6 +148,38 @@ hisoblama — o'sha helperlarni chaqir.
 | `CategoryProviderAdmin` | `admin/provider/admin_categoriy_provider.dart` | admin kategoriyalari |
 | `FilialProviderAdmin` | `admin/provider/admin_filial_provider.dart` | filiallar ro'yxati |
 | `CategoryProviderAdminUpload` | `admin/provider/upload_image_provider.dart` | rasm/media yuklash holati |
+| `CoreSession` | `core2/provider/core_session_provider.dart` | mone_core sessiyasi: `core_token`, user, hisoblangan `perms` to'plami (`has()`, `canCreate/canPost(type)`), ulanish holati, `retry()` |
+| `CoreDictProvider` | `core2/provider/core_dict_provider.dart` | omborlar/kontragentlar/tovarlar/birliklar/guruhlar keshi; `skladById`/`corrById`/`goodById` O(1) |
+| `CoreDocsProvider` | `core2/provider/core_docs_provider.dart` | hujjatlar ro'yxati (filtr, sahifalash) + create/update/post/cancel/delete/quick (natija xotirada `upsert`) |
+| `CoreStockProvider` | `core2/provider/core_stock_provider.dart` | ombor bo'yicha qoldiq keshi, `rowFor(sklad, good)` O(1) indeks |
 
 > Lokal (ekran ichida yaratiladigan) provider: `MagazinProvider`
 > (`yuk/provider/magazin_provider.dart`) — magazin qarz daftari ekranlarida.
+
+---
+
+## 8. Ombor 2.0 — `lib/core2/` (mone_core `/api/v2`)
+
+Shartnoma: `../mone_core/docs/API_V2.md`. Yadro alohida serverda (port 1020, manzil `ServerConfig.coreUrl`),
+alohida token (`core_token`) — v1 `token` bilan ARALASHMAYDI. Login: v1 parol muvaffaqiyatli bo'lgach o'sha kod bilan
+fonda `POST /auth/login {"code"}` (`CoreSession.loginWithCode`), keyin `GET /auth/me` → `perms` ro'yxati. Xato bo'lsa
+ilova ishlayveradi, «Ombor 2.0» ekranlari `CoreConnectGate` orqali «server ulanmagan» + «Qayta urinish» ko'rsatadi.
+
+| Qatlam | Fayl | Nima |
+|---|---|---|
+| model | `core2/models/core_user.dart` | `CoreUser`, `CoreMe` (user + perms), `CorePermDef`, **`CorePerms`** (kalit konstantalari) |
+| model | `core2/models/core_dicts.dart` | `CoreSklad`, `CoreCorr`, `CoreUnit`, `CoreGoodGroup`, `CoreGood` (+`units[{unit,to_base}]`, `selectableUnits`, `preferredUnit`) |
+| model | **`core2/models/core_qty.dart`** | **YAGONA konvert**: base (g/ml/pcs/m) ↔ UI (kg/l): `coreQtyFromUi(ui, unit)` (BUTUN base), `coreFormatQtyUnit`, `coreLineAmount` (butun so'm). Qo'lda `*1000` YOZMA |
+| model | `core2/models/core_doc.dart` | `CoreDoc`, `CoreDocLine` (qty butun base, price/amount butun so'm, flag), `CoreDocType`/`CoreDocStatus`, `CoreDocWarning`, `CoreStockAfter`, `CoreDocPostResult` |
+| model | `core2/models/core_stock.dart`, `core_recipe.dart`, `core_report.dart`, `core_integration.dart` | qoldiq/partiya/kartochka; retsept versiyalari; aylanma/defitsit; sotuv nuqtasi/API kalit/webhook/sync holati |
+| service | `core2/services/core_client.dart` | **`CoreClient`** — alohida Dio (`core_token` interceptor), `url('/docs')` = `AppUrls.coreApi` + yo'l, `wrap()` → `CoreApiException` (error/code/perm), `idem()` Idempotency-Key |
+| service | `core2/services/core_*_service.dart` | auth, dict, doc, stock(+reports), recipe, admin (perms/roles/users/sync), integration |
+| provider | `core2/provider/*` | 7-bo'limdagi 4 ta global provider |
+| ui | `core2/ui/core_hub_ui.dart` | «Ombor 2.0» grid — kartalar `perms` bo'yicha; ulanish holati; ⚙ server |
+| ui | `core2/ui/docs_list_ui.dart`, `doc_form_ui.dart`, `doc_detail_ui.dart` | ro'yxat (filtr/qidiruv/sahifalash) → **universal forma** (tur bo'yicha maydonlar; production 2 jadval flag 1/0; inventory rejimi — joriy qoldiq + fakt, «faqat farqlilar», bo'sh yuborilmaydi; `DocFormUi.marketReceipt()` — bozorchi, supplier «РЫНОК», `/docs/quick`) → tafsilot (qatorlar, stock_after, warnings, tarix; Tasdiqlash/Bekor/O'chirish perms bo'yicha) |
+| ui | `core2/ui/stock_ui.dart` | `StockUi` (ombor, qidiruv, manfiy qizil, cost faqat `stock.cost.view`) → `StockCardUi` (kartochka ledger + partiyalar tab) |
+| ui | `core2/ui/dict_*_ui.dart`, `recipes_ui.dart`, `perms_ui.dart`, `integration_ui.dart`, `reports_ui.dart`, `sync_status_ui.dart` | lug'atlar (ombor qo'shish = 1 dialog), retsept versiyalari (+yangi versiya nusxa bilan), rollar×perms switch + foydalanuvchilar, sotuv nuqtalari/API kalit (bir marta ko'rsatiladi)/webhook, hisobotlar (3 tab), sinxron kartasi |
+| ui (widget) | `core2/ui/widgets/core_widgets.dart`, `good_picker.dart`, `core_entry_menu.dart` | `CoreConnectGate`, chip/dropdown/xato/warnings dialog; tovar tanlash sheet (qoldiq bilan); oddiy user bosh ekranidagi kirish menyusi (user/ombor/shef home AppBar) |
+
+Kirish nuqtalari: admin menyu «Ombor 2.0» (`admin_home_ui.dart`), user/ombor/shef AppBar `CoreEntryMenu`
+(Hujjatlar / Qoldiq / Bozor приход / hub). Logout (`core/auth/session.dart`) core providerlarni ham tozalaydi.

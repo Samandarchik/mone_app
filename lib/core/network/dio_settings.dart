@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:talker_dio_logger/talker_dio_logger_interceptor.dart';
 import 'package:talker_dio_logger/talker_dio_logger_settings.dart';
+import 'package:uz_ai_dev/core/config/server_config.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 
 class AppDioClient {
@@ -17,6 +18,11 @@ class AppDioClient {
         receiveTimeout: const Duration(seconds: 30),
       ),
     );
+    // Sozlamada server manzili almashtirilsa Dio baseUrl ham yangilanadi
+    // (AppUrls manzillari absolyut, lekin nisbiy yo'l ishlatilgan joy uchun).
+    ServerConfig.revision.addListener(() {
+      dio.options.baseUrl = AppUrls.baseUrl;
+    });
 
     dio.interceptors.add(
       InterceptorsWrapper(

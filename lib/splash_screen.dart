@@ -4,7 +4,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uz_ai_dev/core2/provider/core_session_provider.dart';
 import 'package:uz_ai_dev/admin/ui/admin_home_ui.dart';
 import 'package:uz_ai_dev/bugalter/ui/bugalter_home_ui.dart';
 import 'package:uz_ai_dev/ombor/ui/ombor_home_ui.dart';
@@ -72,6 +74,9 @@ class _SplashScreenState extends State<SplashScreen> {
     // Sklad nomlarini serverdan yangilaymiz (superadmin tahrirlagan bo'lishi
     // mumkin). Kutmaymiz — xato bo'lsa keshdagi nomlar qoladi.
     unawaited(SkladRegistry.refreshSilently());
+    // Ombor 2.0 (mone_core) sessiyasini keshdan tiklab, fonda /auth/me bilan
+    // yangilaymiz (401 bo'lsa saqlangan kod bilan qayta kiradi).
+    unawaited(context.read<CoreSession>().restore());
 
     // Role bo'yicha yo'naltirish
     if (isAdmin == true || role == AppRoles.superAdmin) {

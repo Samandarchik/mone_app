@@ -14,6 +14,7 @@ import 'package:uz_ai_dev/core/auth/session.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/context_extension.dart';
 import 'package:uz_ai_dev/core/utils/qty_units.dart';
+import 'package:uz_ai_dev/core2/ui/widgets/core_entry_menu.dart';
 import 'package:uz_ai_dev/user/provider/provider.dart';
 import 'package:uz_ai_dev/user/ui/order_ui.dart';
 import 'package:uz_ai_dev/user/ui/orders_page.dart';
@@ -98,6 +99,9 @@ class _UserHomeUiState extends State<UserHomeUi> {
           IconButton(
               onPressed: () => logoutAndClear(context),
               icon: Icon(Icons.logout)),
+          // Ombor 2.0 (mone_core): Hujjatlar / Qoldiq / Bozor приход —
+          // perms bo'yicha; yadro sessiyasi bo'lmasa ko'rinmaydi.
+          const CoreEntryMenu(),
           if (_hasOstatka)
             IconButton(
                 tooltip: 'Ostatka',

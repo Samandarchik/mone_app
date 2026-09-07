@@ -13,6 +13,10 @@ import 'package:uz_ai_dev/core/data/sklad_registry.dart';
 import 'package:uz_ai_dev/core/di/di.dart';
 import 'package:uz_ai_dev/core/services/windows_update_service.dart';
 import 'package:uz_ai_dev/core/utils/app_navigator.dart';
+import 'package:uz_ai_dev/core2/provider/core_dict_provider.dart';
+import 'package:uz_ai_dev/core2/provider/core_docs_provider.dart';
+import 'package:uz_ai_dev/core2/provider/core_session_provider.dart';
+import 'package:uz_ai_dev/core2/provider/core_stock_provider.dart';
 import 'package:uz_ai_dev/ombor/provider/ombor_provider.dart';
 import 'package:uz_ai_dev/production/provider/production_orders_provider.dart';
 import 'package:uz_ai_dev/production/provider/stock_provider.dart';
@@ -50,6 +54,12 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => CategoryProviderAdmin()),
         ChangeNotifierProvider(create: (_) => FilialProviderAdmin()),
         ChangeNotifierProvider(create: (_) => CategoryProviderAdminUpload()),
+        // Ombor 2.0 (mone_core /api/v2): sessiya (core_token + perms),
+        // lug'atlar keshi, hujjatlar ro'yxati, qoldiq keshi.
+        ChangeNotifierProvider(create: (_) => CoreSession()),
+        ChangeNotifierProvider(create: (_) => CoreDictProvider()),
+        ChangeNotifierProvider(create: (_) => CoreDocsProvider()),
+        ChangeNotifierProvider(create: (_) => CoreStockProvider()),
       ],
       child: const MyApp(),
     ),

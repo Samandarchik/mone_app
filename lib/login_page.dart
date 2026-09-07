@@ -1,14 +1,23 @@
 // login_page.dart — kirish ekrani (LoginPage): v1 parol-bilan login
 // (ApiService.loginV1), token/role/is_admin'ni SharedPreferences'ga saqlaydi va
-// _navigateByRole orqali rolga mos Home'ga o'tadi.
+// _navigateByRole orqali rolga mos Home'ga o'tadi. Muvaffaqiyatli login'dan
+// keyin o'sha kod bilan FONDA mone_core (/api/v2/auth/login) ga ham kiriladi
+// (CoreSession.loginWithCode) — xato bo'lsa ilova to'xtamaydi. Pastdagi ⚙
+// «Server» tugmasi base_url/core_url sozlash dialogini ochadi.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uz_ai_dev/admin/ui/admin_home_ui.dart';
 import 'package:uz_ai_dev/bugalter/ui/bugalter_home_ui.dart';
+import 'package:uz_ai_dev/core/config/server_config.dart';
 import 'package:uz_ai_dev/core/constants/roles.dart';
 import 'package:uz_ai_dev/core/data/sklad_registry.dart';
 import 'package:uz_ai_dev/core/context_extension.dart';
+import 'package:uz_ai_dev/core/widgets/server_settings_dialog.dart';
+import 'package:uz_ai_dev/core2/provider/core_session_provider.dart';
 import 'package:uz_ai_dev/ombor/ui/ombor_home_ui.dart';
 import 'package:uz_ai_dev/shef/ui/shef_home_ui.dart';
 import 'package:uz_ai_dev/yuk/ui/yuk_home_ui.dart';
@@ -80,6 +89,10 @@ class _LoginPageState extends State<LoginPage> {
       await SkladRegistry.refreshSilently();
 
       if (!mounted) return;
+      // Ombor 2.0 (mone_core): o'sha kod bilan fonda kiramiz — kutmaymiz,
+      // xato bo'lsa «Ombor 2.0» bo'limi «ulanmagan» ko'rsatadi.
+      unawaited(
+          context.read<CoreSession>().loginWithCode(_passwordController.text));
       _navigateByRole(user);
     } else {
       _showErrorDialog(result['message'] ?? 'Login xatosi');
@@ -256,6 +269,21 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         SizedBox(height: 20),
                         Text(version ?? ""),
+                        const SizedBox(height: 6),
+                        // Server manzillari (v1/v2) — «localhost» / IP / domen.
+                        ValueListenableBuilder<int>(
+                          valueListenable: ServerConfig.revision,
+                          builder: (context, _, __) => TextButton.icon(
+                            onPressed: () => showServerSettingsDialog(context),
+                            style: TextButton.styleFrom(
+                                foregroundColor: Colors.grey.shade600),
+                            icon: const Icon(Icons.settings_outlined, size: 16),
+                            label: Text(
+                              _shortHost(ServerConfig.baseUrl),
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -267,6 +295,10 @@ class _LoginPageState extends State<LoginPage> {
       ),
     );
   }
+
+  // «https://moneapp.monebakeryuz.uz» → «moneapp.monebakeryuz.uz».
+  static String _shortHost(String url) =>
+      url.replaceFirst(RegExp(r'^https?://'), '');
 
   @override
   void dispose() {

@@ -26,6 +26,9 @@ import 'package:uz_ai_dev/admin/ui/user_management_screen.dart';
 import 'package:uz_ai_dev/core/auth/session.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/context_extension.dart';
+import 'package:uz_ai_dev/core/widgets/server_settings_dialog.dart';
+import 'package:uz_ai_dev/core2/provider/core_session_provider.dart';
+import 'package:uz_ai_dev/core2/ui/core_hub_ui.dart';
 import 'package:uz_ai_dev/production/models/latest_price_model.dart';
 import 'package:uz_ai_dev/production/services/production_service.dart';
 import 'package:uz_ai_dev/production/ui/production_plan_page.dart';
@@ -127,6 +130,15 @@ class _AdminHomeUiState extends State<AdminHomeUi> {
           PopupMenuButton(
             icon: const Icon(Icons.menu),
             itemBuilder: (_) => [
+              // Ombor 2.0 — mone_core (/api/v2) hujjat oqimlari hub'i.
+              const PopupMenuItem(
+                value: 'core_hub',
+                child: ListTile(
+                  leading: Icon(Icons.warehouse),
+                  title: Text('Ombor 2.0'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
               const PopupMenuItem(
                 value: 'categories',
                 child: ListTile(
@@ -215,9 +227,27 @@ class _AdminHomeUiState extends State<AdminHomeUi> {
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
+              const PopupMenuItem(
+                value: 'server_settings',
+                child: ListTile(
+                  leading: Icon(Icons.dns_outlined),
+                  title: Text('Server sozlamalari'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
             ],
-            onSelected: (value) {
+            onSelected: (value) async {
               switch (value) {
+                case 'core_hub':
+                  context.push(const CoreHubUi());
+                  break;
+                case 'server_settings':
+                  final saved = await showServerSettingsDialog(context);
+                  if (saved && context.mounted) {
+                    // Yangi yadro manziliga qayta ulanamiz.
+                    context.read<CoreSession>().retry();
+                  }
+                  break;
                 case 'categories':
                   context.push(const CategoryManagementScreen());
                   break;

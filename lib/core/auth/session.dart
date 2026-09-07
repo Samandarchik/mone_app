@@ -13,6 +13,10 @@ import 'package:uz_ai_dev/admin/provider/upload_image_provider.dart';
 import 'package:uz_ai_dev/bugalter/provider/bugalter_provider.dart';
 import 'package:uz_ai_dev/core/clearable_provider.dart';
 import 'package:uz_ai_dev/core/context_extension.dart';
+import 'package:uz_ai_dev/core2/provider/core_dict_provider.dart';
+import 'package:uz_ai_dev/core2/provider/core_docs_provider.dart';
+import 'package:uz_ai_dev/core2/provider/core_session_provider.dart';
+import 'package:uz_ai_dev/core2/provider/core_stock_provider.dart';
 import 'package:uz_ai_dev/login_page.dart';
 import 'package:uz_ai_dev/ombor/provider/ombor_provider.dart';
 import 'package:uz_ai_dev/production/provider/production_orders_provider.dart';
@@ -26,7 +30,7 @@ import 'package:uz_ai_dev/yuk/provider/yuk_provider.dart';
 // provider referenslar OLDIN olinadi va navigatsiya birinchi `await` dan OLDIN
 // (sinxron) bajariladi.
 Future<void> logoutAndClear(BuildContext context) async {
-  // 1. Provider referenslarini oldindan olamiz (13 ta global provider).
+  // 1. Provider referenslarini oldindan olamiz (13 + 4 ta global provider).
   final providers = <ClearableProvider>[
     context.read<ProductProvider>(),
     context.read<OmborProvider>(),
@@ -41,6 +45,11 @@ Future<void> logoutAndClear(BuildContext context) async {
     context.read<CategoryProviderAdmin>(),
     context.read<FilialProviderAdmin>(),
     context.read<CategoryProviderAdminUpload>(),
+    // Ombor 2.0 (mone_core) — core_token/perms/keshlar ham tozalanadi.
+    context.read<CoreSession>(),
+    context.read<CoreDictProvider>(),
+    context.read<CoreDocsProvider>(),
+    context.read<CoreStockProvider>(),
   ];
   // 2. Login ekraniga (butun stack tozalab).
   context.pushAndRemove(const LoginPage());
