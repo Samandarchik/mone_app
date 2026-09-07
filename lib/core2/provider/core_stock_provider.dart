@@ -37,13 +37,19 @@ class CoreStockProvider extends ChangeNotifier with ClearableProvider {
     super.notifyListeners();
   }
 
+  /// Qoldiq qatorlaridan tovar nomi/base birligi — CoreDictProvider keshiga
+  /// (`onRows` orqali; tovarlar to'liq yuklanmaydi).
+  void Function(List<CoreStockRow>)? onRows;
+
   Future<void> load(int skladId, {String? date, bool nonzero = false}) async {
     _loading.add(skladId);
     _errors.remove(skladId);
     notifyListeners();
     try {
-      _bySklad[skladId] =
+      final rows =
           await _service.stock(skladId: skladId, date: date, nonzero: nonzero);
+      _bySklad[skladId] = rows;
+      onRows?.call(rows);
     } catch (e) {
       _errors[skladId] = CoreClient.wrap(e).message;
     } finally {

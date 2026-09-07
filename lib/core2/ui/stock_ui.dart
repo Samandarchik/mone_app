@@ -1,5 +1,6 @@
 // core2/ui/stock_ui.dart — mone_core qoldiq (StockUi): ombor tanlash,
-// qidiruv, qatorda tovar, qty (kg/l ko'rinishda), cost/last_price faqat
+// qidiruv, qatorda tovar, qty (kg/l ko'rinishda), `deficit` (partiyasiz
+// yechilgan — qizil «partiyasiz: X»), cost/last_price faqat
 // `stock.cost.view` bo'lsa; manfiy qoldiq qizil; qator bosilsa
 // StockCardUi — 2 tab: kartochka (/stock/card → {open_qty, close_qty, rows}
 // ledger yozuvlari balans bilan, sana oralig'i) va partiyalar (/batches:
@@ -46,7 +47,12 @@ class _StockUiState extends State<StockUi> {
 
   void _load() {
     if (_sklad != null) {
-      context.read<CoreStockProvider>().load(_sklad!, nonzero: _nonzero);
+      final stock = context.read<CoreStockProvider>();
+      final dict = context.read<CoreDictProvider>();
+      // Qoldiq qatorlaridagi tovar nomi/base birligi keshga (tovarlar to'liq
+      // yuklanmaydi — 12 000+).
+      stock.onRows = (rows) => dict.cacheGoods(rows.map((r) => r.toGood()));
+      stock.load(_sklad!, nonzero: _nonzero);
     }
   }
 
@@ -187,9 +193,30 @@ class _StockTile extends StatelessWidget {
   final VoidCallback onTap;
   const _StockTile({required this.row, required this.showCost, required this.onTap});
 
+  // Ikkinchi qator: deficit (partiyasiz yechim), qiymat/oxirgi narx, kam.
+  Widget? _subtitle() {
+    final parts = <String>[];
+    if (row.hasDeficit) {
+      parts.add('partiyasiz: ${coreFormatQty(row.deficit, row.baseUnit)}'
+          '${row.qtyLots != 0 ? ' · partiyada: ${coreFormatQty(row.qtyLots, row.baseUnit)}' : ''}');
+    }
+    if (showCost) {
+      parts.add('qiymat: ${coreMoney(row.cost ?? 0)}');
+      if (row.lastPrice != null) {
+        parts.add('oxirgi narx: ${coreMoney(row.lastPrice!)}/${row.baseUnit}');
+      }
+    }
+    if (row.low) parts.add('KAM');
+    if (parts.isEmpty) return null;
+    final color = row.hasDeficit
+        ? Colors.red.shade700
+        : (row.low ? Colors.orange.shade800 : Colors.grey.shade600);
+    return Text(parts.join(' · '), style: TextStyle(fontSize: 11.5, color: color));
+  }
+
   @override
   Widget build(BuildContext context) {
-    final neg = row.negative;
+    final neg = row.negative || row.hasDeficit;
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
@@ -202,18 +229,7 @@ class _StockTile extends StatelessWidget {
         onTap: onTap,
         title: Text(row.goodName,
             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
-        subtitle: showCost
-            ? Text(
-                'qiymat: ${coreMoney(row.cost ?? 0)}'
-                '${row.lastPrice != null ? ' · oxirgi narx: ${coreMoney(row.lastPrice!)}/${row.baseUnit}' : ''}'
-                '${row.low ? ' · KAM' : ''}',
-                style: TextStyle(
-                    fontSize: 11.5,
-                    color: row.low ? Colors.orange.shade800 : Colors.grey.shade600),
-              )
-            : (row.low
-                ? Text('kam qoldi', style: TextStyle(fontSize: 11.5, color: Colors.orange.shade800))
-                : null),
+        subtitle: _subtitle(),
         trailing: Text(
           coreFormatQtyUnit(row.qty, row.baseUnit),
           style: TextStyle(

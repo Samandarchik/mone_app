@@ -7,6 +7,8 @@
 // Miqdor: tanlangan birlikda kiritiladi (kg/l/dona), serverga BUTUN base
 // (`coreQtyFromUi`); narx — 1 birlik, butun so'm; summa avtomatik; sotuv
 // summasi (issue/reserve/act) — QATOR darajasida `sale_amount` (ledger.Line).
+// Inventory qatori `flag`: 1 — tayyor mahsulot (is_complect, retsept bilan
+// yoyiladi), 0 — xom. Tovar qidiruvi server tomonda (good_picker).
 // Hujjat endpointlari ledger ulanmaguncha 501 — showCoreError «hali
 // yoqilmagan» deb ko'rsatadi.
 // Tugmalar perms bo'yicha: Saqlash (draft) — doc.<type>.create, Tasdiqlash —
@@ -163,9 +165,15 @@ class _DocFormState extends State<_DocForm> {
     final dict = context.read<CoreDictProvider>();
     final ex = widget.existing;
     if (ex != null) {
+      // Tovarlar to'liq keshlanmaydi (12 000+): keshda bo'lmasa qator
+      // ma'lumotidan (nom + `unit` → base) quramiz; fonda keshga olib kelamiz.
+      dict.ensureGoods(ex.lines.map((l) => l.goodId));
       for (final l in ex.lines) {
         final good = dict.goodById(l.goodId) ??
-            CoreGood(id: l.goodId, name: l.goodName, baseUnit: 'pcs');
+            CoreGood(
+                id: l.goodId,
+                name: l.goodName,
+                baseUnit: coreBaseUnitOf(l.unit));
         final unit = good.selectableUnits.firstWhere(
           (u) => u.unit == l.unit,
           orElse: () => good.preferredUnit,
@@ -721,18 +729,33 @@ class _InventoryFormState extends State<_InventoryForm> {
     final ex = widget.existing;
     if (ex != null) {
       for (final l in ex.lines) {
-        final good = dict.goodById(l.goodId);
-        if (good == null) continue;
+        final good = dict.goodById(l.goodId) ??
+            CoreGood(
+                id: l.goodId,
+                name: l.goodName,
+                baseUnit: coreBaseUnitOf(l.unit));
         _extra.add(good);
         _ctrl(good.id).text = coreFormatQty(l.qty, good.baseUnit);
       }
+      dict.ensureGoods(ex.lines.map((l) => l.goodId));
     }
     if (_sklad != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) context.read<CoreStockProvider>().load(_sklad!, nonzero: true);
+        if (mounted) _loadStock(_sklad!);
       });
     }
   }
+
+  // Qoldiqni yuklash; qatorlardagi tovar nomi/base birligi dict keshiga.
+  void _loadStock(int skladId) {
+    final stock = context.read<CoreStockProvider>();
+    final dict = context.read<CoreDictProvider>();
+    stock.onRows = (rows) => dict.cacheGoods(rows.map((r) => r.toGood()));
+    stock.load(skladId, nonzero: true);
+  }
+
+  // Ekrandagi qatorlar tovarlari (qoldiqdan yoki qo'lda) — `_build` uchun.
+  final Map<int, CoreGood> _goodsById = {};
 
   TextEditingController _ctrl(int goodId) =>
       _fact.putIfAbsent(goodId, () => TextEditingController());
@@ -752,13 +775,18 @@ class _InventoryFormState extends State<_InventoryForm> {
     final rows = <_InvRow>[];
     final seen = <int>{};
     for (final r in stock) {
-      final good = dict.goodById(r.goodId) ??
-          CoreGood(id: r.goodId, name: r.goodName, baseUnit: r.baseUnit);
+      final good = dict.goodById(r.goodId) ?? r.toGood();
       seen.add(r.goodId);
+      _goodsById[good.id] = good;
       rows.add(_InvRow(good: good, current: r.qty));
     }
     for (final g in _extra) {
-      if (seen.add(g.id)) rows.add(_InvRow(good: g, current: 0));
+      _goodsById.putIfAbsent(g.id, () => g);
+      if (seen.add(g.id)) {
+        // Qo'lda qo'shilgan tovarning joriy qoldig'i (keshda bo'lsa).
+        final cur = context.read<CoreStockProvider>().qtyFor(_sklad ?? 0, g.id);
+        rows.add(_InvRow(good: g, current: cur));
+      }
     }
     final q = _q.toLowerCase();
     return rows.where((r) {
@@ -778,7 +806,8 @@ class _InventoryFormState extends State<_InventoryForm> {
     _fact.forEach((goodId, c) {
       final v = parseUiQty(c.text);
       if (v == null) return; // bo'sh — yuborilmaydi
-      final good = dict.goodById(goodId);
+      // Keshdagi to'liq karta ustun (is_complect ma'lum), bo'lmasa ekrandagi.
+      final good = dict.goodById(goodId) ?? _goodsById[goodId];
       if (good == null) return;
       final unit = good.preferredUnit;
       lines.add(CoreDocLine(
@@ -786,6 +815,9 @@ class _InventoryFormState extends State<_InventoryForm> {
         goodName: good.name,
         unit: unit.unit,
         qty: coreQtyFromUi(v, unit),
+        // Ledger: inventory qatorida flag 1 = tayyor mahsulot (taom) fakti —
+        // retsept bo'yicha ingredientlarga yoyiladi; 0 = xom ashyo.
+        flag: good.isComplect ? 1 : 0,
       ));
     });
     return CoreDoc(
@@ -804,15 +836,20 @@ class _InventoryFormState extends State<_InventoryForm> {
       return;
     }
     final dict = context.read<CoreDictProvider>();
-    final doc = _build(dict);
-    if (doc.lines.isEmpty) {
-      showCoreInfo(context, 'Hech bir tovarga fakt kiritilmadi');
-      return;
-    }
     final docs = context.read<CoreDocsProvider>();
     final stock = context.read<CoreStockProvider>();
     setState(() => _busy = true);
     try {
+      // Fakt kiritilgan tovarlarning to'liq kartasi (is_complect → flag).
+      await dict.ensureGoods(_fact.entries
+          .where((e) => parseUiQty(e.value.text) != null)
+          .map((e) => e.key));
+      if (!mounted) return;
+      final doc = _build(dict);
+      if (doc.lines.isEmpty) {
+        showCoreInfo(context, 'Hech bir tovarga fakt kiritilmadi');
+        return;
+      }
       CoreDoc saved = doc.id > 0
           ? await docs.update(doc.id, doc)
           : await docs.create(doc);
@@ -859,7 +896,7 @@ class _InventoryFormState extends State<_InventoryForm> {
                       enabled: editable,
                       onChanged: (v) {
                         setState(() => _sklad = v);
-                        if (v != null) stockP.load(v, nonzero: true);
+                        if (v != null) _loadStock(v);
                       },
                     ),
                   ),

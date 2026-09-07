@@ -41,6 +41,28 @@ int coreUnitFactor(String unitCode) {
   }
 }
 
+/// Birlik kodidan BASE kodni topish (tovar keshda bo'lmaganda hujjat
+/// qatoridagi `unit` dan): kg/g→g, l/ml→ml, pcs/portion/mpcs→mpcs, m/mm→mm.
+String coreBaseUnitOf(String unitCode) {
+  switch (unitCode) {
+    case 'kg':
+    case 'g':
+      return 'g';
+    case 'l':
+    case 'ml':
+      return 'ml';
+    case 'pcs':
+    case 'portion':
+    case 'mpcs':
+      return 'mpcs';
+    case 'm':
+    case 'mm':
+      return 'mm';
+    default:
+      return unitCode;
+  }
+}
+
 /// Ko'rsatish birligi nomi: g→kg, ml→l, mpcs/pcs→dona, mm→m, portion→порция.
 String coreDisplayUnit(String baseUnit) {
   switch (baseUnit) {

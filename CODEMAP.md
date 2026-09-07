@@ -149,7 +149,7 @@ hisoblama — o'sha helperlarni chaqir.
 | `FilialProviderAdmin` | `admin/provider/admin_filial_provider.dart` | filiallar ro'yxati |
 | `CategoryProviderAdminUpload` | `admin/provider/upload_image_provider.dart` | rasm/media yuklash holati |
 | `CoreSession` | `core2/provider/core_session_provider.dart` | mone_core sessiyasi: `core_token`, user, hisoblangan `perms` to'plami (`has()`, `canCreate/canPost(type)`), ulanish holati, `retry()` |
-| `CoreDictProvider` | `core2/provider/core_dict_provider.dart` | omborlar/kontragentlar/tovarlar/birliklar/guruhlar keshi; `skladById`/`corrById`/`goodById` O(1) |
+| `CoreDictProvider` | `core2/provider/core_dict_provider.dart` | omborlar/kontragentlar/birliklar/guruhlar keshi (to'liq); **tovarlar to'liq yuklanmaydi (12 000+)** — `searchGoods()` server qidiruvi (`?search=&limit=50`), `ensureGoods(ids)`/`cacheGoods()` kesh; `skladById`/`corrById`/`goodById` O(1) |
 | `CoreDocsProvider` | `core2/provider/core_docs_provider.dart` | hujjatlar ro'yxati (filtr, sahifalash) + create/update/post/cancel/delete/quick (natija xotirada `upsert`) |
 | `CoreStockProvider` | `core2/provider/core_stock_provider.dart` | ombor bo'yicha qoldiq keshi, `rowFor(sklad, good)` O(1) indeks |
 

@@ -44,6 +44,8 @@ class _DocDetailUiState extends State<DocDetailUi> {
     try {
       final d = await context.read<CoreDocsProvider>().fetch(widget.docId);
       if (!mounted) return;
+      // Tovar nomlari qatorda bor; keshga fonda (warnings/birlik uchun).
+      context.read<CoreDictProvider>().ensureGoods(d.lines.map((l) => l.goodId));
       setState(() {
         // Post javobidagi warnings tafsilotda yo'q — mavjudini saqlaymiz.
         _doc = d.warnings.isEmpty && (_doc?.warnings.isNotEmpty ?? false)
@@ -277,7 +279,7 @@ class _DocDetailUiState extends State<DocDetailUi> {
                     // Post'dan keyingi qoldiq (ledger beradi, qator darajasida).
                     if (l.stockAfter != null)
                       Text(
-                        'qoldiq: ${coreFormatQtyUnit(l.stockAfter!, dict.goodById(l.goodId)?.baseUnit ?? 'pcs')}',
+                        'qoldiq: ${coreFormatQtyUnit(l.stockAfter!, _baseOf(l, dict))}',
                         style: TextStyle(
                             fontSize: 11.5,
                             color: l.stockAfter! < 0 ? Colors.red.shade700 : Colors.grey.shade700),
@@ -293,7 +295,8 @@ class _DocDetailUiState extends State<DocDetailUi> {
     ));
   }
 
-  /// Qator miqdori — hujjatdagi birlikda (kg), bo'lmasa base'dan kg/l ga.
+  /// Qator miqdori — hujjatdagi birlikda (kg/pcs…); tovar keshda bo'lsa
+  /// uning `units` faktori, bo'lmasa `/units` standart faktori.
   String _qtyText(CoreDocLine l, CoreDictProvider dict) {
     final good = dict.goodById(l.goodId);
     if (good != null) {
@@ -304,8 +307,13 @@ class _DocDetailUiState extends State<DocDetailUi> {
       if (u != null) return '${coreFormatInUnit(l.qty, u)} ${u.unit}';
       return coreFormatQtyUnit(l.qty, good.baseUnit);
     }
-    return '${l.qty} ${l.unit}';
+    if (l.unit.isNotEmpty) return coreFormatQtyAs(l.qty, l.unit);
+    return '${l.qty}';
   }
+
+  // Qator base birligi: kesh, bo'lmasa `unit` dan (kg → g).
+  String _baseOf(CoreDocLine l, CoreDictProvider dict) =>
+      dict.goodById(l.goodId)?.baseUnit ?? coreBaseUnitOf(l.unit);
 
   Widget _warnings(CoreDoc doc, CoreDictProvider dict) {
     return Container(

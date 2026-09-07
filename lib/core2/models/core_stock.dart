@@ -1,6 +1,9 @@
 // core2/models/core_stock.dart — mone_core qoldiq modellari: CoreStockRow
-// (/stock: qty butun base, cost/last_price faqat stock.cost.view bo'lsa
-// keladi — yo'q bo'lsa null), CoreStockSummary (/stock/summary),
+// (/stock: qty butun base, qty_lots/deficit (partiyasiz yechim), cost/
+// last_price faqat stock.cost.view bo'lsa keladi — yo'q bo'lsa null),
+// CoreStockSummary (/stock/summary),
+import 'package:uz_ai_dev/core2/models/core_dicts.dart';
+//
 // CoreBatch (/batches — FIFO partiyalar), CoreStockCard + CoreCardEntry
 // (/stock/card — {open_qty, close_qty, rows[]} ledger yozuvlari balans bilan).
 
@@ -10,6 +13,11 @@ class CoreStockRow {
   final String goodName;
   final String baseUnit;
   final int qty;
+  // Partiyalardagi miqdor (soft rejimda SH5 ko'rsatadigan qoldiq = qty + deficit).
+  final int qtyLots;
+  // Partiyasiz yechilgan (qoplanmagan) miqdor — ledger.StockRow `deficit`.
+  // Hozir api/stock.go DTO'si bu ikki maydonni tashlab yuboradi → 0.
+  final int deficit;
   final int? cost; // qoldiq qiymati (butun so'm) — ruxsat bo'lsa
   final int? lastPrice; // oxirgi kirim narxi (1 base birlik) — ruxsat bo'lsa
   final int minQty;
@@ -20,6 +28,8 @@ class CoreStockRow {
     this.goodName = '',
     this.baseUnit = 'pcs',
     this.qty = 0,
+    this.qtyLots = 0,
+    this.deficit = 0,
     this.cost,
     this.lastPrice,
     this.minQty = 0,
@@ -31,12 +41,18 @@ class CoreStockRow {
         goodName: (j['good_name'] ?? '').toString(),
         baseUnit: (j['base_unit'] ?? 'pcs').toString(),
         qty: (j['qty'] as num?)?.toInt() ?? 0,
+        qtyLots: (j['qty_lots'] as num?)?.toInt() ?? 0,
+        deficit: (j['deficit'] as num?)?.toInt() ?? 0,
         cost: (j['cost'] as num?)?.toInt(),
         lastPrice: (j['last_price'] as num?)?.toInt(),
         minQty: (j['min_qty'] as num?)?.toInt() ?? 0,
       );
 
+  /// Qoldiq keshidagi qatordan tovar kartochkasi (kesh uchun).
+  CoreGood toGood() => CoreGood(id: goodId, name: goodName, baseUnit: baseUnit);
+
   bool get negative => qty < 0;
+  bool get hasDeficit => deficit != 0;
   bool get low => minQty > 0 && qty < minQty;
 }
 

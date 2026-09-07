@@ -1,9 +1,12 @@
 // core2/ui/dict_goods_ui.dart — mone_core tovarlari (DictGoodsUi): qidiruv
-// (lokal kesh), ro'yxat (nom, guruh, base birlik, п/ф/taom belgisi), FAB
+// SERVER tomonda (12 000+ tovar; debounce, ?search=&limit=100), ro'yxat
+// (nom, guruh, base birlik, п/ф/taom belgisi), FAB
 // «+» / qatorga bosish → forma: nom, guruh, base birlik (g/ml/mpcs/mm —
 // server faqat 1/1000 base kodlarini oladi), qo'shimcha birliklar (unit +
 // to_base butun), rk_code, faol. PUT qisman (units berilsa to'liq almashadi).
 // Yozish — perm dict.edit.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +15,7 @@ import 'package:uz_ai_dev/core2/models/core_qty.dart';
 import 'package:uz_ai_dev/core2/models/core_user.dart';
 import 'package:uz_ai_dev/core2/provider/core_dict_provider.dart';
 import 'package:uz_ai_dev/core2/provider/core_session_provider.dart';
+import 'package:uz_ai_dev/core2/services/core_client.dart';
 import 'package:uz_ai_dev/core2/ui/widgets/core_widgets.dart';
 
 class DictGoodsUi extends StatefulWidget {
@@ -23,12 +27,51 @@ class DictGoodsUi extends StatefulWidget {
 
 class _DictGoodsUiState extends State<DictGoodsUi> {
   final _search = TextEditingController();
-  String _q = '';
+  Timer? _debounce;
+  List<CoreGood> _results = const [];
+  bool _loading = false;
+  String? _error;
+  int _seq = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _load('');
+    });
+  }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _search.dispose();
     super.dispose();
+  }
+
+  void _onChanged(String v) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () => _load(v));
+  }
+
+  // Server qidiruvi (?search=&limit=100), faol/nofaol hammasi.
+  Future<void> _load(String q) async {
+    final my = ++_seq;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final r = await context
+          .read<CoreDictProvider>()
+          .searchGoods(q, limit: 100, onlyActive: false);
+      if (!mounted || my != _seq) return;
+      setState(() => _results = r);
+    } catch (e) {
+      if (!mounted || my != _seq) return;
+      setState(() => _error = CoreClient.wrap(e).display);
+    } finally {
+      if (mounted && my == _seq) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -55,10 +98,16 @@ class _DictGoodsUiState extends State<DictGoodsUi> {
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
               child: TextField(
                 controller: _search,
-                onChanged: (v) => setState(() => _q = v),
+                onChanged: _onChanged,
                 decoration: InputDecoration(
-                  hintText: 'Tovar qidirish...',
+                  hintText: 'Tovar qidirish (server)...',
                   prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                  suffixIcon: _loading
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(
+                              width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)))
+                      : null,
                   filled: true,
                   fillColor: Colors.white,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16),
@@ -72,8 +121,14 @@ class _DictGoodsUiState extends State<DictGoodsUi> {
             Expanded(
               child: Consumer<CoreDictProvider>(
                 builder: (context, dict, _) {
-                  final list = dict.searchGoods(_q, limit: 300, onlyActive: false);
-                  if (list.isEmpty) return const Center(child: Text('Topilmadi'));
+                  if (_error != null) {
+                    return CoreErrorView(message: _error!, onRetry: () => _load(_search.text));
+                  }
+                  // Saqlangandan keyin keshdagi yangi nusxa ko'rinsin.
+                  final list = _results.map((g) => dict.goodById(g.id) ?? g).toList();
+                  if (list.isEmpty) {
+                    return Center(child: Text(_loading ? 'Qidirilmoqda…' : 'Topilmadi'));
+                  }
                   return ListView.builder(
                     padding: const EdgeInsets.fromLTRB(12, 4, 12, 88),
                     itemCount: list.length,
@@ -137,8 +192,13 @@ class _DictGoodsUiState extends State<DictGoodsUi> {
     );
     if (result == null || !context.mounted) return;
     try {
-      await context.read<CoreDictProvider>().saveGood(result);
-      if (context.mounted) showCoreInfo(context, 'Saqlandi: ${result.name}');
+      final saved = await context.read<CoreDictProvider>().saveGood(result);
+      if (!context.mounted) return;
+      showCoreInfo(context, 'Saqlandi: ${result.name}');
+      // Yangi tovar ro'yxatda darhol ko'rinsin.
+      if (!_results.any((x) => x.id == saved.id)) {
+        setState(() => _results = [saved, ..._results]);
+      }
     } catch (e) {
       if (context.mounted) showCoreError(context, e);
     }

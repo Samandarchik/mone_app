@@ -119,6 +119,9 @@ Future<void> showWarningsDialog(
     BuildContext context, List<CoreDocWarning> warnings) async {
   if (warnings.isEmpty) return;
   final dict = context.read<CoreDictProvider>();
+  // Tovar nomi/birligi uchun keshga olib kelamiz (tovarlar to'liq yuklanmaydi).
+  await dict.ensureGoods(warnings.map((w) => w.goodId ?? 0));
+  if (!context.mounted) return;
   await showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog(

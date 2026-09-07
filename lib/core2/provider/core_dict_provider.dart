@@ -1,9 +1,10 @@
 // core2/provider/core_dict_provider.dart — mone_core lug'atlari keshi
-// (CoreDictProvider): omborlar, kontragentlar, tovarlar, birliklar, guruhlar.
-// Bir marta yuklanadi (`ensureLoaded`), keyin xotirada; `skladById` /
-// `corrById` / `goodById` — O(1) indeks Map'lar (kartochka build'ida
-// chiziqli qidiruv YO'Q). Tovar qidiruvi — lokal (`searchGoods`), ro'yxat
-// katta bo'lsa serverga `search=` bilan ham murojaat qilinadi.
+// (CoreDictProvider): omborlar, kontragentlar, birliklar, guruhlar — bir
+// marta to'liq yuklanadi (`ensureLoaded`). TOVARLAR (12 000+) to'liq
+// yuklanmaydi: qidiruv SERVER tomonda (`searchGoods` → `/goods?search=&limit=50`),
+// natijalar va tanlangan/ko'rilgan tovarlar `_goodIdx` keshiga tushadi;
+// `goodById` — O(1) kesh, `ensureGoods(ids)` — yetishmaganlarni `/goods/{id}`
+// bilan olib keladi. `skladById`/`corrById` — O(1) indeks Map'lar.
 import 'package:flutter/foundation.dart';
 import 'package:uz_ai_dev/core/clearable_provider.dart';
 import 'package:uz_ai_dev/core2/models/core_dicts.dart';
@@ -15,14 +16,15 @@ class CoreDictProvider extends ChangeNotifier with ClearableProvider {
 
   List<CoreSklad> _sklads = [];
   List<CoreCorr> _corrs = [];
-  List<CoreGood> _goods = [];
   List<CoreUnit> _units = [];
   List<CoreGoodGroup> _groups = [];
 
   Map<int, CoreSklad> _skladIdx = {};
   Map<int, CoreCorr> _corrIdx = {};
-  Map<int, CoreGood> _goodIdx = {};
+  final Map<int, CoreGood> _goodIdx = {};
   Map<int, CoreGoodGroup> _groupIdx = {};
+  // Serverda topilmagan id'lar — qayta-qayta so'ramaslik uchun.
+  final Set<int> _missingGoods = {};
 
   bool _loaded = false;
   bool _loading = false;
@@ -33,9 +35,10 @@ class CoreDictProvider extends ChangeNotifier with ClearableProvider {
   List<CoreSklad> get activeSklads =>
       _sklads.where((s) => s.active).toList(growable: false);
   List<CoreCorr> get corrs => _corrs;
-  List<CoreGood> get goods => _goods;
   List<CoreUnit> get units => _units;
   List<CoreGoodGroup> get groups => _groups;
+  /// Keshdagi tovarlar (faqat ko'rilgan/tanlanganlar — to'liq ro'yxat EMAS).
+  Iterable<CoreGood> get cachedGoods => _goodIdx.values;
   bool get loaded => _loaded;
   bool get loading => _loading;
   String? get error => _error;
@@ -65,18 +68,41 @@ class CoreDictProvider extends ChangeNotifier with ClearableProvider {
     return null;
   }
 
-  /// Lokal qidiruv (kesh ustida), max [limit] natija.
-  List<CoreGood> searchGoods(String q, {int limit = 50, bool onlyActive = true}) {
-    final s = q.trim().toLowerCase();
-    final out = <CoreGood>[];
-    for (final g in _goods) {
-      if (onlyActive && !g.active) continue;
-      if (s.isEmpty || g.name.toLowerCase().contains(s) || g.rkCode == s) {
-        out.add(g);
-        if (out.length >= limit) break;
-      }
+  /// Server qidiruvi (`?search=&limit=`); natijalar keshlanadi.
+  /// Xato tashlaydi (UI ko'rsatadi).
+  Future<List<CoreGood>> searchGoods(String q,
+      {int limit = 50, bool onlyActive = true}) async {
+    final list = await _service.goods(
+        search: q.trim(), active: onlyActive ? true : null, limit: limit);
+    cacheGoods(list);
+    return list;
+  }
+
+  /// Tovarlarni keshga qo'yish (hujjat/qoldiq javoblaridan ham).
+  void cacheGoods(Iterable<CoreGood> goods, {bool notify = false}) {
+    for (final g in goods) {
+      _goodIdx[g.id] = g;
+      _missingGoods.remove(g.id);
     }
-    return out;
+    if (notify) notifyListeners();
+  }
+
+  /// Keshda yo'q tovarlarni `/goods/{id}` bilan olib keladi (parallel).
+  /// Xatolar yutiladi — nom/birlik qator ma'lumotidan olinadi.
+  Future<void> ensureGoods(Iterable<int> ids) async {
+    final need = ids
+        .where((id) => id > 0 && !_goodIdx.containsKey(id) && !_missingGoods.contains(id))
+        .toSet();
+    if (need.isEmpty) return;
+    await Future.wait(need.map((id) async {
+      try {
+        _goodIdx[id] = await _service.good(id);
+      } catch (e) {
+        _missingGoods.add(id);
+        debugPrint('ensureGoods($id): $e');
+      }
+    }));
+    notifyListeners();
   }
 
   /// Bir marta yuklash; parallel chaqiruvlar bitta so'rovni kutadi.
@@ -93,15 +119,13 @@ class CoreDictProvider extends ChangeNotifier with ClearableProvider {
       final results = await Future.wait([
         _service.sklads(),
         _service.corrs(),
-        _service.goods(limit: 5000),
         _service.units().catchError((_) => <CoreUnit>[]),
         _service.goodGroups().catchError((_) => <CoreGoodGroup>[]),
       ]);
       _sklads = results[0] as List<CoreSklad>;
       _corrs = results[1] as List<CoreCorr>;
-      _goods = results[2] as List<CoreGood>;
-      _units = results[3] as List<CoreUnit>;
-      _groups = results[4] as List<CoreGoodGroup>;
+      _units = results[2] as List<CoreUnit>;
+      _groups = results[3] as List<CoreGoodGroup>;
       _reindex();
       _loaded = true;
     } catch (e) {
@@ -115,7 +139,6 @@ class CoreDictProvider extends ChangeNotifier with ClearableProvider {
   void _reindex() {
     _skladIdx = {for (final s in _sklads) s.id: s};
     _corrIdx = {for (final c in _corrs) c.id: c};
-    _goodIdx = {for (final g in _goods) g.id: g};
     _groupIdx = {for (final g in _groups) g.id: g};
   }
 
@@ -147,13 +170,7 @@ class CoreDictProvider extends ChangeNotifier with ClearableProvider {
 
   Future<CoreGood> saveGood(CoreGood g) async {
     final saved = await _service.saveGood(g);
-    final i = _goods.indexWhere((e) => e.id == saved.id);
-    if (i >= 0) {
-      _goods[i] = saved;
-    } else {
-      _goods.add(saved);
-    }
-    _reindex();
+    _goodIdx[saved.id] = saved;
     notifyListeners();
     return saved;
   }
@@ -162,9 +179,10 @@ class CoreDictProvider extends ChangeNotifier with ClearableProvider {
   void clear() {
     _sklads = [];
     _corrs = [];
-    _goods = [];
     _units = [];
     _groups = [];
+    _goodIdx.clear();
+    _missingGoods.clear();
     _reindex();
     _loaded = false;
     _loading = false;
