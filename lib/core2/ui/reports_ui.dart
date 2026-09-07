@@ -1,19 +1,19 @@
 // core2/ui/reports_ui.dart — mone_core hisobotlari (ReportsUi, perm
 // report.view), 3 tab: Aylanma (/reports/turnover — ombor + davr, jadval:
 // tovar, ochilish/kirim/chiqim/yopilish miqdor va qiymat), Qoldiq qiymati
-// (/reports/stock-value — ombor bo'yicha pozitsiya, manfiy, qiymat, jami),
-// Defitsit (/reports/deficit — partiyasiz chiqimlar: sana, hujjat, ombor,
-// tovar, miqdor). Miqdorlar base'dan kg/l ko'rinishda, pul butun so'm.
+// (/reports/stock-value — ombor bo'yicha pozitsiya, qiymat, jami), Defitsit
+// (/reports/deficit — ombor×tovar jamlangan partiyasiz chiqimlar: miqdor,
+// hujjatlar soni, davr; bosilsa tovar kartochkasi). Javoblar
+// `{"items":[…]}`. Miqdorlar base'dan kg/l/dona ko'rinishda, pul butun so'm.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/core/context_extension.dart';
-import 'package:uz_ai_dev/core2/models/core_doc.dart';
 import 'package:uz_ai_dev/core2/models/core_qty.dart';
 import 'package:uz_ai_dev/core2/models/core_report.dart';
 import 'package:uz_ai_dev/core2/models/core_stock.dart';
 import 'package:uz_ai_dev/core2/provider/core_dict_provider.dart';
 import 'package:uz_ai_dev/core2/services/core_stock_service.dart';
-import 'package:uz_ai_dev/core2/ui/doc_detail_ui.dart';
+import 'package:uz_ai_dev/core2/ui/stock_ui.dart';
 import 'package:uz_ai_dev/core2/ui/widgets/core_widgets.dart';
 
 class ReportsUi extends StatefulWidget {
@@ -413,7 +413,9 @@ class _DeficitTabState extends State<_DeficitTab> with AutomaticKeepAliveClientM
                           itemCount: rows.length,
                           itemBuilder: (_, i) {
                             final r = rows[i];
-                            final unit = dict.goodById(r.goodId)?.baseUnit ?? r.baseUnit;
+                            final unit = r.baseUnit.isNotEmpty
+                                ? r.baseUnit
+                                : (dict.goodById(r.goodId)?.baseUnit ?? 'pcs');
                             return Container(
                               margin: const EdgeInsets.only(bottom: 6),
                               decoration: BoxDecoration(
@@ -423,16 +425,24 @@ class _DeficitTabState extends State<_DeficitTab> with AutomaticKeepAliveClientM
                               ),
                               child: ListTile(
                                 dense: true,
-                                onTap: r.docId > 0
-                                    ? () => context.push(DocDetailUi(docId: r.docId))
-                                    : null,
-                                leading: Icon(docTypeIcon(r.docType), color: Colors.red.shade700),
+                                // Tovar kartochkasi — partiyasiz chiqimlar qaysi hujjatdan.
+                                onTap: () => context.push(StockCardUi(
+                                  skladId: r.skladId,
+                                  goodId: r.goodId,
+                                  goodName: r.goodName.isNotEmpty
+                                      ? r.goodName
+                                      : dict.goodName(r.goodId),
+                                  baseUnit: unit,
+                                )),
+                                leading: Icon(Icons.remove_circle_outline,
+                                    color: Colors.red.shade700),
                                 title: Text(
                                     r.goodName.isNotEmpty ? r.goodName : dict.goodName(r.goodId),
                                     style: const TextStyle(fontWeight: FontWeight.w600)),
                                 subtitle: Text(
-                                  '${coreDate(r.docDate)} · ${CoreDocType.title(r.docType)} #${r.docId} · '
-                                  '${r.skladName.isNotEmpty ? r.skladName : dict.skladName(r.skladId)}',
+                                  '${r.skladName.isNotEmpty ? r.skladName : dict.skladName(r.skladId)}'
+                                  ' · ${r.docs} hujjat · ${coreDate(r.firstDate)} – ${coreDate(r.lastDate)}'
+                                  '${r.cost != 0 ? ' · ${coreMoney(r.cost)} so\'m' : ''}',
                                   style: const TextStyle(fontSize: 11.5),
                                 ),
                                 trailing: Text(

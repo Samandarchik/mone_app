@@ -2,8 +2,9 @@
 // integration.manage). SalePointsUi — sotuv nuqtalari ro'yxati + tahrir
 // (nom, source konak/rk7, external_id, default ombor, qoidalar match/value/
 // sklad, faol). ApiKeysUi — kalitlar ro'yxati, yaratish (nom + scopes) →
-// kalit BIR MARTA dialogda, nusxalash; o'chirish. WebhooksUi — ro'yxat,
-// qo'shish/tahrir (url, events, faol), o'chirish.
+// kalit BIR MARTA dialogda, nusxalash; o'chirish (=faolsizlantirish).
+// WebhooksUi — ro'yxat, qo'shish/tahrir (nom, url, events, faol), yaratishda
+// `secret` bir marta dialogda; o'chirish.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -171,11 +172,11 @@ class _SalePointDialogState extends State<_SalePointDialog> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      initialValue: _source,
+                      initialValue: CoreSalePoint.sources.contains(_source) ? _source : 'other',
                       decoration: coreInput('Manba'),
-                      items: const [
-                        DropdownMenuItem(value: 'konak', child: Text('konak')),
-                        DropdownMenuItem(value: 'rk7', child: Text('rk7')),
+                      items: [
+                        for (final s in CoreSalePoint.sources)
+                          DropdownMenuItem(value: s, child: Text(s)),
                       ],
                       onChanged: (v) => setState(() => _source = v ?? _source),
                     ),
@@ -196,7 +197,7 @@ class _SalePointDialogState extends State<_SalePointDialog> {
               Row(
                 children: [
                   const Expanded(
-                      child: Text('Qoidalar (kategoriya/guruh/taom → ombor)',
+                      child: Text('Qoidalar (category / code / good → ombor)',
                           style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600))),
                   TextButton.icon(
                     onPressed: () => setState(() => _rules.add(_RuleEdit())),
@@ -220,12 +221,13 @@ class _SalePointDialogState extends State<_SalePointDialog> {
                           SizedBox(
                             width: 120,
                             child: DropdownButtonFormField<String>(
-                              initialValue: r.match,
+                              initialValue: CoreSalePointRule.matches.contains(r.match)
+                                  ? r.match
+                                  : 'category',
                               decoration: coreInput('match'),
-                              items: const [
-                                DropdownMenuItem(value: 'category', child: Text('category')),
-                                DropdownMenuItem(value: 'group', child: Text('group')),
-                                DropdownMenuItem(value: 'good', child: Text('good')),
+                              items: [
+                                for (final m in CoreSalePointRule.matches)
+                                  DropdownMenuItem(value: m, child: Text(m)),
                               ],
                               onChanged: (v) => setState(() => r.match = v ?? r.match),
                             ),
@@ -458,9 +460,15 @@ class _ApiKeysUiState extends State<ApiKeysUi> {
                             child: ListTile(
                               dense: true,
                               leading: const Icon(Icons.vpn_key_outlined, color: kCoreAccentDark),
-                              title: Text(k.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                              title: Text(k.name,
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: k.active ? Colors.black87 : Colors.grey)),
                               subtitle: Text(
-                                '${k.scopes.join(', ')}${k.createdAt.isNotEmpty ? ' · ${coreDate(k.createdAt, withTime: true)}' : ''}',
+                                '${k.scopes.join(', ')}'
+                                '${k.createdAt.isNotEmpty ? ' · ${coreDate(k.createdAt, withTime: true)}' : ''}'
+                                '${k.lastUsed.isNotEmpty && k.lastUsed != 'null' ? ' · oxirgi: ${coreDate(k.lastUsed, withTime: true)}' : ''}'
+                                '${k.active ? '' : ' · nofaol'}',
                                 style: const TextStyle(fontSize: 11.5),
                               ),
                               trailing: IconButton(
@@ -513,6 +521,7 @@ class _WebhooksUiState extends State<WebhooksUi> {
   }
 
   Future<void> _edit(CoreWebhook? w) async {
+    final nameCtrl = TextEditingController(text: w?.name ?? '');
     final urlCtrl = TextEditingController(text: w?.url ?? '');
     final events = <String>{...?w?.events};
     var active = w?.active ?? true;
@@ -525,6 +534,8 @@ class _WebhooksUiState extends State<WebhooksUi> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              TextField(controller: nameCtrl, decoration: coreInput('Nomi')),
+              const SizedBox(height: 10),
               TextField(
                   controller: urlCtrl,
                   keyboardType: TextInputType.url,
@@ -560,15 +571,58 @@ class _WebhooksUiState extends State<WebhooksUi> {
       ),
     );
     final url = urlCtrl.text.trim();
+    final name = nameCtrl.text.trim();
     urlCtrl.dispose();
+    nameCtrl.dispose();
     if (ok != true || url.isEmpty || !mounted) return;
     try {
-      await _service.saveWebhook(
-          CoreWebhook(id: w?.id ?? 0, url: url, events: events.toList(), active: active));
+      final saved = await _service.saveWebhook(CoreWebhook(
+          id: w?.id ?? 0,
+          name: name.isEmpty ? url : name,
+          url: url,
+          events: events.toList(),
+          active: active));
+      if (!mounted) return;
+      // Yaratishda `secret` bir marta keladi — HMAC imzo kaliti.
+      if (saved.secret.isNotEmpty) await _showSecretOnce(saved);
       _load();
     } catch (e) {
       if (mounted) showCoreError(context, e);
     }
+  }
+
+  Future<void> _showSecretOnce(CoreWebhook w) {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Webhook secret (faqat bir marta)'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(w.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            SelectableText(w.secret,
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
+            const SizedBox(height: 8),
+            Text('X-Signature: sha256=HMAC-SHA256(secret, body) tekshiruvi uchun.',
+                style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600)),
+          ],
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: w.secret));
+              if (ctx.mounted) showCoreInfo(ctx, 'Nusxalandi');
+            },
+            icon: const Icon(Icons.copy, size: 18),
+            label: const Text('Nusxalash'),
+          ),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Yopish')),
+        ],
+      ),
+    );
   }
 
   Future<void> _delete(CoreWebhook w) async {
@@ -619,12 +673,13 @@ class _WebhooksUiState extends State<WebhooksUi> {
                               onTap: () => _edit(w),
                               leading: Icon(Icons.webhook,
                                   color: w.active ? kCoreAccentDark : Colors.grey),
-                              title: Text(w.url,
+                              title: Text(w.name.isNotEmpty ? w.name : w.url,
                                   style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                                   overflow: TextOverflow.ellipsis),
                               subtitle: Text(
-                                  '${w.events.join(', ')}${w.active ? '' : ' · nofaol'}',
+                                  '${w.url}\n${w.events.join(', ')}${w.active ? '' : ' · nofaol'}',
                                   style: const TextStyle(fontSize: 11.5)),
+                              isThreeLine: true,
                               trailing: IconButton(
                                 onPressed: () => _delete(w),
                                 icon: Icon(Icons.delete_outline, color: Colors.red.shade700),

@@ -16,6 +16,20 @@ class CoreAdminService {
     }
   }
 
+  /// `GET /roles` → ["superadmin","admin",…].
+  Future<List<String>> roles() async {
+    try {
+      final r = await CoreClient.dio.get(CoreClient.url('/roles'));
+      final data = r.data;
+      if (data is List) return data.map((e) => e.toString()).toList();
+      return const [];
+    } catch (e) {
+      throw CoreClient.wrap(e);
+    }
+  }
+
+  /// `GET /roles/{role}/perms` → `{"role","perms":{…}}` (katalogdagi hamma
+  /// kalit, yo'q = false).
   Future<Map<String, bool>> rolePerms(String role) async {
     try {
       final r = await CoreClient.dio.get(CoreClient.url('/roles/$role/perms'));
@@ -65,7 +79,16 @@ class CoreAdminService {
     }
   }
 
-  /// `GET /sync/status` (shartnomada hali yo'q — kutilgan shakl modelda).
+  /// `DELETE /users/{id}` — faolsizlantirish.
+  Future<void> deactivateUser(int id) async {
+    try {
+      await CoreClient.dio.delete(CoreClient.url('/users/$id'));
+    } catch (e) {
+      throw CoreClient.wrap(e);
+    }
+  }
+
+  /// `GET /sync/status` (internal/sync/admin.go shakli — CoreSyncStatus).
   Future<CoreSyncStatus> syncStatus() async {
     try {
       final r = await CoreClient.dio.get(CoreClient.url('/sync/status'));

@@ -1,7 +1,8 @@
 // core2/ui/dict_goods_ui.dart — mone_core tovarlari (DictGoodsUi): qidiruv
 // (lokal kesh), ro'yxat (nom, guruh, base birlik, п/ф/taom belgisi), FAB
-// «+» / qatorga bosish → forma: nom, guruh, base birlik (g/ml/pcs/m),
-// qo'shimcha birliklar (unit + to_base butun), rk_code, faol.
+// «+» / qatorga bosish → forma: nom, guruh, base birlik (g/ml/mpcs/mm —
+// server faqat 1/1000 base kodlarini oladi), qo'shimcha birliklar (unit +
+// to_base butun), rk_code, faol. PUT qisman (units berilsa to'liq almashadi).
 // Yozish — perm dict.edit.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -168,7 +169,7 @@ class _GoodDialogState extends State<_GoodDialog> {
   late final _name = TextEditingController(text: widget.good?.name ?? '');
   late final _rk = TextEditingController(text: widget.good?.rkCode ?? '');
   late int? _group = widget.good?.groupId;
-  late String _base = widget.good?.baseUnit ?? 'g';
+  late String _base = widget.good?.baseUnit ?? 'mpcs';
   late bool _semi = widget.good?.isSemi ?? false;
   late bool _complect = widget.good?.isComplect ?? false;
   late bool _active = widget.good?.active ?? true;
@@ -217,13 +218,13 @@ class _GoodDialogState extends State<_GoodDialog> {
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
-                initialValue: CoreGood.baseUnits.contains(_base) ? _base : 'pcs',
-                decoration: coreInput('Base birlik (saqlash)'),
+                initialValue: CoreGood.baseUnits.contains(_base) ? _base : 'mpcs',
+                decoration: coreInput('Base birlik (saqlash, 1/1000)'),
                 items: const [
                   DropdownMenuItem(value: 'g', child: Text('g — gramm (UI: kg)')),
                   DropdownMenuItem(value: 'ml', child: Text('ml — millilitr (UI: l)')),
-                  DropdownMenuItem(value: 'pcs', child: Text('pcs — dona')),
-                  DropdownMenuItem(value: 'm', child: Text('m — metr')),
+                  DropdownMenuItem(value: 'mpcs', child: Text('mpcs — 0.001 dona (UI: dona)')),
+                  DropdownMenuItem(value: 'mm', child: Text('mm — millimetr (UI: m)')),
                 ],
                 onChanged: widget.good == null
                     ? (v) => setState(() => _base = v ?? _base)

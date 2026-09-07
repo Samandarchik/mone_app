@@ -39,13 +39,14 @@ class CoreSklad {
         'allow_negative': allowNegative,
       };
 
+  // Server: sklad|shop|bar|kitchen|production|central.
   static const List<String> kinds = [
+    'sklad',
     'central',
     'shop',
     'bar',
     'kitchen',
     'production',
-    'other',
   ];
   static const List<String> negativeModes = ['strict', 'warn', 'soft'];
 }
@@ -188,7 +189,8 @@ class CoreGood {
       };
 
   /// Hujjat qatorida tanlanadigan birliklar: default ko'rsatish birligi
-  /// (g→kg, ml→l) birinchi, keyin base, keyin qo'shimchalar (takrorsiz).
+  /// (g→kg, ml→l, mpcs→pcs, mm→m) birinchi, keyin qo'shimchalar
+  /// (`units`), oxirida base o'zi (takrorsiz).
   List<CoreGoodUnit> get selectableUnits {
     final out = <CoreGoodUnit>[];
     final seen = <String>{};
@@ -198,28 +200,33 @@ class CoreGood {
 
     final def = defaultDisplayUnit(baseUnit);
     if (def != null) add(def);
-    add(CoreGoodUnit(unit: baseUnit, toBase: 1));
     for (final u in units) {
       add(u);
     }
+    add(CoreGoodUnit(unit: baseUnit, toBase: 1));
     return out;
   }
 
-  /// Tovarning eng qulay kiritish birligi (g→kg ×1000, ml→l ×1000, boshqa —
-  /// base o'zi).
+  /// Tovarning eng qulay kiritish birligi (kg / l / dona / m — ×1000).
   CoreGoodUnit get preferredUnit => selectableUnits.first;
 
-  static const List<String> baseUnits = ['g', 'ml', 'pcs', 'm'];
+  /// Server qabul qiladigan base birliklar (`/units` da factor=1 bo'lganlar):
+  /// g, ml, mpcs (0.001 dona), mm.
+  static const List<String> baseUnits = ['g', 'ml', 'mpcs', 'mm'];
 }
 
-/// Base birlikka mos «katta» ko'rsatish birligi: g → kg, ml → l (×1000).
-/// pcs/m uchun yo'q (null).
+/// Base birlikka mos «katta» ko'rsatish birligi (×1000): g→kg, ml→l,
+/// mpcs→pcs, mm→m. Boshqa (noma'lum) base uchun null.
 CoreGoodUnit? defaultDisplayUnit(String baseUnit) {
   switch (baseUnit) {
     case 'g':
       return const CoreGoodUnit(unit: 'kg', toBase: 1000);
     case 'ml':
       return const CoreGoodUnit(unit: 'l', toBase: 1000);
+    case 'mpcs':
+      return const CoreGoodUnit(unit: 'pcs', toBase: 1000);
+    case 'mm':
+      return const CoreGoodUnit(unit: 'm', toBase: 1000);
     default:
       return null;
   }

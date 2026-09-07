@@ -6,6 +6,7 @@ class CoreRecipeLine {
   final int ord;
   final int goodId;
   final String goodName;
+  final String baseUnit; // o'qishda server beradi (g/ml/mpcs/mm)
   final int qtyBrutto;
   final int qtyNetto;
 
@@ -13,6 +14,7 @@ class CoreRecipeLine {
     this.ord = 0,
     required this.goodId,
     this.goodName = '',
+    this.baseUnit = '',
     this.qtyBrutto = 0,
     this.qtyNetto = 0,
   });
@@ -21,6 +23,7 @@ class CoreRecipeLine {
         ord: (j['ord'] as num?)?.toInt() ?? 0,
         goodId: (j['good_id'] as num?)?.toInt() ?? 0,
         goodName: (j['good_name'] ?? '').toString(),
+        baseUnit: (j['base_unit'] ?? '').toString(),
         qtyBrutto: (j['qty_brutto'] as num?)?.toInt() ?? 0,
         qtyNetto: (j['qty_netto'] as num?)?.toInt() ?? 0,
       );
@@ -36,8 +39,9 @@ class CoreRecipeLine {
 class CoreRecipeVersion {
   final int id;
   final String validFrom; // YYYY-MM-DD
-  final int yieldQty;
-  final String yieldUnit;
+  final int yieldQty; // BUTUN base birlik (yield_unit — ko'rsatish birligi)
+  final String yieldUnit; // kg|l|pcs|portion|…
+  final String note;
   final List<CoreRecipeLine> lines;
 
   const CoreRecipeVersion({
@@ -45,6 +49,7 @@ class CoreRecipeVersion {
     required this.validFrom,
     this.yieldQty = 0,
     this.yieldUnit = '',
+    this.note = '',
     this.lines = const [],
   });
 
@@ -54,6 +59,7 @@ class CoreRecipeVersion {
         validFrom: (j['valid_from'] ?? '').toString().split('T').first,
         yieldQty: (j['yield_qty'] as num?)?.toInt() ?? 0,
         yieldUnit: (j['yield_unit'] ?? '').toString(),
+        note: (j['note'] ?? '').toString(),
         lines: (j['lines'] as List?)
                 ?.whereType<Map>()
                 .map((e) =>
@@ -66,6 +72,7 @@ class CoreRecipeVersion {
         'valid_from': validFrom,
         'yield_qty': yieldQty,
         'yield_unit': yieldUnit,
+        'note': note.isEmpty ? null : note,
         'lines': [
           for (var i = 0; i < lines.length; i++)
             (lines[i].toJson()..['ord'] = i + 1),
@@ -76,19 +83,25 @@ class CoreRecipeVersion {
 class CoreRecipe {
   final int id;
   final int goodId;
+  final String goodName; // o'qishda server beradi
   final String name;
   final List<CoreRecipeVersion> versions;
 
   const CoreRecipe({
     required this.id,
     required this.goodId,
+    this.goodName = '',
     this.name = '',
     this.versions = const [],
   });
 
+  /// Ro'yxatda ko'rsatiladigan nom: retsept nomi, bo'lmasa tovar nomi.
+  String get title => name.isNotEmpty ? name : goodName;
+
   factory CoreRecipe.fromJson(Map<String, dynamic> j) => CoreRecipe(
         id: (j['id'] as num?)?.toInt() ?? 0,
         goodId: (j['good_id'] as num?)?.toInt() ?? 0,
+        goodName: (j['good_name'] ?? '').toString(),
         name: (j['name'] ?? '').toString(),
         versions: (j['versions'] as List?)
                 ?.whereType<Map>()

@@ -1,8 +1,9 @@
 // core2/ui/stock_ui.dart — mone_core qoldiq (StockUi): ombor tanlash,
 // qidiruv, qatorda tovar, qty (kg/l ko'rinishda), cost/last_price faqat
 // `stock.cost.view` bo'lsa; manfiy qoldiq qizil; qator bosilsa
-// StockCardUi — 2 tab: kartochka (/stock/card ledger yozuvlari balans bilan,
-// sana oralig'i) va partiyalar (/batches: kirgan/qolgan, narx, sana).
+// StockCardUi — 2 tab: kartochka (/stock/card → {open_qty, close_qty, rows}
+// ledger yozuvlari balans bilan, sana oralig'i) va partiyalar (/batches:
+// kirgan/qolgan, narx, sana). /stock va /batches ledger ulanmaguncha 501.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/core/context_extension.dart';
@@ -249,7 +250,7 @@ class _StockCardUiState extends State<StockCardUi>
     with SingleTickerProviderStateMixin {
   final _service = CoreStockService();
   late final TabController _tab = TabController(length: 2, vsync: this);
-  List<CoreCardEntry>? _card;
+  CoreStockCard? _card;
   List<CoreBatch>? _batches;
   String? _cardErr;
   String? _batchErr;
@@ -362,25 +363,49 @@ class _StockCardUiState extends State<StockCardUi>
             ],
           ),
         ),
+        if (_card != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Row(
+              children: [
+                Text('Boshi: ${coreFormatQtyUnit(_card!.openQty, widget.baseUnit)}',
+                    style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700)),
+                const Spacer(),
+                Text('Oxiri: ${coreFormatQtyUnit(_card!.closeQty, widget.baseUnit)}',
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: _card!.closeQty < 0 ? Colors.red : Colors.black87)),
+              ],
+            ),
+          ),
         Expanded(
           child: _cardErr != null
               ? CoreErrorView(message: _cardErr!, onRetry: _loadCard)
               : _card == null
                   ? const Center(child: CircularProgressIndicator.adaptive())
-                  : _card!.isEmpty
+                  : _card!.rows.isEmpty
                       ? const Center(child: Text('Harakat yo\'q'))
                       : ListView.builder(
                           padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
-                          itemCount: _card!.length,
+                          itemCount: _card!.rows.length,
                           itemBuilder: (_, i) {
-                            final e = _card![i];
+                            final e = _card!.rows[i];
                             final plus = e.qtyDelta >= 0;
+                            final who = e.corr.isNotEmpty
+                                ? e.corr
+                                : [e.fromSklad, e.toSklad]
+                                    .where((s) => s.isNotEmpty)
+                                    .join(' → ');
                             return Container(
                               margin: const EdgeInsets.only(bottom: 6),
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: Colors.grey.shade300),
+                                border: Border.all(
+                                    color: e.batchId == null && !plus
+                                        ? Colors.red.shade200
+                                        : Colors.grey.shade300),
                               ),
                               child: ListTile(
                                 dense: true,
@@ -389,14 +414,17 @@ class _StockCardUiState extends State<StockCardUi>
                                     : null,
                                 leading: Icon(docTypeIcon(e.docType), color: kCoreAccentDark),
                                 title: Text(
-                                    '${CoreDocType.title(e.docType)} · ${coreDate(e.docDate)}',
+                                    '${CoreDocType.title(e.docType)} ${e.docNumber} · ${coreDate(e.docDate)}',
                                     style: const TextStyle(fontSize: 13)),
-                                subtitle: showCost
-                                    ? Text(
-                                        'qiymat: ${plus ? '+' : ''}${coreMoney(e.costDelta)}',
-                                        style: TextStyle(
-                                            fontSize: 11.5, color: Colors.grey.shade600))
-                                    : null,
+                                subtitle: Text(
+                                  [
+                                    if (who.isNotEmpty) who,
+                                    if (showCost && e.costDelta != null)
+                                      'qiymat: ${plus ? '+' : ''}${coreMoney(e.costDelta!)}',
+                                    if (e.batchId == null && !plus) 'partiyasiz',
+                                  ].join(' · '),
+                                  style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
+                                ),
                                 trailing: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   crossAxisAlignment: CrossAxisAlignment.end,

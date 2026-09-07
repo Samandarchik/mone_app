@@ -169,10 +169,10 @@ ilova ishlayveradi, «Ombor 2.0» ekranlari `CoreConnectGate` orqali «server ul
 |---|---|---|
 | model | `core2/models/core_user.dart` | `CoreUser`, `CoreMe` (user + perms), `CorePermDef`, **`CorePerms`** (kalit konstantalari) |
 | model | `core2/models/core_dicts.dart` | `CoreSklad`, `CoreCorr`, `CoreUnit`, `CoreGoodGroup`, `CoreGood` (+`units[{unit,to_base}]`, `selectableUnits`, `preferredUnit`) |
-| model | **`core2/models/core_qty.dart`** | **YAGONA konvert**: base (g/ml/pcs/m) ↔ UI (kg/l): `coreQtyFromUi(ui, unit)` (BUTUN base), `coreFormatQtyUnit`, `coreLineAmount` (butun so'm). Qo'lda `*1000` YOZMA |
-| model | `core2/models/core_doc.dart` | `CoreDoc`, `CoreDocLine` (qty butun base, price/amount butun so'm, flag), `CoreDocType`/`CoreDocStatus`, `CoreDocWarning`, `CoreStockAfter`, `CoreDocPostResult` |
+| model | **`core2/models/core_qty.dart`** | **YAGONA konvert**: base (`g`/`ml`/`mpcs`=0.001 dona/`mm` — server `/units`, hammasi 1/1000) ↔ UI (kg/l/dona/m): `coreQtyFromUi(ui, unit)` (BUTUN base), `coreFormatQtyUnit`, `coreFormatQtyAs(qty, 'kg')`, `coreLineAmount` (butun so'm). Qo'lda `*1000` YOZMA |
+| model | `core2/models/core_doc.dart` | `CoreDoc`, `CoreDocLine` (qty butun base, price/amount/`sale_amount` butun so'm, flag, `stock_after` — o'qishda QATOR darajasida), `CoreDocType`/`CoreDocStatus`, `CoreDocWarning`, `CoreDocPostResult` |
 | model | `core2/models/core_stock.dart`, `core_recipe.dart`, `core_report.dart`, `core_integration.dart` | qoldiq/partiya/kartochka; retsept versiyalari; aylanma/defitsit; sotuv nuqtasi/API kalit/webhook/sync holati |
-| service | `core2/services/core_client.dart` | **`CoreClient`** — alohida Dio (`core_token` interceptor), `url('/docs')` = `AppUrls.coreApi` + yo'l, `wrap()` → `CoreApiException` (error/code/perm), `idem()` Idempotency-Key |
+| service | `core2/services/core_client.dart` | **`CoreClient`** — alohida Dio (`core_token` interceptor), `url('/docs')` = `AppUrls.coreApi` + yo'l, `wrap()` → `CoreApiException` (error/code/perm; **501 `not_implemented`** = ledger hali ulanmagan → `display` «server bu funksiyani hali yoqmagan», sariq), `idem()` Idempotency-Key. Ro'yxat javoblari: `/goods`,`/recipes`,`/docs`,`/users` → `{items,total}`; lug'atlar oddiy massiv; hisobotlar `{items,…}` — `listOf()` ikkalasini oladi |
 | service | `core2/services/core_*_service.dart` | auth, dict, doc, stock(+reports), recipe, admin (perms/roles/users/sync), integration |
 | provider | `core2/provider/*` | 7-bo'limdagi 4 ta global provider |
 | ui | `core2/ui/core_hub_ui.dart` | «Ombor 2.0» grid — kartalar `perms` bo'yicha; ulanish holati; ⚙ server |

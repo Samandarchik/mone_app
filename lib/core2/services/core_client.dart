@@ -33,9 +33,16 @@ class CoreApiException implements Exception {
   bool get forbidden => status == 403;
   bool get insufficient => code == 'insufficient' || status == 422;
   bool get network => status == null;
+  // 501 — ledger hali ulanmagan (/docs*, /stock, /batches hozircha shu).
+  bool get notImplemented => status == 501 || code == 'not_implemented';
+
+  /// Foydalanuvchiga ko'rsatiladigan matn (501 — alohida tushuntirish).
+  String get display => notImplemented
+      ? 'Server bu funksiyani hali yoqmagan ($message)'
+      : message;
 
   @override
-  String toString() => message;
+  String toString() => display;
 }
 
 abstract final class CoreClient {
@@ -91,9 +98,9 @@ abstract final class CoreClient {
       if (r != null) {
         final data = r.data;
         if (data is Map) {
+          final msg = (data['error'] ?? data['message'] ?? '').toString();
           return CoreApiException(
-            (data['error'] ?? data['message'] ?? 'Server xatosi ${r.statusCode}')
-                .toString(),
+            msg.isEmpty ? 'Server xatosi ${r.statusCode}' : msg,
             code: (data['code'] ?? '').toString(),
             status: r.statusCode,
             perm: (data['perm'] ?? '').toString(),
@@ -102,7 +109,8 @@ abstract final class CoreClient {
                 : const {},
           );
         }
-        return CoreApiException('Server xatosi ${r.statusCode}',
+        return CoreApiException(
+            r.statusCode == 501 ? 'not_implemented' : 'Server xatosi ${r.statusCode}',
             status: r.statusCode);
       }
       switch (e.type) {

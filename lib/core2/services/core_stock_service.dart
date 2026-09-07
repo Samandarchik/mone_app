@@ -1,7 +1,9 @@
 // core2/services/core_stock_service.dart — mone_core qoldiq/partiya/kartochka:
 // stock (GET /stock?sklad_id=&good_id=&date=&search=&nonzero=1), summary
-// (GET /stock/summary?date=), batches (GET /batches), card (GET /stock/card).
-// Hisobotlar: turnover, stockValue, deficit (perm report.view).
+// (GET /stock/summary?date=), batches (GET /batches), card (GET /stock/card
+// → CoreStockCard obyekti). Hisobotlar (perm report.view, javob
+// `{"items":[…],…}`): turnover, stockValue, deficit. /stock, /batches —
+// ledger ulanmaguncha 501.
 import 'package:uz_ai_dev/core2/models/core_report.dart';
 import 'package:uz_ai_dev/core2/models/core_stock.dart';
 import 'package:uz_ai_dev/core2/services/core_client.dart';
@@ -55,7 +57,8 @@ class CoreStockService {
     }
   }
 
-  Future<List<CoreCardEntry>> card({
+  /// `{sklad_id, good_id, open_qty, open_cost, close_qty, rows[]}`.
+  Future<CoreStockCard> card({
     required int skladId,
     required int goodId,
     String? dateFrom,
@@ -71,7 +74,7 @@ class CoreStockService {
           if (dateTo != null && dateTo.isNotEmpty) 'date_to': dateTo,
         },
       );
-      return CoreClient.listOf(r.data).map(CoreCardEntry.fromJson).toList();
+      return CoreStockCard.fromJson(CoreClient.mapOf(r.data));
     } catch (e) {
       throw CoreClient.wrap(e);
     }
@@ -115,11 +118,16 @@ class CoreStockService {
   Future<List<CoreDeficitRow>> deficit({
     required String dateFrom,
     required String dateTo,
+    int? skladId,
   }) async {
     try {
       final r = await CoreClient.dio.get(
         CoreClient.url('/reports/deficit'),
-        queryParameters: {'date_from': dateFrom, 'date_to': dateTo},
+        queryParameters: {
+          'date_from': dateFrom,
+          'date_to': dateTo,
+          if (skladId != null) 'sklad_id': skladId,
+        },
       );
       return CoreClient.listOf(r.data).map(CoreDeficitRow.fromJson).toList();
     } catch (e) {

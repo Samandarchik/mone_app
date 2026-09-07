@@ -1,7 +1,8 @@
 // core2/ui/perms_ui.dart — mone_core ruxsatlar va foydalanuvchilar (admin,
 // perm users.manage). PermsUi — rollar × perms switch jadvali: rol tanlanadi
-// (chip), katalog (/perms) guruh bo'yicha, har switch → PUT /roles/{role}/
-// perms (butun map). CoreUsersUi — foydalanuvchilar ro'yxati (rol, omborlar,
+// (chip, ro'yxat GET /roles, superadmin tahrirlanmaydi), katalog (/perms)
+// guruh bo'yicha, har switch → PUT /roles/{role}/perms (butun map).
+// CoreUsersUi — foydalanuvchilar ro'yxati (`{items,total}`; rol, omborlar,
 // faol) + tahrir dialogi (nom, telefon, login_code, rol, omborlar chip,
 // faol, parol ixtiyoriy, shaxsiy perm override).
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import 'package:uz_ai_dev/core2/provider/core_dict_provider.dart';
 import 'package:uz_ai_dev/core2/services/core_admin_service.dart';
 import 'package:uz_ai_dev/core2/ui/widgets/core_widgets.dart';
 
+// Fallback (GET /roles ishlamasa); superadmin faqat foydalanuvchi dialogida.
 const List<String> kCoreRoles = [
   'admin',
   'bugalter',
@@ -30,6 +32,8 @@ class PermsUi extends StatefulWidget {
 class _PermsUiState extends State<PermsUi> {
   final _service = CoreAdminService();
   List<CorePermDef>? _catalog;
+  // /roles dan (superadmin tahrirlanmaydi — ro'yxatdan chiqariladi).
+  List<String> _roles = kCoreRoles;
   String _role = kCoreRoles.first;
   Map<String, bool>? _perms;
   String? _error;
@@ -48,6 +52,14 @@ class _PermsUiState extends State<PermsUi> {
     });
     try {
       _catalog ??= await _service.perms();
+      if (_roles == kCoreRoles) {
+        final rs = await _service.roles().catchError((_) => <String>[]);
+        final editable = rs.where((r) => r != 'superadmin').toList();
+        if (editable.isNotEmpty) {
+          _roles = editable;
+          if (!_roles.contains(_role)) _role = _roles.first;
+        }
+      }
       final p = await _service.rolePerms(_role);
       if (mounted) setState(() => _perms = p);
     } catch (e) {
@@ -104,7 +116,7 @@ class _PermsUiState extends State<PermsUi> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Row(
                 children: [
-                  for (final r in kCoreRoles) ...[
+                  for (final r in _roles) ...[
                     ChoiceChip(
                       label: Text(r, style: const TextStyle(fontSize: 12)),
                       selected: _role == r,

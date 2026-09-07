@@ -3,8 +3,10 @@
 // valid_from), qidiruv, «+» yangi retsept (tovar tanlash → birinchi
 // versiya). RecipeDetailUi — versiyalar ro'yxati (valid_from) → versiya
 // tafsiloti (qatorlar brutto/netto, base birlikdan kg/l ko'rinishda),
-// «Yangi versiya» — RecipeVersionFormUi: sana + qatorlar (oldingi
+// «Yangi versiya» — RecipeVersionFormUi: sana + izoh + qatorlar (oldingi
 // versiyadan nusxa), brutto/netto kg'da kiritiladi, BUTUN base yuboriladi.
+// POST /recipes body: {good_id, name, version:{…}}; yield_qty base
+// birlikda, yield_unit — ko'rsatish birligi (kg/l/pcs/portion).
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -58,7 +60,8 @@ class _RecipesUiState extends State<RecipesUi> {
         builder: (_) => RecipeVersionFormUi(
           title: 'Yangi retsept: ${good.name}',
           base: null,
-          yieldUnit: good.baseUnit,
+          // Chiqish birligi — tovar base'ining katta birligi (kg/l/pcs/m).
+          yieldUnit: good.preferredUnit.unit,
         ),
       ),
     );
@@ -78,8 +81,9 @@ class _RecipesUiState extends State<RecipesUi> {
     final q = _q.toLowerCase();
     final list = (_list ?? const <CoreRecipe>[]).where((r) {
       if (q.isEmpty) return true;
-      final name = r.name.isNotEmpty ? r.name : dict.goodName(r.goodId);
-      return name.toLowerCase().contains(q);
+      final name = r.title.isNotEmpty ? r.title : dict.goodName(r.goodId);
+      return name.toLowerCase().contains(q) ||
+          r.goodName.toLowerCase().contains(q);
     }).toList();
 
     return Scaffold(
@@ -124,9 +128,10 @@ class _RecipesUiState extends State<RecipesUi> {
                                   child: ListTile(
                                     dense: true,
                                     leading: const Icon(Icons.menu_book_outlined, color: kCoreAccentDark),
-                                    title: Text(r.name.isNotEmpty ? r.name : dict.goodName(r.goodId),
+                                    title: Text(r.title.isNotEmpty ? r.title : dict.goodName(r.goodId),
                                         style: const TextStyle(fontWeight: FontWeight.w600)),
                                     subtitle: Text(
+                                      '${r.goodName.isNotEmpty && r.goodName != r.title ? '${r.goodName} · ' : ''}'
                                       '${r.versions.length} versiya'
                                       '${latest != null ? ' · oxirgi: ${coreDate(latest.validFrom)}' : ''}',
                                       style: const TextStyle(fontSize: 11.5),
@@ -214,7 +219,7 @@ class _RecipeDetailUiState extends State<RecipeDetailUi> {
         builder: (_) => RecipeVersionFormUi(
           title: 'Yangi versiya: ${r.name}',
           base: base,
-          yieldUnit: base?.yieldUnit ?? good?.baseUnit ?? 'pcs',
+          yieldUnit: base?.yieldUnit ?? good?.preferredUnit.unit ?? 'pcs',
         ),
       ),
     );
@@ -244,7 +249,7 @@ class _RecipeDetailUiState extends State<RecipeDetailUi> {
       appBar: AppBar(
         backgroundColor: kCoreBg,
         elevation: 0,
-        title: Text(r?.name.isNotEmpty == true ? r!.name : 'Retsept',
+        title: Text(r?.title.isNotEmpty == true ? r!.title : 'Retsept',
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
       ),
@@ -291,6 +296,11 @@ class _RecipeDetailUiState extends State<RecipeDetailUi> {
     );
   }
 
+  // Qator base birligi: server bergan `base_unit`, bo'lmasa lug'atdan.
+  String _lineUnit(CoreRecipeLine l, CoreDictProvider dict) => l.baseUnit.isNotEmpty
+      ? l.baseUnit
+      : (dict.goodById(l.goodId)?.baseUnit ?? 'pcs');
+
   Widget _versionCard(CoreRecipeVersion v, CoreDictProvider dict) {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -303,7 +313,9 @@ class _RecipeDetailUiState extends State<RecipeDetailUi> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           kv('Amal qiladi', coreDate(v.validFrom)),
-          kv('Chiqish', coreFormatQtyUnit(v.yieldQty, v.yieldUnit)),
+          // yield_qty — base birlikda, yield_unit — ko'rsatish birligi (kg…).
+          kv('Chiqish', coreFormatQtyAs(v.yieldQty, v.yieldUnit)),
+          if (v.note.isNotEmpty) kv('Izoh', v.note),
           const Divider(),
           Row(
             children: [
@@ -331,15 +343,13 @@ class _RecipeDetailUiState extends State<RecipeDetailUi> {
                 SizedBox(
                     width: 80,
                     child: Text(
-                        coreFormatQtyUnit(
-                            l.qtyBrutto, dict.goodById(l.goodId)?.baseUnit ?? 'pcs'),
+                        coreFormatQtyUnit(l.qtyBrutto, _lineUnit(l, dict)),
                         textAlign: TextAlign.right,
                         style: const TextStyle(fontSize: 12.5))),
                 SizedBox(
                     width: 80,
                     child: Text(
-                        coreFormatQtyUnit(
-                            l.qtyNetto, dict.goodById(l.goodId)?.baseUnit ?? 'pcs'),
+                        coreFormatQtyUnit(l.qtyNetto, _lineUnit(l, dict)),
                         textAlign: TextAlign.right,
                         style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600))),
               ],
@@ -386,6 +396,7 @@ class RecipeVersionFormUi extends StatefulWidget {
 class _RecipeVersionFormUiState extends State<RecipeVersionFormUi> {
   String _date = todayIso();
   final _yield = TextEditingController();
+  final _note = TextEditingController();
   final List<_RecipeLineEdit> _lines = [];
   bool _init = false;
 
@@ -397,10 +408,15 @@ class _RecipeVersionFormUiState extends State<RecipeVersionFormUi> {
     final dict = context.read<CoreDictProvider>();
     final b = widget.base;
     if (b != null) {
-      _yield.text = b.yieldQty > 0 ? coreFormatQty(b.yieldQty, widget.yieldUnit) : '';
+      _yield.text = b.yieldQty > 0
+          ? coreFormatInUnit(b.yieldQty, _unitOf(widget.yieldUnit))
+          : '';
       for (final l in b.lines) {
         final g = dict.goodById(l.goodId) ??
-            CoreGood(id: l.goodId, name: l.goodName, baseUnit: 'pcs');
+            CoreGood(
+                id: l.goodId,
+                name: l.goodName,
+                baseUnit: l.baseUnit.isNotEmpty ? l.baseUnit : 'mpcs');
         _lines.add(_RecipeLineEdit(g, bruttoBase: l.qtyBrutto, nettoBase: l.qtyNetto));
       }
     } else {
@@ -411,14 +427,18 @@ class _RecipeVersionFormUiState extends State<RecipeVersionFormUi> {
   @override
   void dispose() {
     _yield.dispose();
+    _note.dispose();
     for (final l in _lines) {
       l.dispose();
     }
     super.dispose();
   }
 
-  CoreGoodUnit _unitOf(String baseUnit) =>
-      defaultDisplayUnit(baseUnit) ?? CoreGoodUnit(unit: baseUnit, toBase: 1);
+  /// Kiritish birligi: base kod (g/ml/mpcs/mm) → katta birlik; birlik kodi
+  /// (kg/l/pcs/portion) bo'lsa — o'zi, `/units` faktori bilan.
+  CoreGoodUnit _unitOf(String code) =>
+      defaultDisplayUnit(code) ??
+      CoreGoodUnit(unit: code, toBase: coreUnitFactor(code));
 
   void _submit() {
     final lines = <CoreRecipeLine>[];
@@ -434,13 +454,16 @@ class _RecipeVersionFormUiState extends State<RecipeVersionFormUi> {
       showCoreInfo(context, 'Kamida bitta ingredient kiriting');
       return;
     }
-    final yieldQty = coreQtyFromUi(parseUiQty(_yield.text) ?? 0, _unitOf(widget.yieldUnit));
+    final yu = _unitOf(widget.yieldUnit);
+    final yieldQty = coreQtyFromUi(parseUiQty(_yield.text) ?? 0, yu);
     Navigator.pop(
       context,
       CoreRecipeVersion(
         validFrom: _date,
-        yieldQty: yieldQty <= 0 ? 1 : yieldQty,
-        yieldUnit: widget.yieldUnit,
+        yieldQty: yieldQty <= 0 ? yu.toBase : yieldQty,
+        // yield_unit — ko'rsatish birligi (kg/l/pcs…), base kod emas.
+        yieldUnit: yu.unit,
+        note: _note.text.trim(),
         lines: lines,
       ),
     );
@@ -491,6 +514,8 @@ class _RecipeVersionFormUiState extends State<RecipeVersionFormUi> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 10),
+                TextField(controller: _note, decoration: coreInput('Izoh (ixtiyoriy)')),
                 const SizedBox(height: 10),
                 Row(
                   children: [

@@ -1,8 +1,8 @@
 // core2/models/core_stock.dart — mone_core qoldiq modellari: CoreStockRow
 // (/stock: qty butun base, cost/last_price faqat stock.cost.view bo'lsa
 // keladi — yo'q bo'lsa null), CoreStockSummary (/stock/summary),
-// CoreBatch (/batches — FIFO partiyalar), CoreCardEntry (/stock/card —
-// ledger yozuvlari balans bilan).
+// CoreBatch (/batches — FIFO partiyalar), CoreStockCard + CoreCardEntry
+// (/stock/card — {open_qty, close_qty, rows[]} ledger yozuvlari balans bilan).
 
 class CoreStockRow {
   final int skladId;
@@ -87,34 +87,90 @@ class CoreBatch {
         docId: (j['doc_id'] as num?)?.toInt() ?? 0,
         qtyIn: (j['qty_in'] as num?)?.toInt() ?? 0,
         qtyLeft: (j['qty_left'] as num?)?.toInt() ?? 0,
-        unitCost: (j['unit_cost'] as num?)?.toInt() ?? 0,
+        // Server float64 beradi (faqat shu maydon) — ko'rsatish uchun yaxlitlab.
+        unitCost: (j['unit_cost'] as num?)?.round() ?? 0,
         receivedAt: (j['received_at'] ?? '').toString(),
       );
 }
 
+/// `/stock/card` qatori (ledger yozuvi, yig'ma balans bilan).
 class CoreCardEntry {
+  final int id;
   final int docId;
   final String docType;
+  final String docNumber;
   final String docDate;
+  final String corr;
+  final String fromSklad;
+  final String toSklad;
   final int qtyDelta;
-  final int costDelta;
+  final int? costDelta; // faqat stock.cost.view
+  final int? batchId; // null — partiyasiz (defitsit) chiqim
   final int balance;
+  final String postedAt;
 
   const CoreCardEntry({
+    this.id = 0,
     this.docId = 0,
     this.docType = '',
+    this.docNumber = '',
     this.docDate = '',
+    this.corr = '',
+    this.fromSklad = '',
+    this.toSklad = '',
     this.qtyDelta = 0,
-    this.costDelta = 0,
+    this.costDelta,
+    this.batchId,
     this.balance = 0,
+    this.postedAt = '',
   });
 
   factory CoreCardEntry.fromJson(Map<String, dynamic> j) => CoreCardEntry(
+        id: (j['id'] as num?)?.toInt() ?? 0,
         docId: (j['doc_id'] as num?)?.toInt() ?? 0,
         docType: (j['doc_type'] ?? '').toString(),
+        docNumber: (j['doc_number'] ?? '').toString(),
         docDate: (j['doc_date'] ?? '').toString().split('T').first,
+        corr: (j['corr'] ?? '').toString(),
+        fromSklad: (j['from_sklad'] ?? '').toString(),
+        toSklad: (j['to_sklad'] ?? '').toString(),
         qtyDelta: (j['qty_delta'] as num?)?.toInt() ?? 0,
-        costDelta: (j['cost_delta'] as num?)?.toInt() ?? 0,
+        costDelta: (j['cost_delta'] as num?)?.toInt(),
+        batchId: (j['batch_id'] as num?)?.toInt(),
         balance: (j['balance'] as num?)?.toInt() ?? 0,
+        postedAt: (j['posted_at'] ?? '').toString(),
+      );
+}
+
+/// `GET /stock/card` javobi: `{sklad_id, good_id, open_qty, open_cost,
+/// close_qty, rows[]}`.
+class CoreStockCard {
+  final int skladId;
+  final int goodId;
+  final int openQty;
+  final int openCost;
+  final int closeQty;
+  final List<CoreCardEntry> rows;
+
+  const CoreStockCard({
+    required this.skladId,
+    required this.goodId,
+    this.openQty = 0,
+    this.openCost = 0,
+    this.closeQty = 0,
+    this.rows = const [],
+  });
+
+  factory CoreStockCard.fromJson(Map<String, dynamic> j) => CoreStockCard(
+        skladId: (j['sklad_id'] as num?)?.toInt() ?? 0,
+        goodId: (j['good_id'] as num?)?.toInt() ?? 0,
+        openQty: (j['open_qty'] as num?)?.toInt() ?? 0,
+        openCost: (j['open_cost'] as num?)?.toInt() ?? 0,
+        closeQty: (j['close_qty'] as num?)?.toInt() ?? 0,
+        rows: (j['rows'] as List?)
+                ?.whereType<Map>()
+                .map((e) => CoreCardEntry.fromJson(Map<String, dynamic>.from(e)))
+                .toList() ??
+            const [],
       );
 }

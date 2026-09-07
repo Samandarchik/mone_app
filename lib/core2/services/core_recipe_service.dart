@@ -27,7 +27,8 @@ class CoreRecipeService {
     }
   }
 
-  /// Yangi retsept (tovar uchun) — birinchi versiya bilan.
+  /// Yangi retsept (tovar uchun) — birinchi versiya `version` maydonida
+  /// (massiv emas). `name` bo'sh bo'lsa server tovar nomini oladi.
   Future<CoreRecipe> create({
     required int goodId,
     required String name,
@@ -38,8 +39,8 @@ class CoreRecipeService {
         CoreClient.url('/recipes'),
         data: {
           'good_id': goodId,
-          'name': name,
-          'versions': [version.toJson()],
+          if (name.isNotEmpty) 'name': name,
+          'version': version.toJson(),
         },
         options: CoreClient.idem(),
       );
@@ -63,18 +64,26 @@ class CoreRecipeService {
     }
   }
 
-  /// Ingredientlarga yoyish: [{good_id, qty}].
+  /// Ingredientlarga yoyish: `{"ingredients":[{good_id, good_name,
+  /// base_unit, qty}]}` (ledger stub bo'lsa 501).
   Future<List<Map<String, dynamic>>> expand({
     required int goodId,
     required String date,
     required int qty,
+    int? skladId,
   }) async {
     try {
       final r = await CoreClient.dio.get(
         CoreClient.url('/recipes/expand'),
-        queryParameters: {'good_id': goodId, 'date': date, 'qty': qty},
+        queryParameters: {
+          'good_id': goodId,
+          'date': date,
+          'qty': qty,
+          if (skladId != null) 'sklad_id': skladId,
+        },
       );
-      return CoreClient.listOf(r.data);
+      final m = CoreClient.mapOf(r.data);
+      return CoreClient.listOf(m['ingredients']);
     } catch (e) {
       throw CoreClient.wrap(e);
     }

@@ -4,8 +4,11 @@
 // reserve (dan/ga), production (dan/ga, ikki jadval: sarf flag=1 va mahsulot
 // flag=0), act (ga, taomlar), inventory (ombor, sana, tovar ro'yxati: joriy
 // qoldiq + fakt; «faqat farqlilar»; bo'sh qoldirilganlar yuborilmaydi).
-// Miqdor: tanlangan birlikda kiritiladi (kg/l), serverga BUTUN base
-// (`coreQtyFromUi`); narx — 1 birlik, butun so'm; summa avtomatik.
+// Miqdor: tanlangan birlikda kiritiladi (kg/l/dona), serverga BUTUN base
+// (`coreQtyFromUi`); narx — 1 birlik, butun so'm; summa avtomatik; sotuv
+// summasi (issue/reserve/act) — QATOR darajasida `sale_amount` (ledger.Line).
+// Hujjat endpointlari ledger ulanmaguncha 501 — showCoreError «hali
+// yoqilmagan» deb ko'rsatadi.
 // Tugmalar perms bo'yicha: Saqlash (draft) — doc.<type>.create, Tasdiqlash —
 // doc.<type>.post (warnings → dialog), O'chirish (draft). Orqa sana —
 // doc.backdate. Bozorchi: DocFormUi.marketReceipt() — supplier «РЫНОК»
@@ -75,6 +78,8 @@ class _LineEdit {
   CoreGoodUnit unit;
   final TextEditingController qty;
   final TextEditingController price;
+  // issue/reserve/act: qator sotuv summasi (ixtiyoriy, butun so'm).
+  final TextEditingController sale;
   final int flag;
 
   _LineEdit({
@@ -82,17 +87,21 @@ class _LineEdit {
     required this.unit,
     String qtyText = '',
     String priceText = '',
+    String saleText = '',
     this.flag = 0,
   })  : qty = TextEditingController(text: qtyText),
-        price = TextEditingController(text: priceText);
+        price = TextEditingController(text: priceText),
+        sale = TextEditingController(text: saleText);
 
   int get baseQty => coreQtyFromUi(parseUiQty(qty.text) ?? 0, unit);
   int get priceInt => parseMoney(price.text);
   int get amount => coreLineAmount(baseQty, priceInt, unit);
+  int get saleInt => parseMoney(sale.text);
 
   void dispose() {
     qty.dispose();
     price.dispose();
+    sale.dispose();
   }
 
   CoreDocLine toLine() => CoreDocLine(
@@ -102,6 +111,7 @@ class _LineEdit {
         qty: baseQty,
         price: priceInt,
         amount: amount,
+        saleAmount: sale.text.trim().isEmpty ? null : saleInt,
         flag: flag,
       );
 }
@@ -122,7 +132,6 @@ class _DocFormState extends State<_DocForm> {
   int? _to;
   int? _corr;
   final _comment = TextEditingController();
-  final _sale = TextEditingController();
   final List<_LineEdit> _lines = [];
   bool _busy = false;
   bool _initDone = false;
@@ -132,6 +141,7 @@ class _DocFormState extends State<_DocForm> {
   bool get hasTo => CoreDocType.hasTo(type);
   bool get hasCorr => CoreDocType.hasCorr(type);
   bool get hasPrice => CoreDocType.hasPrice(type);
+  bool get hasSale => CoreDocType.hasSaleAmount(type);
   bool get isProduction => type == CoreDocType.production;
 
   @override
@@ -143,9 +153,6 @@ class _DocFormState extends State<_DocForm> {
     _to = ex?.toSklad;
     _corr = ex?.corrId;
     _comment.text = ex?.comment ?? '';
-    if (ex != null && ex.saleAmount > 0) {
-      _sale.text = formatMoneyInput(ex.saleAmount);
-    }
   }
 
   @override
@@ -168,6 +175,7 @@ class _DocFormState extends State<_DocForm> {
           unit: unit,
           qtyText: coreFormatInUnit(l.qty, unit),
           priceText: l.price > 0 ? formatMoneyInput(l.price) : '',
+          saleText: (l.saleAmount ?? 0) > 0 ? formatMoneyInput(l.saleAmount!) : '',
           flag: l.flag,
         ));
       }
@@ -192,7 +200,6 @@ class _DocFormState extends State<_DocForm> {
   @override
   void dispose() {
     _comment.dispose();
-    _sale.dispose();
     for (final l in _lines) {
       l.dispose();
     }
@@ -200,6 +207,7 @@ class _DocFormState extends State<_DocForm> {
   }
 
   int get _total => _lines.fold(0, (s, l) => s + l.amount);
+  int get _totalSale => _lines.fold(0, (s, l) => s + l.saleInt);
 
   Future<void> _addLine({int flag = 0}) async {
     final sklad = hasFrom ? _from : _to;
@@ -218,7 +226,6 @@ class _DocFormState extends State<_DocForm> {
         toSklad: hasTo ? _to : null,
         corrId: hasCorr ? _corr : null,
         comment: _comment.text.trim(),
-        saleAmount: parseMoney(_sale.text),
         lines: _lines.map((l) => l.toLine()).toList(),
       );
 
@@ -418,16 +425,6 @@ class _DocFormState extends State<_DocForm> {
             onChanged: (v) => setState(() => _corr = v),
           ),
         ],
-        if (CoreDocType.hasSaleAmount(type)) ...[
-          const SizedBox(height: 10),
-          TextField(
-            controller: _sale,
-            enabled: editable,
-            keyboardType: TextInputType.number,
-            inputFormatters: [ThousandsSeparatorInputFormatter()],
-            decoration: coreInput('Sotuv summasi (ixtiyoriy, so\'m)'),
-          ),
-        ],
         const SizedBox(height: 10),
         TextField(
           controller: _comment,
@@ -570,19 +567,46 @@ class _DocFormState extends State<_DocForm> {
                     style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
               ),
             ),
+          if (hasSale)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: TextField(
+                controller: l.sale,
+                enabled: editable,
+                keyboardType: TextInputType.number,
+                inputFormatters: [ThousandsSeparatorInputFormatter()],
+                onChanged: (_) => setState(() {}),
+                decoration: coreInput('Sotuv summasi (ixtiyoriy, so\'m)'),
+              ),
+            ),
         ],
       ),
     );
   }
 
   Widget _totalCard() {
-    if (!hasPrice) return const SizedBox.shrink();
-    return _card(Row(
+    if (!hasPrice && !hasSale) return const SizedBox.shrink();
+    return _card(Column(
       children: [
-        const Expanded(
-            child: Text('Jami', style: TextStyle(fontWeight: FontWeight.bold))),
-        Text('${coreMoney(_total)} so\'m',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        if (hasPrice)
+          Row(
+            children: [
+              const Expanded(
+                  child: Text('Jami', style: TextStyle(fontWeight: FontWeight.bold))),
+              Text('${coreMoney(_total)} so\'m',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
+          ),
+        if (hasSale)
+          Row(
+            children: [
+              const Expanded(
+                  child: Text('Sotuv summasi',
+                      style: TextStyle(fontWeight: FontWeight.w600))),
+              Text('${coreMoney(_totalSale)} so\'m',
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+            ],
+          ),
       ],
     ));
   }

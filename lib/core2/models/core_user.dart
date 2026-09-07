@@ -88,21 +88,26 @@ class CoreMe {
   const CoreMe({required this.user, required this.perms});
 
   factory CoreMe.fromJson(Map<String, dynamic> j) {
-    // Ba'zi implementatsiyalar {user:{…}, perms:[…]}, ba'zilari {…User, perms:[…]}
-    // qaytarishi mumkin — ikkalasini ham qabul qilamiz.
+    // /auth/me: {…User, "perms":[…hisoblangan], "perms_override":{…}};
+    // /auth/login: {"token","user":{User},"perms":[…]} — ikkalasi qabul.
     final userJson = j['user'] is Map
         ? Map<String, dynamic>.from(j['user'] as Map)
         : Map<String, dynamic>.from(j);
-    final rawPerms = j['perms'];
-    final Set<String> perms = {};
-    if (rawPerms is List) {
-      for (final p in rawPerms) {
-        perms.add(p.toString());
+    final perms = parsePermsList(j['perms']);
+    if (j['perms'] is List) userJson.remove('perms');
+    if (j['perms_override'] is Map) userJson['perms'] = j['perms_override'];
+    return CoreMe(user: CoreUser.fromJson(userJson), perms: perms);
+  }
+
+  /// `"perms":["doc.receipt.create",…]` → to'plam (List bo'lmasa bo'sh).
+  static Set<String> parsePermsList(dynamic raw) {
+    final out = <String>{};
+    if (raw is List) {
+      for (final p in raw) {
+        out.add(p.toString());
       }
     }
-    // /auth/me da perms LIST (hisoblangan); User ichidagi perms MAP (override).
-    if (rawPerms is List) userJson.remove('perms');
-    return CoreMe(user: CoreUser.fromJson(userJson), perms: perms);
+    return out;
   }
 }
 

@@ -1,7 +1,8 @@
 // core2/ui/doc_detail_ui.dart — hujjat tafsiloti (DocDetailUi): sarlavha
 // (tur, raqam, holat chip), sana/omborlar/kontragent/izoh/manba, qatorlar
-// (miqdor birlikda, narx, summa; production'da sarf/mahsulot bo'limlari),
-// `stock_after` (hujjatdan keyingi qoldiq), warnings, tarix (created_by,
+// (miqdor birlikda, narx, summa, sotuv summasi, `stock_after` — qator
+// darajasida, hujjatdan keyingi qoldiq; production'da sarf/mahsulot
+// bo'limlari), warnings (post javobidan saqlanadi), tarix (created_by,
 // posted_by/at). Tugmalar perms bo'yicha: Tahrirlash (draft), Tasdiqlash
 // (draft → post, warnings dialog), Bekor qilish (posted → cancel,
 // doc.cancel), O'chirish (draft).
@@ -212,10 +213,6 @@ class _DocDetailUiState extends State<DocDetailUi> {
                       doc.lines.where((l) => l.flag == 0).toList(), doc, dict),
                 ] else
                   _lines('Qatorlar', doc.lines, doc, dict),
-                if (doc.stockAfter.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  _stockAfter(doc, dict),
-                ],
                 const SizedBox(height: 10),
                 _history(doc),
               ],
@@ -272,6 +269,19 @@ class _DocDetailUiState extends State<DocDetailUi> {
                         '${coreMoney(l.price)} × → ${coreMoney(l.amount)}',
                         style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
                       ),
+                    if ((l.saleAmount ?? 0) > 0)
+                      Text(
+                        'sotuv: ${coreMoney(l.saleAmount!)}',
+                        style: TextStyle(fontSize: 11.5, color: Colors.green.shade700),
+                      ),
+                    // Post'dan keyingi qoldiq (ledger beradi, qator darajasida).
+                    if (l.stockAfter != null)
+                      Text(
+                        'qoldiq: ${coreFormatQtyUnit(l.stockAfter!, dict.goodById(l.goodId)?.baseUnit ?? 'pcs')}',
+                        style: TextStyle(
+                            fontSize: 11.5,
+                            color: l.stockAfter! < 0 ? Colors.red.shade700 : Colors.grey.shade700),
+                      ),
                   ],
                 ),
               ],
@@ -322,38 +332,6 @@ class _DocDetailUiState extends State<DocDetailUi> {
         ],
       ),
     );
-  }
-
-  Widget _stockAfter(CoreDoc doc, CoreDictProvider dict) {
-    return _card(Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('Hujjatdan keyingi qoldiq',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 6),
-        for (final s in doc.stockAfter)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 3),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${s.goodName.isNotEmpty ? s.goodName : dict.goodName(s.goodId)} · ${dict.skladName(s.skladId)}',
-                    style: const TextStyle(fontSize: 12.5),
-                  ),
-                ),
-                Text(
-                  coreFormatQtyUnit(
-                      s.qty, dict.goodById(s.goodId)?.baseUnit ?? 'pcs'),
-                  style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: s.qty < 0 ? Colors.red.shade700 : Colors.black87),
-                ),
-              ],
-            ),
-          ),
-      ],
-    ));
   }
 
   Widget _history(CoreDoc doc) {

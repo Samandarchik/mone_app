@@ -102,11 +102,11 @@ Widget coreStatusChip(String status) {
 /// Xatoni SnackBar'da ko'rsatish (403 bo'lsa qaysi perm yetmagani bilan).
 void showCoreError(BuildContext context, Object e) {
   final err = CoreClient.wrap(e);
-  var msg = err.message;
+  var msg = err.display;
   if (err.forbidden && err.perm.isNotEmpty) msg = '$msg (ruxsat: ${err.perm})';
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
     content: Text(msg),
-    backgroundColor: Colors.red.shade700,
+    backgroundColor: err.notImplemented ? Colors.orange.shade800 : Colors.red.shade700,
   ));
 }
 
@@ -142,6 +142,7 @@ Future<void> showWarningsDialog(
             final qtyText = good == null
                 ? '${w.qty}'
                 : coreFormatQtyUnit(w.qty, good.baseUnit);
+            // negative_stock | no_batch | no_recipe | rounding
             return ListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
@@ -199,13 +200,17 @@ class CoreErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 501 (ledger hali yo'q) — qizil xato emas, sariq «hali yoqilmagan».
+    final notImpl = message.contains('not_implemented') ||
+        message.contains('hali yoqmagan');
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 48),
+            Icon(notImpl ? Icons.construction : Icons.error_outline,
+                color: notImpl ? Colors.orange.shade800 : Colors.red, size: 48),
             const SizedBox(height: 12),
             Text(message,
                 textAlign: TextAlign.center,

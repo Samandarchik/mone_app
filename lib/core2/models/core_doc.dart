@@ -1,8 +1,9 @@
 // core2/models/core_doc.dart — mone_core hujjati (CoreDoc) va qatori
-// (CoreDocLine), tur/holat konstantalari (CoreDocType/CoreDocStatus),
-// post javobidagi ogohlantirish (CoreDocWarning), qoldiq-keyin (stock_after)
-// va ro'yxat javobi (CoreDocPage). qty — butun base birlik, price/amount —
-// butun so'm. JSON snake_case, API_V2.md «Hujjatlar» bo'limi bilan 1:1.
+// (CoreDocLine: qty butun base, price/amount/sale_amount butun so'm,
+// stock_after — o'qishda qator darajasida), tur/holat konstantalari
+// (CoreDocType/CoreDocStatus), post javobidagi ogohlantirish
+// (CoreDocWarning), ro'yxat (CoreDocPage) va post natijasi
+// (CoreDocPostResult). JSON snake_case — ledger.Doc/Line bilan 1:1.
 
 abstract final class CoreDocType {
   static const String receipt = 'receipt';
@@ -55,7 +56,8 @@ abstract final class CoreDocType {
       t == inventory || t == reserve;
   static bool hasCorr(String t) => t == receipt || t == issue;
   static bool hasPrice(String t) => t == receipt;
-  static bool hasSaleAmount(String t) => t == issue || t == reserve;
+  // Qatorda `sale_amount` (sotuv summasi) kiritiladi — issue/reserve/act.
+  static bool hasSaleAmount(String t) => t == issue || t == reserve || t == act;
 }
 
 abstract final class CoreDocStatus {
@@ -86,7 +88,11 @@ class CoreDocLine {
   final int qty; // BUTUN base birlik
   final int price; // 1 `unit` narxi, butun so'm
   final int amount; // butun so'm
+  // issue/reserve/act: shu qatorning sotuv summasi (butun so'm), ixtiyoriy.
+  final int? saleAmount;
   final int flag; // production: 1 — sarf, 0 — mahsulot
+  // O'qishda: post'dan keyingi qoldiq (base birlik), ledger beradi.
+  final int? stockAfter;
 
   const CoreDocLine({
     this.id = 0,
@@ -97,7 +103,9 @@ class CoreDocLine {
     this.qty = 0,
     this.price = 0,
     this.amount = 0,
+    this.saleAmount,
     this.flag = 0,
+    this.stockAfter,
   });
 
   factory CoreDocLine.fromJson(Map<String, dynamic> j) => CoreDocLine(
@@ -109,7 +117,9 @@ class CoreDocLine {
         qty: (j['qty'] as num?)?.toInt() ?? 0,
         price: (j['price'] as num?)?.toInt() ?? 0,
         amount: (j['amount'] as num?)?.toInt() ?? 0,
+        saleAmount: (j['sale_amount'] as num?)?.toInt(),
         flag: (j['flag'] as num?)?.toInt() ?? 0,
+        stockAfter: (j['stock_after'] as num?)?.toInt(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -119,6 +129,7 @@ class CoreDocLine {
         'qty': qty,
         'price': price,
         'amount': amount,
+        if (saleAmount != null) 'sale_amount': saleAmount,
         'flag': flag,
       };
 }
@@ -151,28 +162,6 @@ class CoreDocWarning {
       );
 }
 
-/// Tafsilotdagi `stock_after`: hujjatdan keyingi qoldiq (ombor, tovar).
-class CoreStockAfter {
-  final int skladId;
-  final int goodId;
-  final String goodName;
-  final int qty;
-
-  const CoreStockAfter({
-    required this.skladId,
-    required this.goodId,
-    this.goodName = '',
-    this.qty = 0,
-  });
-
-  factory CoreStockAfter.fromJson(Map<String, dynamic> j) => CoreStockAfter(
-        skladId: (j['sklad_id'] as num?)?.toInt() ?? 0,
-        goodId: (j['good_id'] as num?)?.toInt() ?? 0,
-        goodName: (j['good_name'] ?? '').toString(),
-        qty: (j['qty'] as num?)?.toInt() ?? 0,
-      );
-}
-
 class CoreDoc {
   final int id;
   final String type;
@@ -190,9 +179,8 @@ class CoreDoc {
   final String? postedAt;
   final String? createdAt;
   final int total;
-  final int saleAmount;
   final List<CoreDocLine> lines;
-  final List<CoreStockAfter> stockAfter;
+  // Post javobidagi ogohlantirishlar (tafsilot GET'ida kelmaydi — UI saqlaydi).
   final List<CoreDocWarning> warnings;
 
   const CoreDoc({
@@ -212,11 +200,15 @@ class CoreDoc {
     this.postedAt,
     this.createdAt,
     this.total = 0,
-    this.saleAmount = 0,
     this.lines = const [],
-    this.stockAfter = const [],
     this.warnings = const [],
   });
+
+  /// Sotuv summasi — qatorlar `sale_amount` yig'indisi (butun so'm).
+  int get saleAmount => lines.fold(0, (s, l) => s + (l.saleAmount ?? 0));
+
+  /// Biror qatorda `stock_after` bormi (tafsilotda ustun ko'rsatish uchun).
+  bool get hasStockAfter => lines.any((l) => l.stockAfter != null);
 
   factory CoreDoc.fromJson(Map<String, dynamic> j) => CoreDoc(
         id: (j['id'] as num?)?.toInt() ?? 0,
@@ -235,16 +227,9 @@ class CoreDoc {
         postedAt: j['posted_at']?.toString(),
         createdAt: j['created_at']?.toString(),
         total: (j['total'] as num?)?.toInt() ?? 0,
-        saleAmount: (j['sale_amount'] as num?)?.toInt() ?? 0,
         lines: (j['lines'] as List?)
                 ?.whereType<Map>()
                 .map((e) => CoreDocLine.fromJson(Map<String, dynamic>.from(e)))
-                .toList() ??
-            const [],
-        stockAfter: (j['stock_after'] as List?)
-                ?.whereType<Map>()
-                .map((e) =>
-                    CoreStockAfter.fromJson(Map<String, dynamic>.from(e)))
                 .toList() ??
             const [],
         warnings: (j['warnings'] as List?)
@@ -263,7 +248,6 @@ class CoreDoc {
         'to_sklad': toSklad,
         'corr_id': corrId,
         'comment': comment,
-        if (CoreDocType.hasSaleAmount(type)) 'sale_amount': saleAmount,
         'lines': [
           for (var i = 0; i < lines.length; i++)
             (lines[i].toJson()..['ord'] = i + 1),
@@ -293,9 +277,7 @@ class CoreDoc {
         postedAt: postedAt,
         createdAt: createdAt,
         total: total,
-        saleAmount: saleAmount,
         lines: lines,
-        stockAfter: stockAfter,
         warnings: warnings ?? this.warnings,
       );
 }

@@ -100,23 +100,20 @@ class CoreSession extends ChangeNotifier with ClearableProvider {
       final res = await _auth.loginWithCode(code);
       _token = res.token;
       _user = res.user;
+      // Hisoblangan ruxsatlar login javobida keladi; bo'sh kelsa /auth/me.
+      _perms = res.perms;
+      if (_perms.isEmpty) {
+        try {
+          final me = await _auth.me();
+          _user = me.user;
+          _perms = me.perms;
+        } catch (e) {
+          debugPrint('CoreSession.me: $e');
+        }
+      }
       await prefs.setString(CoreClient.tokenKey, _token);
       await prefs.setString(_kUser, jsonEncode(_user!.toJson()));
-      // Hisoblangan ruxsatlar — /auth/me dan.
-      try {
-        final me = await _auth.me();
-        _user = me.user;
-        _perms = me.perms;
-        await prefs.setString(_kUser, jsonEncode(_user!.toJson()));
-        await prefs.setString(_kPerms, jsonEncode(_perms.toList()));
-      } catch (e) {
-        debugPrint('CoreSession.me: $e');
-        // perms override map'dan yoqilganlarni olamiz (vaqtinchalik).
-        _perms = {
-          for (final e in _user!.permsOverride.entries)
-            if (e.value) e.key
-        };
-      }
+      await prefs.setString(_kPerms, jsonEncode(_perms.toList()));
       _state = CoreConnState.connected;
       notifyListeners();
       return true;

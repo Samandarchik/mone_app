@@ -1,8 +1,9 @@
 // core2/models/core_report.dart — mone_core hisobot qatorlari:
 // CoreTurnoverRow (/reports/turnover — ochilish/kirim/chiqim/yopilish,
 // miqdor butun base + qiymat butun so'm), CoreDeficitRow (/reports/deficit —
-// partiyasiz (no_batch) chiqimlar). Stock-value uchun CoreStockSummary
-// (core_stock.dart) ishlatiladi.
+// partiyasiz chiqimlar, ombor×tovar jamlangan). Hisobot javoblari obyekt:
+// `{"items":[…], "date_from", "date_to", "total_cost"…}` — servis `items`
+// ni oladi. Stock-value uchun CoreStockSummary (core_stock.dart).
 
 class CoreTurnoverRow {
   final int goodId;
@@ -46,22 +47,21 @@ class CoreTurnoverRow {
       );
 }
 
+/// `/reports/deficit` qatori — ombor×tovar bo'yicha jamlangan partiyasiz
+/// (batch_id IS NULL) chiqimlar: qty (manfiy), cost, hujjatlar soni, davr.
 class CoreDeficitRow {
-  final int docId;
-  final String docType;
-  final String docDate;
   final int skladId;
   final String skladName;
   final int goodId;
   final String goodName;
   final String baseUnit;
-  final int qty; // manfiy — partiyasiz yechilgan miqdor
+  final int qty;
   final int cost;
+  final int docs;
+  final String firstDate;
+  final String lastDate;
 
   const CoreDeficitRow({
-    this.docId = 0,
-    this.docType = '',
-    this.docDate = '',
     this.skladId = 0,
     this.skladName = '',
     this.goodId = 0,
@@ -69,18 +69,21 @@ class CoreDeficitRow {
     this.baseUnit = 'pcs',
     this.qty = 0,
     this.cost = 0,
+    this.docs = 0,
+    this.firstDate = '',
+    this.lastDate = '',
   });
 
   factory CoreDeficitRow.fromJson(Map<String, dynamic> j) => CoreDeficitRow(
-        docId: (j['doc_id'] as num?)?.toInt() ?? 0,
-        docType: (j['doc_type'] ?? '').toString(),
-        docDate: (j['doc_date'] ?? '').toString().split('T').first,
         skladId: (j['sklad_id'] as num?)?.toInt() ?? 0,
         skladName: (j['sklad_name'] ?? '').toString(),
         goodId: (j['good_id'] as num?)?.toInt() ?? 0,
         goodName: (j['good_name'] ?? '').toString(),
         baseUnit: (j['base_unit'] ?? 'pcs').toString(),
-        qty: (j['qty'] as num?)?.toInt() ?? (j['qty_delta'] as num?)?.toInt() ?? 0,
-        cost: (j['cost'] as num?)?.toInt() ?? (j['cost_delta'] as num?)?.toInt() ?? 0,
+        qty: (j['qty'] as num?)?.toInt() ?? 0,
+        cost: (j['cost'] as num?)?.toInt() ?? 0,
+        docs: (j['docs'] as num?)?.toInt() ?? 0,
+        firstDate: (j['first_date'] ?? '').toString().split('T').first,
+        lastDate: (j['last_date'] ?? '').toString().split('T').first,
       );
 }
