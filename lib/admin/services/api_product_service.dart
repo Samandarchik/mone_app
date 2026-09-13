@@ -42,7 +42,10 @@ class ApiProductService {
   Future<List<ProductModelAdmin>> getAllProducts() async {
     try {
       final raw = await fetchAllProductsRaw();
-      return compute(parseProductsJson, raw);
+      // `await` SHART: awaitsiz qaytarilgan Future xatosi shu try/catch dan
+      // chetlab o'tadi va isolate'dagi parse xatosi (buzuq JSON) pastdagi
+      // catch'ga tushmay, chaqiruvchiga xom holda chiqib ketardi.
+      return await compute(parseProductsJson, raw);
     } on DioException catch (e) {
       if (e.response != null) {
         throw Exception(

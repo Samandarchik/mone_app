@@ -65,9 +65,14 @@ class ShefService {
 
   // GET /api/production/pf-stock — полуфабрикат qoldig'i (butun ro'yxat).
   // Shef o'z skladini oladi, shuning uchun sklad_id YUBORILMAYDI.
-  Future<PfStockData> fetchPfStock() async {
+  // ready: true — пф EMAS, TAYYOR mahsulotlar qoldig'i («Готовый» ekrani).
+  // Backend bir xil javob shaklini beradi, faqat filtr teskari (kind=ready).
+  Future<PfStockData> fetchPfStock({bool ready = false}) async {
     try {
-      final response = await dio.get(AppUrls.pfStock);
+      final response = await dio.get(
+        AppUrls.pfStock,
+        queryParameters: ready ? const {'kind': 'ready'} : null,
+      );
       if (response.statusCode == 200) {
         final body = response.data;
         if (body is Map && body['data'] is Map) {
@@ -90,8 +95,7 @@ class ShefService {
         if (body is Map) return ProductionOrder.listFromJson(body['data']);
         return [];
       }
-      throw Exception(
-          'Buyurtmalarni yuklab bo\'lmadi: ${response.statusCode}');
+      throw Exception('Buyurtmalarni yuklab bo\'lmadi: ${response.statusCode}');
     } on DioException catch (e) {
       _throwDio(e, 'buyurtmalar yuklanmadi');
     }
@@ -113,8 +117,7 @@ class ShefService {
   // POST /api/production/orders — buyurtma yaratish.
   // Body: { "items": [ {"product_id": 12, "qty": 130}, ... ] }.
   // Server snapshot va partiya hisobini o'zi qiladi.
-  Future<ProductionOrder?> createOrder(
-      List<Map<String, dynamic>> items) async {
+  Future<ProductionOrder?> createOrder(List<Map<String, dynamic>> items) async {
     try {
       final response = await dio.post(
         AppUrls.productionOrders,

@@ -64,6 +64,14 @@ class ShefHomeUi extends StatelessWidget {
             subtitle: 'Qoldiq: bor / band / mumkin',
             onTap: () => _open(context, const PfStockPage()),
           ),
+          // Готовый — «Полуфабрикат» bilan AYNAN bir xil ekran, faqat пф
+          // BO'LMAGAN (tayyor) mahsulotlar ro'yxati (GET pf-stock?kind=ready).
+          _MenuCard(
+            icon: Icons.cake_outlined,
+            title: 'Готовый',
+            subtitle: 'Tayyor mahsulot qoldig\'i',
+            onTap: () => _open(context, const PfStockPage(ready: true)),
+          ),
           // Тех карта — shefga belgilangan kategoriyalar retsepti
           // (narxlarsiz: faqat tarkib tahrirlanadi).
           _MenuCard(

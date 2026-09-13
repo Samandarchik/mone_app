@@ -3,7 +3,6 @@
 // admin_add_categoriy.dart shu dialogni «+» va tahrirda chaqiradi.
 import 'dart:io';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -11,6 +10,7 @@ import 'package:uz_ai_dev/admin/model/category_model.dart';
 import 'package:uz_ai_dev/admin/provider/upload_image_provider.dart';
 import 'package:uz_ai_dev/admin/services/print_agent_service.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
+import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 
 class CategoryDialog extends StatefulWidget {
   final CategoryProductAdmin? category;
@@ -230,13 +230,22 @@ class _CategoryDialogState extends State<CategoryDialog> {
                               fit: BoxFit.cover,
                             ),
                           )
-                        : widget.category?.imageUrl != null
+                        // Rasm manzili BO'SH SATR ham bo'lishi mumkin (пф
+                        // kategoriyalarida `image_url: ""`) — u holda tarmoqqa
+                        // chiqmaymiz, aks holda baseUrl'ning o'zi so'ralib
+                        // «Invalid image data» xatosi chiqadi.
+                        : (widget.category?.imageUrl?.isNotEmpty ?? false)
                             ? ClipRRect(
                                 borderRadius: BorderRadius.circular(12),
-                                child: CachedNetworkImage(
+                                child: AppNetworkImage(
                                   imageUrl:
                                       "${AppUrls.baseUrl}${widget.category!.imageUrl!}",
                                   fit: BoxFit.cover,
+                                  errorWidget: (context) => Icon(
+                                    Icons.broken_image,
+                                    size: 48,
+                                    color: Colors.grey[400],
+                                  ),
                                 ),
                               )
                             : Column(

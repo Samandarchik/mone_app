@@ -30,6 +30,14 @@ class ShefProvider extends ChangeNotifier with ClearableProvider {
   bool isLoadingPfStock = false;
   String? pfStockError;
 
+  // «Готовый» ekrani (PfStockPage(ready: true)) — bir xil qator shakli,
+  // lekin пф BO'LMAGAN mahsulotlar. Alohida holat: ikkala ekran bir vaqtda
+  // ochilishi mumkin.
+  List<PfStockRow> readyStock = [];
+  int readyStockSkladId = 0;
+  bool isLoadingReadyStock = false;
+  String? readyStockError;
+
   // Buyurtma yuborilayotganda tugma spinner'i uchun.
   bool isSubmitting = false;
 
@@ -119,7 +127,11 @@ class ShefProvider extends ChangeNotifier with ClearableProvider {
 
   // Полуфабрикат qoldig'i. Ekran ochilganda va pull-to-refresh'da chaqiriladi;
   // parallel (ikkilangan) so'rov ketmasligi uchun yuklanayotgan bo'lsa chiqamiz.
-  Future<void> fetchPfStock() async {
+  // ready: true — «Готовый» ekrani (пф emas, tayyor mahsulotlar). Ikki ro'yxat
+  // ALOHIDA saqlanadi: ikkala ekran bir vaqtda ochiq bo'lishi mumkin va biri
+  // ikkinchisining ma'lumotini bosib ketmasligi kerak.
+  Future<void> fetchPfStock({bool ready = false}) async {
+    if (ready) return _fetchReadyStock();
     if (isLoadingPfStock) return;
     isLoadingPfStock = true;
     pfStockError = null;
@@ -133,6 +145,24 @@ class ShefProvider extends ChangeNotifier with ClearableProvider {
       pfStockError = e.toString().replaceFirst('Exception: ', '');
     } finally {
       isLoadingPfStock = false;
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  Future<void> _fetchReadyStock() async {
+    if (isLoadingReadyStock) return;
+    isLoadingReadyStock = true;
+    readyStockError = null;
+    notifyListeners();
+
+    try {
+      final data = await _service.fetchPfStock(ready: true);
+      readyStock = data.items;
+      readyStockSkladId = data.skladId;
+    } catch (e) {
+      readyStockError = e.toString().replaceFirst('Exception: ', '');
+    } finally {
+      isLoadingReadyStock = false;
       if (!_disposed) notifyListeners();
     }
   }
@@ -202,9 +232,8 @@ class ShefProvider extends ChangeNotifier with ClearableProvider {
   }
 
   // Shef: «Qabul qildim» — material_status = qabul_qilindi.
-  Future<String?> acceptStage(int orderId, int pi, int si) =>
-      _stageAction(orderId, pi, si,
-          () => _service.acceptStage(orderId, pi, si));
+  Future<String?> acceptStage(int orderId, int pi, int si) => _stageAction(
+      orderId, pi, si, () => _service.acceptStage(orderId, pi, si));
 
   // Shef: «Qabul qilmadim» (izoh bilan) — material_status = rad_etildi.
   Future<String?> rejectStage(int orderId, int pi, int si, String comment) =>
@@ -253,6 +282,10 @@ class ShefProvider extends ChangeNotifier with ClearableProvider {
     pfStockSkladId = 0;
     isLoadingPfStock = false;
     pfStockError = null;
+    readyStock = [];
+    readyStockSkladId = 0;
+    isLoadingReadyStock = false;
+    readyStockError = null;
     isSubmitting = false;
     busyStageKey = null;
     notifyListeners();
