@@ -1,6 +1,8 @@
 // admin/ui/rk7_mapping_ui.dart — RK7 «Mapping» tabi (Rk7MappingTab): tepada
 // bog'lanmagan taomlar (GET /api/rk7/unmapped), pastda qidiruv bilan mapping
 // ro'yxati (GET /api/rk7/mappings?q=) va bog'lash dialogi (POST /api/rk7/mappings).
+// Dialogda mahsulot tanlangach «SH5 retsepti» bo'limi ham chiqadi
+// (PLAN_RETSEPT §4) — _Sh5RecipeSection, fayl oxirida.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -9,8 +11,10 @@ import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/admin/model/product_model.dart';
 import 'package:uz_ai_dev/admin/model/rk7_mapping_model.dart';
 import 'package:uz_ai_dev/admin/model/rk7_shift_model.dart';
+import 'package:uz_ai_dev/admin/model/sh5_recipe_model.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/services/rk7_service.dart';
+import 'package:uz_ai_dev/admin/services/sh5_service.dart';
 import 'package:uz_ai_dev/admin/ui/widgets/rk7_common.dart';
 import 'package:uz_ai_dev/core/data/sklad_registry.dart';
 
@@ -143,6 +147,42 @@ class _Rk7MappingTabState extends State<Rk7MappingTab>
       if (skladId > 0 && !SkladRegistry.ids.contains(skladId)) skladId,
     ];
 
+    // Retsept qo'llash / dialog ichida mapping saqlanishi — «Saqlash»siz
+    // yopilsa ham ro'yxat yangilanishi uchun.
+    bool dirty = false;
+
+    // Apply serverda mapping.product_id ≠ 0 bo'lishini talab qiladi
+    // (PLAN_RETSEPT §3), shuning uchun retseptni qo'llashdan oldin dialogdagi
+    // joriy qiymatlar bilan mapping saqlanadi.
+    Future<bool> ensureMapping() async {
+      final product = selected;
+      if (product == null) return false;
+      final perPortion = int.tryParse(perPortionController.text.trim()) ?? 0;
+      if (perPortion < 1) {
+        if (mounted) {
+          rk7Snack(context, 'per_portion 1 dan kichik bo\'lmasin', error: true);
+        }
+        return false;
+      }
+      try {
+        await _service.saveMapping(
+          dishGuid: dishGuid,
+          productId: product.id,
+          deductMode: mode,
+          perPortion: perPortion,
+          skladId: skladId,
+        );
+        dirty = true;
+        return true;
+      } catch (e) {
+        if (mounted) {
+          rk7Snack(context, e.toString().replaceFirst('Exception: ', ''),
+              error: true);
+        }
+        return false;
+      }
+    }
+
     final saved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -261,6 +301,18 @@ class _Rk7MappingTabState extends State<Rk7MappingTab>
                     style:
                         TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
                   ),
+                  // SH5 retsepti — faqat mahsulot tanlangach so'raladi;
+                  // retsept topilmasa bo'lim jim yo'qoladi (PLAN_RETSEPT §4).
+                  if (selected != null)
+                    _Sh5RecipeSection(
+                      key: ValueKey('sh5-recipe-$dishGuid'),
+                      dishGuid: dishGuid,
+                      ensureMapping: ensureMapping,
+                      onApplied: () {
+                        dirty = true;
+                        setDialogState(() => mode = Rk7DeductMode.ingredients);
+                      },
+                    ),
                 ],
               ),
             ),
@@ -287,7 +339,13 @@ class _Rk7MappingTabState extends State<Rk7MappingTab>
     final perPortion = int.tryParse(perPortionController.text.trim()) ?? 0;
     perPortionController.dispose();
 
-    if (saved != true || !mounted) return;
+    if (!mounted) return;
+    if (saved != true) {
+      // Retsept qo'llangan (yoki shu yo'lda mapping saqlangan) bo'lsa ro'yxat
+      // eskirmasin.
+      if (dirty) await _load();
+      return;
+    }
     if (product == null) {
       rk7Snack(context, 'Mahsulot tanlanmadi', error: true);
       return;
@@ -628,6 +686,286 @@ class _Rk7MappingTabState extends State<Rk7MappingTab>
       child: Text(
         text,
         style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
+      ),
+    );
+  }
+}
+
+// ───────────────────────── SH5 retsepti bo'limi ─────────────────────────
+
+// Bog'lash dialogidagi «SH5 retsepti» bloki (PLAN_RETSEPT §4): taomga mos
+// SH5 kalkulyatsiyasi topilsa ingredientlarni (miqdor + mos Mone mahsuloti
+// yoki QIZIL «topilmadi») ko'rsatadi va bitta tugma bilan tex karta qilib
+// qo'llaydi. Retsept topilmasa (404/bo'sh) hech narsa chizmaydi.
+class _Sh5RecipeSection extends StatefulWidget {
+  const _Sh5RecipeSection({
+    super.key,
+    required this.dishGuid,
+    required this.ensureMapping,
+    required this.onApplied,
+  });
+
+  final String dishGuid;
+
+  /// Apply'dan oldin mapping saqlanadi (server product_id ≠ 0 talab qiladi).
+  /// false — saqlanmadi, qo'llash to'xtaydi.
+  final Future<bool> Function() ensureMapping;
+
+  /// Muvaffaqiyat: dialogdagi deduct_mode switch «ingredients» ga o'tadi.
+  final VoidCallback onApplied;
+
+  @override
+  State<_Sh5RecipeSection> createState() => _Sh5RecipeSectionState();
+}
+
+class _Sh5RecipeSectionState extends State<_Sh5RecipeSection> {
+  final Sh5Service _sh5 = Sh5Service();
+
+  Sh5DishRecipe? _recipe;
+  bool _loading = true;
+  bool _applying = false;
+  bool _applied = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final recipe = await _sh5.fetchRecipeByDish(widget.dishGuid);
+      if (!mounted) return;
+      setState(() {
+        _recipe = recipe;
+        _loading = false;
+      });
+    } catch (_) {
+      // Retsept qo'shimcha imkoniyat — xatosi bog'lash oqimini buzmasin.
+      if (!mounted) return;
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _apply({bool overwrite = false}) async {
+    setState(() => _applying = true);
+    try {
+      if (!await widget.ensureMapping()) return;
+      await _sh5.applyRecipe(dishGuid: widget.dishGuid, overwrite: overwrite);
+      if (!mounted) return;
+      setState(() => _applied = true);
+      widget.onApplied();
+      rk7Snack(context, 'Tex karta SH5 retseptidan yaratildi');
+    } on Sh5RecipeApplyException catch (e) {
+      if (!mounted) return;
+      if (e.techCardExists && !overwrite) {
+        final replace = await _confirmOverwrite();
+        if (replace == true) {
+          await _apply(overwrite: true);
+          return;
+        }
+      } else if (e.unmatched.isNotEmpty) {
+        await _showUnmatched(e.unmatched);
+      } else if (mounted) {
+        rk7Snack(context, e.message, error: true);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      rk7Snack(context, e.toString().replaceFirst('Exception: ', ''),
+          error: true);
+    } finally {
+      if (mounted) setState(() => _applying = false);
+    }
+  }
+
+  Future<bool?> _confirmOverwrite() {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Tex karta mavjud', style: TextStyle(fontSize: 15)),
+        content: const Text(
+          'Mahsulotda tex karta bor. Almashtiraylikmi?',
+          style: TextStyle(fontSize: 13.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Yo\'q'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kRk7Accent,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Ha, almashtir'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 409 unmatched — qisman tex karta yozilmaydi, admin avval shu masalliqlarni
+  // Mone'da ochishi (yoki nomini moslashi) kerak.
+  Future<void> _showUnmatched(List<String> names) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text(
+          'Mos kelmagan masalliqlar',
+          style: TextStyle(fontSize: 15),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final name in names)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    '• $name',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.red.shade700,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 8),
+              Text(
+                'Avval bu mahsulotlarni oching yoki nomini moslang.',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Yopish'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 14),
+        child: LinearProgressIndicator(minHeight: 2, color: kRk7Accent),
+      );
+    }
+    final recipe = _recipe;
+    if (recipe == null) return const SizedBox.shrink();
+
+    final unmatchedCount = recipe.unmatchedNames.length;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 12),
+        const Divider(height: 1),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            const Icon(Icons.receipt_long, size: 18, color: kRk7AccentDark),
+            const SizedBox(width: 6),
+            const Expanded(
+              child: Text(
+                'SH5 retsepti',
+                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold),
+              ),
+            ),
+            if (unmatchedCount > 0)
+              rk7Badge('topilmadi: $unmatchedCount', color: Colors.red.shade700),
+          ],
+        ),
+        if (recipe.name.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            recipe.group.isEmpty
+                ? recipe.name
+                : '${recipe.name} · ${recipe.group}',
+            style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
+          ),
+        ],
+        const SizedBox(height: 6),
+        for (final item in recipe.ingredients) _ingredientRow(item),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _applying ? null : () => _apply(),
+            icon: _applying
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Icon(_applied ? Icons.check : Icons.playlist_add, size: 18),
+            label: Text(_applied ? 'Qo\'llandi' : 'Retseptni qo\'llash'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kRk7Accent,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Ingredient qatori: nom + miqdor (qty_micro'dan), ostida mos Mone mahsuloti
+  // yoki QIZIL «topilmadi».
+  Widget _ingredientRow(Sh5RecipeIngredient item) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            item.matched ? Icons.check_circle_outline : Icons.error_outline,
+            size: 16,
+            color: item.matched ? Colors.green.shade600 : Colors.red.shade600,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.name,
+                  style: const TextStyle(fontSize: 13),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  item.matched
+                      ? (item.matchedProductName.isEmpty
+                          ? 'Mahsulot #${item.matchedProductId}'
+                          : item.matchedProductName)
+                      : 'topilmadi',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight:
+                        item.matched ? FontWeight.normal : FontWeight.w600,
+                    color: item.matched
+                        ? Colors.grey.shade600
+                        : Colors.red.shade700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            item.qtyLabel,
+            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+          ),
+        ],
       ),
     );
   }

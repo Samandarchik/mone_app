@@ -248,6 +248,18 @@ abstract final class AppUrls {
   static String get sh5Handovers => '$baseUrl/api/sh5/handovers';
   // Bitta topshiriq: GET ?diff=1 — faqat farq chiqqan qatorlar.
   static String sh5HandoverDetail(int id) => '$baseUrl/api/sh5/handovers/$id';
+  // SH5 kalkulyatsiyasi (retsept) RK7 taomi bo'yicha (faqat admin,
+  // PLAN_RETSEPT §3): GET — {cmp_rid, name, unit, group, ingredients:[{rid,
+  // name, unit, qty_micro, matched_product_id, matched_product_name}]};
+  // retsept yo'q bo'lsa 404 (UI bo'limni ko'rsatmaydi). qty_micro — qty×1e6
+  // BUTUN. dish_guid `{...}` qavslari bilan — shuning uchun kodlanadi.
+  static String sh5RecipeByDish(String dishGuid) =>
+      '$baseUrl/api/sh5/recipes/by-dish/${Uri.encodeComponent(dishGuid)}';
+  // Retseptni mahsulotga tex karta qilib qo'llash: POST {dish_guid,
+  // overwrite} — muvaffaqiyatda mapping deduct_mode «ingredients» bo'ladi.
+  // 409: mahsulotda tex karta bor (overwrite:true bilan qayta yuboriladi)
+  // yoki mos kelmagan ingredientlar ro'yxati (qisman tex karta yozilmaydi).
+  static String get sh5RecipeApply => '$baseUrl/api/sh5/recipes/apply';
 
   //Category
   static String get category => '$baseUrl/api/categories';

@@ -1,10 +1,12 @@
 // admin/services/sh5_service.dart — SH5 (StoreHouse) qoldiq + smena
 // topshirish/qabul servisi: omborlar ro'yxati, ombor tovarlari, bridge'dan
 // yangilash so'rovi, topshiriq qoralamasi/saqlash/qabul/tarix.
-// Endpointlar: /api/sh5/remains[/{id}], /api/sh5/refresh, /api/sh5/handover*.
+// Endpointlar: /api/sh5/remains[/{id}], /api/sh5/refresh, /api/sh5/handover*,
+// /api/sh5/recipes/by-dish/{dish_guid}, /api/sh5/recipes/apply.
 // Javob envelope: {success, message, data}.
 import 'package:dio/dio.dart';
 import 'package:uz_ai_dev/admin/model/sh5_handover_model.dart';
+import 'package:uz_ai_dev/admin/model/sh5_recipe_model.dart';
 import 'package:uz_ai_dev/admin/model/sh5_remain_model.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/di/di.dart';
@@ -124,6 +126,57 @@ class Sh5Service {
       return Sh5Handover.fromJson(Map<String, dynamic>.from(data));
     }
     return null;
+  }
+
+  // ──────────────────── Retsept (kalkulyatsiya) — PLAN_RETSEPT ────────────────────
+
+  /// RK7 taomiga mos SH5 retsepti + har ingredientning Mone mahsulotiga
+  /// moslash natijasi. Retsept topilmasa (404 yoki bo'sh) — null qaytadi va
+  /// UI «SH5 retsepti» bo'limini umuman ko'rsatmaydi.
+  Future<Sh5DishRecipe?> fetchRecipeByDish(String dishGuid) async {
+    try {
+      final response = await dio.get(AppUrls.sh5RecipeByDish(dishGuid));
+      final data = response.data is Map ? response.data['data'] : null;
+      if (data is! Map) return null;
+      final recipe = Sh5DishRecipe.fromJson(Map<String, dynamic>.from(data));
+      return recipe.ingredients.isEmpty ? null : recipe;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      if (e.response != null) {
+        throw Exception('Server xatosi: ${parseDioError(e)}');
+      }
+      throw Exception('Tarmoq xatosi: ${e.message}');
+    }
+  }
+
+  /// Retseptni mahsulotga tex karta qilib qo'llash. [overwrite] — mavjud tex
+  /// kartani almashtirishga admin rozi bo'lgandagina true.
+  ///
+  /// 409 (mavjud tex karta yoki mos kelmagan ingredientlar) —
+  /// [Sh5RecipeApplyException] ko'tariladi, UI shunga qarab tasdiq so'raydi
+  /// yoki qizil ro'yxatni ko'rsatadi.
+  Future<void> applyRecipe({
+    required String dishGuid,
+    bool overwrite = false,
+  }) async {
+    try {
+      await dio.post(AppUrls.sh5RecipeApply, data: {
+        'dish_guid': dishGuid,
+        'overwrite': overwrite,
+      });
+    } on DioException catch (e) {
+      final response = e.response;
+      if (response?.statusCode == 409) {
+        throw Sh5RecipeApplyException.fromResponse(
+          response?.data,
+          parseDioError(e, fallback: 'Retsept qo\'llanmadi'),
+        );
+      }
+      if (response != null) {
+        throw Exception('Server xatosi: ${parseDioError(e)}');
+      }
+      throw Exception('Tarmoq xatosi: ${e.message}');
+    }
   }
 
   // rid → milli BUTUN son ro'yxati (serverga float yuborilmaydi).
