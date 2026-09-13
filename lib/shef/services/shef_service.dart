@@ -1,6 +1,7 @@
 // shef/services/shef_service.dart — shef (ishlab chiqarish) Dio servisi:
 // ShefService — /api/production/{products,orders} (yaratish + accept/reject/
-// progress) va полуфабрикат limiti uchun /api/production/pf-availability.
+// progress), полуфабрикат limiti uchun /api/production/pf-availability va
+// pf qoldig'i ro'yxati uchun /api/production/pf-stock.
 import 'package:dio/dio.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/di/di.dart';
@@ -59,6 +60,24 @@ class ShefService {
       throw Exception('Qoldiq ma\'lumoti yuklanmadi: ${response.statusCode}');
     } on DioException catch (e) {
       _throwDio(e, 'qoldiq ma\'lumoti yuklanmadi');
+    }
+  }
+
+  // GET /api/production/pf-stock — полуфабрикат qoldig'i (butun ro'yxat).
+  // Shef o'z skladini oladi, shuning uchun sklad_id YUBORILMAYDI.
+  Future<PfStockData> fetchPfStock() async {
+    try {
+      final response = await dio.get(AppUrls.pfStock);
+      if (response.statusCode == 200) {
+        final body = response.data;
+        if (body is Map && body['data'] is Map) {
+          return PfStockData.fromJson(Map<String, dynamic>.from(body['data']));
+        }
+        return const PfStockData();
+      }
+      throw Exception('Qoldiqni yuklab bo\'lmadi: ${response.statusCode}');
+    } on DioException catch (e) {
+      _throwDio(e, 'qoldiq yuklanmadi');
     }
   }
 

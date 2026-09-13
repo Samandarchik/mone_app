@@ -25,6 +25,8 @@ import 'package:uz_ai_dev/production/ui/widgets/cost_sheet.dart';
 //      «dd.MM.yyyy • sklad • pricer — qty birlik × 1kg narxi = summa».
 // Sheet `true` qaytarsa — qo'lda narx o'zgargan, chaqiruvchi narxlarni
 // qayta yuklashi kerak.
+// `allowManualEdit: false` — 1-qism (qo'lda narx bloki) UMUMAN chizilmaydi:
+// faqat xarid tarixi ko'rinadi (shef rejimi, manual-price PUT yo'q).
 
 const Color _accent = Color(0xFFC5A97B);
 
@@ -52,6 +54,7 @@ Future<bool?> showPriceHistorySheet(
   BuildContext context, {
   required int productId,
   String productName = '',
+  bool allowManualEdit = true,
 }) {
   return showModalBottomSheet<bool>(
     context: context,
@@ -60,16 +63,25 @@ Future<bool?> showPriceHistorySheet(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
     ),
-    builder: (_) =>
-        _PriceHistorySheet(productId: productId, productName: productName),
+    builder: (_) => _PriceHistorySheet(
+      productId: productId,
+      productName: productName,
+      allowManualEdit: allowManualEdit,
+    ),
   );
 }
 
 class _PriceHistorySheet extends StatefulWidget {
   final int productId;
   final String productName;
+  // false — qo'lda narx bloki ko'rsatilmaydi (faqat tarix o'qiladi).
+  final bool allowManualEdit;
 
-  const _PriceHistorySheet({required this.productId, this.productName = ''});
+  const _PriceHistorySheet({
+    required this.productId,
+    this.productName = '',
+    this.allowManualEdit = true,
+  });
 
   @override
   State<_PriceHistorySheet> createState() => _PriceHistorySheetState();
@@ -204,7 +216,8 @@ class _PriceHistorySheetState extends State<_PriceHistorySheet> {
                 ),
               ),
               const Divider(height: 1),
-              if (_product != null) _manualPriceBlock(_product!),
+              if (widget.allowManualEdit && _product != null)
+                _manualPriceBlock(_product!),
               Expanded(
                 child: FutureBuilder<List<PriceHistoryEntry>>(
                   future: _future,

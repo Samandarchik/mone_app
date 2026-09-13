@@ -8,7 +8,10 @@
 //   - seller → filial (majburiy); ombor/shef → bitta sklad;
 //     yuk_keltiruvchi → bir nechta sklad + manbalar (sources)
 //   - ombor → Telegram guruh ID (ixtiyoriy)
-//   - bugalter/shef → kategoriya so'ralmaydi (bo'sh ro'yxat yuboriladi)
+//   - bugalter → kategoriya so'ralmaydi (bo'sh ro'yxat yuboriladi)
+//   - shef → «Тех карта kategoriyalari» chiplari (sotuvchidagi kabi
+//     User.categoryIds = category_list): shef FAQAT shu kategoriyalarning
+//     тех картасини ko'radi va tahrirlaydi. Bo'sh — hech narsa ko'rinmaydi.
 //   - seller → «Ostatka (SH5) omborlari» ruxsati (kategoriya chiplari naqshi):
 //     tanlangan omborlarni sotuvchi ilovada ochib ko'radi va smena
 //     topshiradi/qabul qiladi (User.sh5Sklads)
@@ -244,12 +247,11 @@ class _UserEditDialogState extends State<UserEditDialog> {
     final int? filialId =
         _selectedRole == AppRoles.seller ? _selectedFilialId : null;
 
-    // Bugalter/shef kategoriya bilan cheklanmaydi — bo'sh ro'yxat yuboriladi,
+    // Bugalter kategoriya bilan cheklanmaydi — bo'sh ro'yxat yuboriladi,
     // rol almashtirilganda eski tanlov qolib ketmasligi uchun.
+    // Shef uchun esa category_list — тех карта ruxsati (sotuvchidagi kabi).
     final List<int> categoryIds =
-        (_selectedRole == AppRoles.bugalter || _selectedRole == AppRoles.shef)
-            ? []
-            : _categoryIds;
+        _selectedRole == AppRoles.bugalter ? [] : _categoryIds;
 
     // Ostatka ruxsati FAQAT sotuvchi uchun; rol almashtirilsa eski tanlov
     // qolib ketmasligi uchun bo'sh ro'yxat yuboriladi.
@@ -575,8 +577,11 @@ class _UserEditDialogState extends State<UserEditDialog> {
     );
   }
 
-  // Kategoriya tanlovi (bugalter/shef dan boshqa rollar uchun).
+  // Kategoriya tanlovi (bugalterdan boshqa rollar uchun).
+  // Sotuvchida — katalog ruxsati; shefda — тех карта ruxsati (bir xil
+  // `category_list` maydoni, faqat sarlavha/izoh rolga moslanadi).
   Widget _buildCategoryChips() {
+    final bool isShef = _selectedRole == AppRoles.shef;
     return Consumer<ProductProvider>(
       builder: (context, provider, child) {
         Widget body;
@@ -650,7 +655,17 @@ class _UserEditDialogState extends State<UserEditDialog> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _sectionTitle('Kategoriyalar'),
+            _sectionTitle(
+                isShef ? 'Тех карта kategoriyalari' : 'Kategoriyalar'),
+            if (isShef) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Shef faqat belgilangan kategoriyalarning тех картасини '
+                'ko\'radi va tahrirlaydi. Bo\'sh qoldirilsa — hech narsa '
+                'ko\'rinmaydi.',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+            ],
             const SizedBox(height: 8),
             body,
           ],
@@ -836,12 +851,12 @@ class _UserEditDialogState extends State<UserEditDialog> {
                 ],
 
                 // Yuk keltiruvchi: kategoriya o'rniga manba (source) tanlovi.
-                // Bugalter/shef: kategoriya so'ralmaydi.
-                // Boshqa rollar: kategoriya tanlovi.
+                // Bugalter: kategoriya so'ralmaydi.
+                // Shef: kategoriya = тех карта ruxsati.
+                // Boshqa rollar: kategoriya tanlovi (katalog).
                 if (_selectedRole == AppRoles.yukKeltiruvchi)
                   _buildSourceChips()
-                else if (_selectedRole != AppRoles.bugalter &&
-                    _selectedRole != AppRoles.shef)
+                else if (_selectedRole != AppRoles.bugalter)
                   _buildCategoryChips(),
 
                 // Ostatka (SH5) ruxsati — faqat sotuvchi uchun.

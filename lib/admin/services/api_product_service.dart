@@ -9,24 +9,40 @@ import 'package:dio/dio.dart';
 import 'package:uz_ai_dev/admin/model/product_model.dart';
 import 'package:uz_ai_dev/admin/model/tech_card_version.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
+import 'package:uz_ai_dev/core/data/local/products_cache.dart';
 import 'package:uz_ai_dev/core/di/di.dart';
 import 'package:uz_ai_dev/core/network/error_handler.dart';
 
 class ApiProductService {
   final Dio dio = sl<Dio>();
 
-  // Get all products
+  // Mahsulotlar ro'yxatining XOM javobi (~1.6 MB): `ResponseType.plain` —
+  // Dio uni UI oqimida dekod QILMAYDI. Dekod + fromJson `compute()` fon
+  // isolate'ida bajariladi (`parseProductsJson`), xom matn esa keshga
+  // yoziladi (`ProductsCache`). Ilgari bu yerda 1342 ta fromJson main
+  // isolate'da ishlab ANR («isn't responding») berardi.
+  Future<String> fetchAllProductsRaw() async {
+    try {
+      final response = await dio.get<String>(
+        AppUrls.productAll,
+        options: Options(responseType: ResponseType.plain),
+      );
+      if (response.statusCode == 200) return response.data ?? '';
+      throw Exception('Server xatosi: ${response.statusCode}');
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw Exception(
+            'Server xatosi: ${e.response!.statusCode} - ${e.response!.statusMessage}');
+      }
+      throw Exception('Tarmoq xatosi: ${e.message}');
+    }
+  }
+
+  // Get all products — xom javob + FON isolate'da parse.
   Future<List<ProductModelAdmin>> getAllProducts() async {
     try {
-      final response =
-          await dio.get(AppUrls.productAll); // product/all endpoint
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = response.data['data'] ?? response.data;
-        return data.map((e) => ProductModelAdmin.fromJson(e)).toList();
-      } else {
-        throw Exception('Server xatosi: ${response.statusCode}');
-      }
+      final raw = await fetchAllProductsRaw();
+      return compute(parseProductsJson, raw);
     } on DioException catch (e) {
       if (e.response != null) {
         throw Exception(

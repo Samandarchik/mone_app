@@ -4,13 +4,19 @@
 // (filterByCategory) va create/update/delete/reorderProducts/setManualPrice
 // (qo'lda xarid narxi) ni xotirada yangilaydi — to'liq re-fetch YO'Q.
 // ApiProductService bilan ishlaydi.
-import 'package:flutter/material.dart';
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:uz_ai_dev/admin/model/product_model.dart';
 import 'package:uz_ai_dev/admin/services/api_product_service.dart';
 import 'package:uz_ai_dev/core/clearable_provider.dart';
+import 'package:uz_ai_dev/core/data/local/products_cache.dart';
 
 class ProductProviderAdmin extends ChangeNotifier with ClearableProvider {
   final ApiProductService _service = ApiProductService();
+
+  // Lokal kesh: `/api/products/all` xom javobi app papkasidagi faylda.
+  final ProductsCache _cache = ProductsCache();
 
   // Barcha mahsulotlar bir marta yuklanadi
   List<ProductModelAdmin> _allProducts = [];
@@ -27,39 +33,71 @@ class ProductProviderAdmin extends ChangeNotifier with ClearableProvider {
   bool get isInitialized => _isInitialized;
   String? get error => _error;
 
-  // Barcha mahsulotlarni bir marta yuklash
+  // Barcha mahsulotlarni yuklash: AVVAL lokal kesh (fon isolate'ida parse —
+  // ro'yxat darhol ko'rinadi), KEYIN tarmoqdan yangilanadi va kesh qayta
+  // yoziladi. Javob ~1.6 MB bo'lgani uchun na yuklab olish, na parse UI
+  // oqimini bloklamaydi (ilgari shu yerda ANR chiqardi).
   Future<void> initializeProducts({bool forceRefresh = false}) async {
     // Agar allaqachon yuklangan bo'lsa va force refresh yo'q bo'lsa, qayta yuklamaymiz
     if (_isInitialized && !forceRefresh) {
       return;
     }
 
-    _isLoading = true;
+    // 1) Kesh — tarmoqni kutmasdan ko'rsatamiz (bo'sh ekran / spinner yo'q).
+    if (_allProducts.isEmpty) {
+      final cached = await _cache.read();
+      if (cached != null && cached.isNotEmpty) {
+        _allProducts = cached;
+        _applyFilter();
+        _isInitialized = true;
+        _isLoading = false;
+        notifyListeners();
+      }
+    }
+
+    // 2) Tarmoq. Keshdan ko'rsatilgan bo'lsa spinner chiqarmaymiz — ro'yxat
+    // ekranda turadi va yangi ma'lumot kelganda jimgina almashadi.
+    final hadData = _allProducts.isNotEmpty;
     _error = null;
-    notifyListeners();
+    _isLoading = !hadData;
+    if (!hadData) notifyListeners();
 
     try {
-      _allProducts = await _service.getAllProducts();
-      // Nusxa olamiz — bir xil List'ga alias bo'lsa, filter/remove'lar
-      // _allProducts'ni ham buzib yuborardi.
-      _filteredProducts = List.of(_allProducts);
+      final raw = await _service.fetchAllProductsRaw();
+      _allProducts = await compute(parseProductsJson, raw);
+      _applyFilter();
       _isInitialized = true;
       _isLoading = false;
       notifyListeners();
+      // Kesh yozish javobni kutib turmaydi.
+      unawaited(_cache.write(raw));
     } catch (e) {
-      _error = e.toString();
       _isLoading = false;
-      _isInitialized = false;
+      // Keshdan ko'rsatilgan bo'lsa xatoni chiqarmaymiz — eski ro'yxat
+      // ishlayveradi (offline rejim).
+      if (!hadData) {
+        _error = e.toString();
+        _isInitialized = false;
+      }
       notifyListeners();
     }
+  }
+
+  // Joriy filtrni (_selectedCategoryId) _allProducts ga qayta qo'llaydi.
+  // Nusxa olamiz — bir xil List'ga alias bo'lsa, filter/remove'lar
+  // _allProducts'ni ham buzib yuborardi.
+  void _applyFilter() {
+    _filteredProducts = _selectedCategoryId == null
+        ? List.of(_allProducts)
+        : _allProducts
+            .where((product) => product.categoryId == _selectedCategoryId)
+            .toList();
   }
 
   // Kategoriya bo'yicha filter (internetga murojaat qilmasdan)
   void filterByCategory(int categoryId) {
     _selectedCategoryId = categoryId;
-    _filteredProducts = _allProducts
-        .where((product) => product.categoryId == categoryId)
-        .toList();
+    _applyFilter();
     notifyListeners();
   }
 
@@ -220,8 +258,10 @@ class ProductProviderAdmin extends ChangeNotifier with ClearableProvider {
   }
 
   // Logout: mahsulotlar (YAGONA manba) va filtr/holat maydonlarini tozalaymiz.
+  // Kesh fayli ham o'chadi — keyingi foydalanuvchiga eski ro'yxat ko'rinmasin.
   @override
   void clear() {
+    unawaited(_cache.clear());
     _allProducts = [];
     _filteredProducts = [];
     _isLoading = false;

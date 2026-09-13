@@ -1,31 +1,158 @@
-// shef/ui/shef_home_ui.dart — shef bosh ekrani: ShefHomeUi — mening ishlab
-// chiqarish buyurtmalarim ro'yxati (status chip, progress); ShefProvider ustida,
-// productionStatusChip shu yerda eksport qilinadi.
+// shef/ui/shef_home_ui.dart — shef bosh ekrani: ShefHomeUi — menyu kartalari.
+// 2026-09-06 dan menyuda FAQAT ikki bo'lim: «Полуфабрикат» (qoldiq) va
+// «Тех карта». Buyurtmalar / yangi buyurtma / ishlab chiqarish rejasi kartalari
+// olib tashlandi (ShefOrdersPage klassi shu faylda qoldi — boshqa joydan
+// ochilishi mumkin). productionStatusChip shu yerdan eksport qilinadi (boshqa
+// rollar ham ishlatadi).
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/core/auth/session.dart';
 import 'package:uz_ai_dev/core2/ui/widgets/core_entry_menu.dart';
 import 'package:uz_ai_dev/shef/model/production_model.dart';
-import 'package:uz_ai_dev/production/ui/production_plan_page.dart';
 import 'package:uz_ai_dev/shef/provider/shef_provider.dart';
+import 'package:uz_ai_dev/shef/ui/pf_stock_page.dart';
+// ShefOrdersPage ichidagi «Yangi buyurtma» tugmasi uchun kerak (bosh menyudan
+// olib tashlangan bo'lsa ham).
 import 'package:uz_ai_dev/shef/ui/shef_create_order_ui.dart';
 import 'package:uz_ai_dev/shef/ui/shef_order_detail_ui.dart';
+import 'package:uz_ai_dev/shef/ui/shef_tech_card_page.dart';
 
-// Shef roli uchun bosh ekran: mening ishlab chiqarish buyurtmalarim.
-// Har karta: order_id, sana, mahsulotlar qisqacha, status chip va umumiy
-// progress (jami oxirgi-bo'lim done / jami qty).
-class ShefHomeUi extends StatefulWidget {
+const Color _bgColor = Color(0xFFFAF6F1);
+const Color _accentColor = Color(0xFFC5A97B);
+
+// Shef roli uchun bosh ekran: bo'limlar menyusi. Buyurtmalar ro'yxati bu yerda
+// chizilmaydi — «Buyurtmalar» kartasi orqali ShefOrdersPage ochiladi.
+class ShefHomeUi extends StatelessWidget {
   const ShefHomeUi({super.key});
 
+  void _open(BuildContext context, Widget page) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  }
+
   @override
-  State<ShefHomeUi> createState() => _ShefHomeUiState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _bgColor,
+      appBar: AppBar(
+        backgroundColor: _bgColor,
+        elevation: 0,
+        title: const Text(
+          'Shef — Ishlab chiqarish',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        actions: [
+          // Ombor 2.0 (mone_core): retseptlar/hujjatlar — perms bo'yicha.
+          const CoreEntryMenu(),
+          IconButton(
+            onPressed: () => logoutAndClear(context),
+            icon: const Icon(Icons.logout),
+          ),
+        ],
+      ),
+      body: GridView.count(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1.05,
+        children: [
+          // Полуфабрикат qoldig'i — qaysi pf bor, nechtasi band/mumkin.
+          _MenuCard(
+            icon: Icons.inventory_2_outlined,
+            title: 'Полуфабрикат',
+            subtitle: 'Qoldiq: bor / band / mumkin',
+            onTap: () => _open(context, const PfStockPage()),
+          ),
+          // Тех карта — shefga belgilangan kategoriyalar retsepti
+          // (narxlarsiz: faqat tarkib tahrirlanadi).
+          _MenuCard(
+            icon: Icons.menu_book_outlined,
+            title: 'Тех карта',
+            subtitle: 'Retsept tarkibini tahrirlash',
+            onTap: () => _open(context, const ShefTechCardCategoriesPage()),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _ShefHomeUiState extends State<ShefHomeUi> {
-  static const Color _bgColor = Color(0xFFFAF6F1);
-  static const Color _accentColor = Color(0xFFC5A97B);
+// Bosh menyudagi bitta bo'lim kartasi.
+class _MenuCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
 
+  const _MenuCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: _accentColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: _accentColor, size: 26),
+              ),
+              const Spacer(),
+              Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Shef buyurtmalari ro'yxati (ilgari bosh ekranda edi).
+// Har karta: order_id, sana, mahsulotlar qisqacha, status chip va umumiy
+// progress (jami oxirgi-bo'lim done / jami qty).
+class ShefOrdersPage extends StatefulWidget {
+  const ShefOrdersPage({super.key});
+
+  @override
+  State<ShefOrdersPage> createState() => _ShefOrdersPageState();
+}
+
+class _ShefOrdersPageState extends State<ShefOrdersPage> {
   // dispose() ichida context.read() xavfsiz emas — referensni saqlaymiz.
   ShefProvider? _shefProvider;
 
@@ -53,10 +180,6 @@ class _ShefHomeUiState extends State<ShefHomeUi> {
     super.dispose();
   }
 
-  void _logout() {
-    logoutAndClear(context);
-  }
-
   Future<void> _openCreateOrder() async {
     final created = await Navigator.push<bool>(
       context,
@@ -75,26 +198,9 @@ class _ShefHomeUiState extends State<ShefHomeUi> {
         backgroundColor: _bgColor,
         elevation: 0,
         title: const Text(
-          'Shef — Ishlab chiqarish',
+          'Buyurtmalar',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
-        actions: [
-          // Ombor 2.0 (mone_core): retseptlar/hujjatlar — perms bo'yicha.
-          const CoreEntryMenu(),
-          // Kunlik ishlab chiqarish rejasi (MRP) — nima pishirish kerak.
-          IconButton(
-            tooltip: 'Ishlab chiqarish rejasi',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ProductionPlanPage()),
-            ),
-            icon: const Icon(Icons.event_note),
-          ),
-          IconButton(
-            onPressed: _logout,
-            icon: const Icon(Icons.logout),
-          ),
-        ],
       ),
       body: Consumer<ShefProvider>(
         builder: (context, provider, child) {
@@ -175,8 +281,6 @@ class _OrderCard extends StatelessWidget {
   final ProductionOrder order;
 
   const _OrderCard({required this.order});
-
-  static const Color _accentColor = Color(0xFFC5A97B);
 
   String _formatDate(String raw) {
     final dt = DateTime.tryParse(raw);

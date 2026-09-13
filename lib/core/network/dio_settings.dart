@@ -1,6 +1,8 @@
 // core/network/dio_settings.dart — Dio klientini quradi (AppDioClient.createDio):
 // baseUrl, Bearer token interceptor, X-Qty-Unit: milli header (гр/мл kontrakti)
 // va faqat-debug TalkerDioLogger.
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,6 +10,23 @@ import 'package:talker_dio_logger/talker_dio_logger_interceptor.dart';
 import 'package:talker_dio_logger/talker_dio_logger_settings.dart';
 import 'package:uz_ai_dev/core/config/server_config.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
+
+// Debug logga yoziladigan javob tanasining eng katta uzunligi (belgi).
+const int _kMaxLoggedBodyChars = 4000;
+
+// Javob tanasini logga chiqarishdan oldin qisqartiradi (yuqoridagi sabab).
+String _shortLogBody(Response response) {
+  final data = response.data;
+  String text;
+  try {
+    text = data is String ? data : jsonEncode(data);
+  } catch (_) {
+    text = data.toString();
+  }
+  if (text.length <= _kMaxLoggedBodyChars) return text;
+  return '${text.substring(0, _kMaxLoggedBodyChars)}\n'
+      '… (jami ${text.length} belgi — log uchun qisqartirildi)';
+}
 
 class AppDioClient {
   Dio createDio() {
@@ -49,7 +68,7 @@ class AppDioClient {
 
     dio.interceptors.add(
       TalkerDioLogger(
-        settings: const TalkerDioLoggerSettings(
+        settings: TalkerDioLoggerSettings(
           // Faqat debug rejimda: release'da Bearer token va barcha so'rov/javob
           // tanalari qurilma loglariga yozilib qolmasin (xavfsizlik).
           enabled: kDebugMode,
@@ -58,6 +77,12 @@ class AppDioClient {
           printResponseData: true,
           printErrorData: true,
           printErrorMessage: true,
+          // Katta javob tanasi logga TO'LIQ yozilmaydi. `/api/products/all`
+          // ~1.6 MB — uni logcat'ga yozish MAIN THREAD ni `writev` da ushlab
+          // turadi va Android ANR («isn't responding») beradi (ANR trace'da
+          // main thread `__android_log_print` ichida edi). Debug loglar
+          // qoladi, faqat tanasi qisqartiriladi.
+          responseDataConverter: _shortLogBody,
         ),
       ),
     );

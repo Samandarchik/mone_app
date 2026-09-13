@@ -7,6 +7,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:uz_ai_dev/core/network/order_socket.dart';
+import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
+import 'package:uz_ai_dev/core/widgets/full_screen_image.dart';
 import 'package:uz_ai_dev/yuk/models/yuk_transfer_model.dart';
 import 'package:uz_ai_dev/yuk/services/yuk_service.dart';
 
@@ -202,6 +204,32 @@ class _YukTransferHistoryUiState extends State<YukTransferHistoryUi> {
 }
 
 // Bitta pul yozuvi kartasi (faqat ko'rish).
+/// Targovli'dan kelgan pulning chek rasmi (kichik prevyu, bosilsa to'liq
+/// ekran). Bosh ekran kartasi (`yuk_home_ui.dart`) ham shuni ishlatadi.
+class TransferReceiptImage extends StatelessWidget {
+  final String url;
+  const TransferReceiptImage({super.key, required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => openFullScreenImage(context, url),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          height: 140,
+          width: double.infinity,
+          child: AppNetworkImage(
+            imageUrl: url,
+            fit: BoxFit.cover,
+            maxDecodeWidth: 800,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _TransferHistoryCard extends StatelessWidget {
   final YukTransfer transfer;
   const _TransferHistoryCard({required this.transfer});
@@ -237,6 +265,7 @@ class _TransferHistoryCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               [
+                if (t.isOnline) 'Onlayn to\'lov',
                 if (dateStr.isNotEmpty) dateStr,
                 if (t.senderName.isNotEmpty) 'Yubordi: ${t.senderName}',
               ].join(' · '),
@@ -246,6 +275,12 @@ class _TransferHistoryCard extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(t.comment, style: const TextStyle(fontSize: 13)),
+              ),
+            // Chek rasmi (targovli «Онлайн» to'lovi) — bosilsa to'liq ekran.
+            if (t.hasImage)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: TransferReceiptImage(url: t.imageFullUrl),
               ),
             if (t.status == 'rejected' && t.reviewText.isNotEmpty)
               Container(

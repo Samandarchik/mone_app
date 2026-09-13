@@ -1,6 +1,6 @@
 // shef/provider/shef_provider.dart — shef roli holati: ShefProvider (orders,
-// tex kartali products, socket) — buyurtma yaratish va masalliq accept/reject/
-// progress ShefService orqali.
+// tex kartali products, полуфабрикат qoldig'i, socket) — buyurtma yaratish va
+// masalliq accept/reject/progress ShefService orqali.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -23,6 +23,12 @@ class ShefProvider extends ChangeNotifier with ClearableProvider {
   List<ProductionProduct> products = [];
   bool isLoadingProducts = false;
   String? productsError;
+
+  // «Полуфабрикат qoldig'i» ekrani (PfStockPage) uchun.
+  List<PfStockRow> pfStock = [];
+  int pfStockSkladId = 0;
+  bool isLoadingPfStock = false;
+  String? pfStockError;
 
   // Buyurtma yuborilayotganda tugma spinner'i uchun.
   bool isSubmitting = false;
@@ -108,6 +114,26 @@ class ShefProvider extends ChangeNotifier with ClearableProvider {
     } finally {
       isLoadingProducts = false;
       notifyListeners();
+    }
+  }
+
+  // Полуфабрикат qoldig'i. Ekran ochilganda va pull-to-refresh'da chaqiriladi;
+  // parallel (ikkilangan) so'rov ketmasligi uchun yuklanayotgan bo'lsa chiqamiz.
+  Future<void> fetchPfStock() async {
+    if (isLoadingPfStock) return;
+    isLoadingPfStock = true;
+    pfStockError = null;
+    notifyListeners();
+
+    try {
+      final data = await _service.fetchPfStock();
+      pfStock = data.items;
+      pfStockSkladId = data.skladId;
+    } catch (e) {
+      pfStockError = e.toString().replaceFirst('Exception: ', '');
+    } finally {
+      isLoadingPfStock = false;
+      if (!_disposed) notifyListeners();
     }
   }
 
@@ -223,6 +249,10 @@ class ShefProvider extends ChangeNotifier with ClearableProvider {
     products = [];
     isLoadingProducts = false;
     productsError = null;
+    pfStock = [];
+    pfStockSkladId = 0;
+    isLoadingPfStock = false;
+    pfStockError = null;
     isSubmitting = false;
     busyStageKey = null;
     notifyListeners();

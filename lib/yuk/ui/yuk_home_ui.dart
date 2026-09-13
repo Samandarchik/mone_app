@@ -208,75 +208,76 @@ class _YukHomeUiState extends State<YukHomeUi> {
           behavior: HitTestBehavior.translucent,
           onTap: () => FocusScope.of(context).unfocus(),
           child: Consumer<YukProvider>(
-          builder: (context, provider, child) {
-            if (provider.isLoading) {
-              return const Center(child: CircularProgressIndicator.adaptive());
-            }
+            builder: (context, provider, child) {
+              if (provider.isLoading) {
+                return const Center(
+                    child: CircularProgressIndicator.adaptive());
+              }
 
-            if (provider.errorMessage != null) {
-              return _ErrorView(
-                message: provider.errorMessage!,
-                onRetry: () => provider.fetchOrders(),
-              );
-            }
+              if (provider.errorMessage != null) {
+                return _ErrorView(
+                  message: provider.errorMessage!,
+                  onRetry: () => provider.fetchOrders(),
+                );
+              }
 
-            return Column(
-              children: [
-                // Internet yo'q paytda ko'rsatiladigan eslatma. Ro'yxat oxirgi
-                // saqlangan keshdan, kiritilgan narxlar lokal saqlanadi.
-                if (provider.isOffline) const _OfflineBanner(),
-                // Targovli tizimidan kelgan, qabul kutayotgan pullar —
-                // barcha sklad tablarining tepasida ko'rinadi.
-                for (final t in provider.transfers)
-                  _TransferCard(
-                    key: ValueKey('transfer_${t.id}'),
-                    transfer: t,
-                  ),
-                Expanded(
-                  child: TabBarView(
-                    children: _sklads.map((id) {
-                      // Asosiy sahifada faqat hali yuborilmagan buyurtmalar
-                      // (yuborilganlar AppBar'dagi tarix ekranida).
-                      final orders = provider.pendingForSklad(id);
-                      return RefreshIndicator(
-                        onRefresh: () async {
-                          await provider.fetchOrders();
-                          await provider.fetchTransfers();
-                        },
-                        child: orders.isEmpty
-                            ? ListView(
-                                children: const [
-                                  SizedBox(height: 120),
-                                  Center(
-                                    child: Text(
-                                      'Buyurtmalar yo\'q',
-                                      style: TextStyle(color: Colors.black54),
+              return Column(
+                children: [
+                  // Internet yo'q paytda ko'rsatiladigan eslatma. Ro'yxat oxirgi
+                  // saqlangan keshdan, kiritilgan narxlar lokal saqlanadi.
+                  if (provider.isOffline) const _OfflineBanner(),
+                  // Targovli tizimidan kelgan, qabul kutayotgan pullar —
+                  // barcha sklad tablarining tepasida ko'rinadi.
+                  for (final t in provider.transfers)
+                    _TransferCard(
+                      key: ValueKey('transfer_${t.id}'),
+                      transfer: t,
+                    ),
+                  Expanded(
+                    child: TabBarView(
+                      children: _sklads.map((id) {
+                        // Asosiy sahifada faqat hali yuborilmagan buyurtmalar
+                        // (yuborilganlar AppBar'dagi tarix ekranida).
+                        final orders = provider.pendingForSklad(id);
+                        return RefreshIndicator(
+                          onRefresh: () async {
+                            await provider.fetchOrders();
+                            await provider.fetchTransfers();
+                          },
+                          child: orders.isEmpty
+                              ? ListView(
+                                  children: const [
+                                    SizedBox(height: 120),
+                                    Center(
+                                      child: Text(
+                                        'Buyurtmalar yo\'q',
+                                        style: TextStyle(color: Colors.black54),
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              )
-                            : ListView(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 8),
-                                children: [
-                                  // Skladning HAMMA yuborilmagan buyurtmalari
-                                  // bitta jamlangan kunlik ro'yxat (buyurtma
-                                  // IDlarisiz), pastda bitta "Yuborish".
-                                  YukSkladCard(
-                                    key: ValueKey('sklad_$id'),
-                                    skladId: id,
-                                    orders: orders,
-                                    showImages: _showImages,
-                                  ),
-                                ],
-                              ),
-                      );
-                    }).toList(),
+                                  ],
+                                )
+                              : ListView(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 8),
+                                  children: [
+                                    // Skladning HAMMA yuborilmagan buyurtmalari
+                                    // bitta jamlangan kunlik ro'yxat (buyurtma
+                                    // IDlarisiz), pastda bitta "Yuborish".
+                                    YukSkladCard(
+                                      key: ValueKey('sklad_$id'),
+                                      skladId: id,
+                                      orders: orders,
+                                      showImages: _showImages,
+                                    ),
+                                  ],
+                                ),
+                        );
+                      }).toList(),
+                    ),
                   ),
-                ),
-              ],
-            );
-          },
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -300,7 +301,8 @@ class _YukHomeUiState extends State<YukHomeUi> {
             _showImages ? Icons.hide_image_outlined : Icons.image_outlined,
             color: _showImages ? _accentColor : null,
           ),
-          tooltip: _showImages ? 'Rasmlarni yashirish' : 'Rasmlarni ko\'rsatish',
+          tooltip:
+              _showImages ? 'Rasmlarni yashirish' : 'Rasmlarni ko\'rsatish',
         ),
         // Qarz daftari: bozorchi qaysi magazinchilarga qarzdorligini yuritadi.
         IconButton(
@@ -395,8 +397,7 @@ class _TransferCard extends StatelessWidget {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('Rad etish',
-                style: TextStyle(color: Colors.red)),
+            child: const Text('Rad etish', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -472,10 +473,12 @@ class _TransferCard extends StatelessWidget {
                 Icon(Icons.account_balance_wallet_outlined,
                     size: 18, color: Colors.amber.shade800),
                 const SizedBox(width: 6),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'Sizga pul yuborildi (Targovli)',
-                    style: TextStyle(
+                    transfer.isOnline
+                        ? 'Onlayn to\'lov (Targovli)'
+                        : 'Sizga pul yuborildi (Targovli)',
+                    style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                     ),
@@ -484,8 +487,7 @@ class _TransferCard extends StatelessWidget {
                 if (dateStr.isNotEmpty)
                   Text(
                     dateStr,
-                    style:
-                        const TextStyle(fontSize: 11, color: Colors.black45),
+                    style: const TextStyle(fontSize: 11, color: Colors.black45),
                   ),
               ],
             ),
@@ -507,6 +509,12 @@ class _TransferCard extends StatelessWidget {
                   style: const TextStyle(fontSize: 13),
                 ),
               ),
+            // Chek rasmi (targovli «Онлайн» to'lovi) — bosilsa to'liq ekran.
+            if (transfer.hasImage)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: TransferReceiptImage(url: transfer.imageFullUrl),
+              ),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -515,9 +523,8 @@ class _TransferCard extends StatelessWidget {
                     style: FilledButton.styleFrom(
                       backgroundColor: Colors.green.shade700,
                     ),
-                    onPressed: deciding
-                        ? null
-                        : () => _decide(context, accept: true),
+                    onPressed:
+                        deciding ? null : () => _decide(context, accept: true),
                     icon: deciding
                         ? const SizedBox(
                             width: 16,
@@ -837,8 +844,7 @@ class _YukSkladCardState extends State<YukSkladCard> {
           ? _scaleSubtotal(
               rawSubtotal, _priceBasis(item, existing), item.received)
           : rawSubtotal;
-      _takenControllers[k] =
-          TextEditingController(text: _qtyText(order, item));
+      _takenControllers[k] = TextEditingController(text: _qtyText(order, item));
       _subtotalControllers[k] = TextEditingController(text: _fmt(subtotal0));
       _takenFocusNodes[k] = FocusNode();
       _subtotalFocusNodes[k] = FocusNode();
@@ -1258,8 +1264,7 @@ class _YukSkladCardState extends State<YukSkladCard> {
       content = Container(
         color: Colors.black87,
         child: const Center(
-          child:
-              Icon(Icons.play_circle_outline, color: Colors.white, size: 28),
+          child: Icon(Icons.play_circle_outline, color: Colors.white, size: 28),
         ),
       );
     } else if (isRemote) {
@@ -1312,8 +1317,7 @@ class _YukSkladCardState extends State<YukSkladCard> {
                     color: Colors.black54,
                     shape: BoxShape.circle,
                   ),
-                  child:
-                      const Icon(Icons.close, size: 14, color: Colors.white),
+                  child: const Icon(Icons.close, size: 14, color: Colors.white),
                 ),
               ),
             ),
@@ -1417,18 +1421,14 @@ class _YukSkladCardState extends State<YukSkladCard> {
       builder: (sheetContext) => StatefulBuilder(
         builder: (sheetContext, setSheet) {
           final name = nameController.text.trim();
-          final prev = rasxod
-              ? null
-              : provider.lastPriceFor(name: name);
+          final prev = rasxod ? null : provider.lastPriceFor(name: name);
           // Jonli birlik narx: kiritilgan son (UI birlikda) va summa.
           final qtyUi = _parse(qtyController.text);
           final sum = _parse(sumController.text);
-          final unitPrice = (!rasxod && qtyUi > 0 && sum > 0)
-              ? sum / qtyUi
-              : null;
-          final dev = unitPrice == null
-              ? null
-              : yukPriceDeviation(unitPrice, prev);
+          final unitPrice =
+              (!rasxod && qtyUi > 0 && sum > 0) ? sum / qtyUi : null;
+          final dev =
+              unitPrice == null ? null : yukPriceDeviation(unitPrice, prev);
           final warn = dev != null && dev.abs() >= kYukPriceWarnRatio;
           final isKg = _isKg(unit);
           return Padding(
@@ -1494,9 +1494,8 @@ class _YukSkladCardState extends State<YukSkladCard> {
                     onChanged: (_) => setSheet(() {}),
                     decoration: InputDecoration(
                       labelText: isKg ? 'Miqdor ($unit)' : 'Soni ($unit)',
-                      helperText: isKg
-                          ? 'Kilogramm/litrda yozing (masalan 1.5)'
-                          : null,
+                      helperText:
+                          isKg ? 'Kilogramm/litrda yozing (masalan 1.5)' : null,
                       isDense: true,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
@@ -1565,18 +1564,16 @@ class _YukSkladCardState extends State<YukSkladCard> {
                           itemType: rasxod ? 'rasxod' : 'proche',
                           name: name,
                           type: unit,
-                          taken: rasxod
-                              ? 0
-                              : qtyFromUi(takenUi, unit).toDouble(),
+                          taken:
+                              rasxod ? 0 : qtyFromUi(takenUi, unit).toDouble(),
                           subtotal: subtotal,
                         ),
                       );
                       Navigator.pop(sheetContext);
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: warn
-                          ? const Color(0xFFE65100)
-                          : _accentColor,
+                      backgroundColor:
+                          warn ? const Color(0xFFE65100) : _accentColor,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
@@ -1870,9 +1867,7 @@ class _YukSkladCardState extends State<YukSkladCard> {
       enabled: enabled,
       keyboardType: TextInputType.numberWithOptions(decimal: decimal),
       inputFormatters: [
-        decimal
-            ? DecimalInputFormatter()
-            : ThousandsSeparatorInputFormatter(),
+        decimal ? DecimalInputFormatter() : ThousandsSeparatorInputFormatter(),
       ],
       onChanged: onChanged,
       textAlign: TextAlign.center,
@@ -1886,8 +1881,7 @@ class _YukSkladCardState extends State<YukSkladCard> {
         isDense: true,
         filled: !enabled,
         fillColor: const Color(0xFFF5F1EA),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
         ),
@@ -2033,25 +2027,22 @@ class _YukSkladCardState extends State<YukSkladCard> {
     final prevPrice = done
         ? null
         : provider.lastPriceFor(productId: item.productId, name: item.name);
-    final deviation = unitPrice == null
-        ? null
-        : yukPriceDeviation(unitPrice, prevPrice);
+    final deviation =
+        unitPrice == null ? null : yukPriceDeviation(unitPrice, prevPrice);
     final priceWarn =
         deviation != null && deviation.abs() >= kYukPriceWarnRatio;
     // Donalab olinadigan кг/л mahsulot («1шт=200гр»): dona vazni nomdan
     // o'qiladi — dona soni bilan kiritish tugmasi va dona narxi ko'rinadi.
     final pieceG = pieceWeightFromName(item.name, item.type);
     final pieces = (pieceG != null && takenVal > 0) ? takenVal / pieceG : null;
-    final canPieceEntry =
-        pieceG != null && !done && !_qtyLocked(item);
+    final canPieceEntry = pieceG != null && !done && !_qtyLocked(item);
     if (pieces != null && unitPrice != null && subtotalVal > 0) {
       // «40 шт × 29 175» — dona narxi ko'rinsa xato darrov seziladi.
       unitLabel += '  ·  ${_fmtPieces(pieces)} шт × '
           '${_formatMoney(subtotalVal / pieces)}';
     }
     final diff = takenVal - item.count;
-    final showDiff =
-        !item.isProche && takenVal > 0 && diff.abs() > 0.0001;
+    final showDiff = !item.isProche && takenVal > 0 && diff.abs() > 0.0001;
     final diffText = diff > 0
         ? '+${_fmtQty(diff, item.type)}'
         : '-${_fmtQty(diff.abs(), item.type)}';
@@ -2123,9 +2114,8 @@ class _YukSkladCardState extends State<YukSkladCard> {
                       unitLabel,
                       style: TextStyle(
                         fontSize: 12,
-                        color: priceWarn
-                            ? const Color(0xFFC62828)
-                            : _accentColor,
+                        color:
+                            priceWarn ? const Color(0xFFC62828) : _accentColor,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -2145,8 +2135,7 @@ class _YukSkladCardState extends State<YukSkladCard> {
                         if (canPieceEntry) ...[
                           const SizedBox(width: 8),
                           InkWell(
-                            onTap: () =>
-                                _enterByPieces(order, item, pieceG),
+                            onTap: () => _enterByPieces(order, item, pieceG),
                             child: Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 8, vertical: 2),
@@ -2308,8 +2297,8 @@ class _YukSkladCardState extends State<YukSkladCard> {
             : (p.taken > 0 ? p.taken : _qtyBasis(item));
         if (taken <= 0) continue;
         final unitPrice = p.subtotal / qtyToUi(taken, item.type);
-        final prev = provider.lastPriceFor(
-            productId: item.productId, name: item.name);
+        final prev =
+            provider.lastPriceFor(productId: item.productId, name: item.name);
         final dev = yukPriceDeviation(unitPrice, prev);
         if (dev == null || dev.abs() < kYukPriceBlockRatio) continue;
         final unit = (item.type ?? '').isNotEmpty ? '/${item.type}' : '';
@@ -2441,8 +2430,7 @@ class _YukSkladCardState extends State<YukSkladCard> {
     return Consumer<YukProvider>(
       builder: (context, provider, child) {
         final orders = _sorted;
-        final pending =
-            orders.where((o) => !_isDoneOrder(o)).toList();
+        final pending = orders.where((o) => !_isDoneOrder(o)).toList();
         final allDone = orders.isNotEmpty && pending.isEmpty;
         final anchor = _anchor;
         final submitting = provider.submittingSkladId == widget.skladId;
@@ -2553,25 +2541,22 @@ class _YukSkladCardState extends State<YukSkladCard> {
               for (final order in orders) ...[
                 if (showBatchLabels) _batchLabel(order),
                 ...orderItemSeq(
-                  order.items.where((i) => _isDoneOrder(order)
-                      ? !i.isRasxod
-                      : i.itemType.isEmpty),
+                  order.items.where((i) =>
+                      _isDoneOrder(order) ? !i.isRasxod : i.itemType.isEmpty),
                   isProche: (i) => i.isProche,
                 ).map((item) => _itemRow(provider, order, item)),
                 // Begona (boshqa yuk user boshlagan) ochiq buyurtmaning
                 // serverdagi proche itemlari — read-only, real-time.
                 if (!_isDoneOrder(order) && !provider.canSeedOrder(order))
-                  ...order.items
-                      .where((i) => i.isProche)
-                      .map(_remoteProcheRow),
+                  ...order.items.where((i) => i.isProche).map(_remoteProcheRow),
                 if (!_isDoneOrder(order))
                   ...provider
                       .addedItemsFor(order.id)
                       .asMap()
                       .entries
                       .where((e) => e.value.isProche)
-                      .map((e) => _addedProcheRow(
-                          provider, order.id, e.key, e.value)),
+                      .map((e) =>
+                          _addedProcheRow(provider, order.id, e.key, e.value)),
               ],
               // Qo'shimcha mahsulot / xarajat qo'shish tugmalari.
               if (anchor != null)
@@ -2697,8 +2682,7 @@ class _YukSkladCardState extends State<YukSkladCard> {
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
-                        color:
-                            const Color(0xFF4CAF50).withValues(alpha: 0.10),
+                        color: const Color(0xFF4CAF50).withValues(alpha: 0.10),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Row(
@@ -2739,8 +2723,7 @@ class _YukSkladCardState extends State<YukSkladCard> {
                                   } else if (provider.errorMessage != null) {
                                     messenger.showSnackBar(
                                       SnackBar(
-                                        content:
-                                            Text(provider.errorMessage!),
+                                        content: Text(provider.errorMessage!),
                                         backgroundColor: Colors.red,
                                       ),
                                     );
@@ -2763,10 +2746,8 @@ class _YukSkladCardState extends State<YukSkladCard> {
                           ),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: const Color(0xFFC62828),
-                            side:
-                                const BorderSide(color: Color(0xFFC62828)),
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 11),
+                            side: const BorderSide(color: Color(0xFFC62828)),
+                            padding: const EdgeInsets.symmetric(vertical: 11),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
@@ -2911,8 +2892,8 @@ class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
           widget.onSelected?.call(option);
           widget.onChanged?.call(option.name);
         },
-        fieldViewBuilder:
-            (context, controller, focusNode, onFieldSubmitted) => TextField(
+        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) =>
+            TextField(
           controller: controller,
           focusNode: focusNode,
           textCapitalization: TextCapitalization.sentences,
