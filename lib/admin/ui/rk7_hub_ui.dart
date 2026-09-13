@@ -6,6 +6,8 @@ import 'package:uz_ai_dev/admin/ui/rk7_mapping_ui.dart';
 import 'package:uz_ai_dev/admin/ui/rk7_sale_places_ui.dart';
 import 'package:uz_ai_dev/admin/ui/rk7_shifts_ui.dart';
 import 'package:uz_ai_dev/admin/ui/widgets/rk7_common.dart';
+import 'package:uz_ai_dev/bugalter/ui/sh5_kirim_ui.dart';
+import 'package:uz_ai_dev/core/context_extension.dart';
 
 // RK7 markazi — RK7 POS'dan tushgan yopilgan smenalar va ularning skladdan
 // yechilishi shu bo'limdan boshqariladi (PLAN_RK7 §6).
@@ -25,6 +27,15 @@ class Rk7HubUi extends StatelessWidget {
             'RK7',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
+          actions: [
+            // SH5 kirim — bozor buyurtmasi → SH5 «Приходная накладная»
+            // (asosiy foydalanuvchi bugalter, admin ham ko'ra oladi).
+            IconButton(
+              tooltip: 'SH5 kirim',
+              icon: const Icon(Icons.move_to_inbox_outlined),
+              onPressed: () => context.push(const Sh5KirimUi()),
+            ),
+          ],
           bottom: const TabBar(
             labelColor: kRk7AccentDark,
             unselectedLabelColor: Colors.black54,

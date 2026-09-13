@@ -255,6 +255,42 @@ abstract final class AppUrls {
   // BUTUN. dish_guid `{...}` qavslari bilan — shuning uchun kodlanadi.
   static String sh5RecipeByDish(String dishGuid) =>
       '$baseUrl/api/sh5/recipes/by-dish/${Uri.encodeComponent(dishGuid)}';
+  // ───────── SH5 kirim (bozor «Приходная накладная») — PLAN_KIRIM §4.3 ─────────
+  // Faqat bugalter yoki admin (boshqalarga 403). Miqdor milli BUTUN, pul —
+  // butun so'm (float yo'q). Hujjatni SH5 da bridge yaratadi, ilova faqat
+  // bog'lanishlarni ko'rsatadi va navbatga qo'yadi.
+  //
+  // Kun ro'yxati: GET ?date=YYYY-MM-DD — {date, settings_ok, missing_sklads,
+  // orders:[{..., doc, items:[{..., map, suggestions}]}], unmapped_count,
+  // mapped_count}. Buyurtmalar — o'sha kunning narxlangan bozor buyurtmalari.
+  static String get sh5KirimDay => '$baseUrl/api/sh5/kirim/day';
+  // SH5 tovar qidiruvi (bog'lash dialogi): GET ?q=&limit=30 —
+  // {items:[{rid, name, unit_name, rk_code, group_name}]}.
+  static String get sh5KirimGoods => '$baseUrl/api/sh5/kirim/goods';
+  // Mone mahsuloti ↔ SH5 tovari bog'lanishi:
+  //   PUT    {key, product_id, product_name, sh5_rid} — `manual` mapping
+  //   DELETE ?key=  — bog'lanishni o'chirish
+  //   GET    ?q=    — barcha bog'lanishlar ro'yxati (ko'rish uchun)
+  static String get sh5KirimMap => '$baseUrl/api/sh5/kirim/map';
+  // SH5 ga yuborish: POST {date, order_ids:[...]} — {docs:[...]} (`queued`).
+  // 428 {need_credentials:true} — SH5 login/parol saqlanmagan;
+  // 400 {unmapped:[key,...]} — bog'lanmagan mahsulot qolgan.
+  static String get sh5KirimSend => '$baseUrl/api/sh5/kirim/send';
+  // Hujjat statuslari (ekran 3 s da so'raydi): GET ?date= — {docs:[...]}.
+  static String get sh5KirimDocs => '$baseUrl/api/sh5/kirim/docs';
+  // Xato bo'lgan hujjatni qayta navbatga qo'yish: POST — `error` → `queued`.
+  static String sh5KirimDocRetry(int id) =>
+      '$baseUrl/api/sh5/kirim/docs/$id/retry';
+  // SH5 login/paroli (bir marta kiritiladi): GET — {has, sh5_user, verified,
+  // last_error} (parol HECH QACHON qaytmaydi); POST {sh5_user, sh5_pass};
+  // DELETE — o'chirish.
+  static String get sh5KirimCredentials => '$baseUrl/api/sh5/kirim/credentials';
+  // Sozlamalar: GET — {sklads:[{sklad_id, sklad_name, dep_rid, dep_name}],
+  // sources:[{source, cntr_rid, cntr_name}], departs:[{rid,name}],
+  // corrs:[{rid,name,type}]}; PUT {sklads:[{sklad_id,dep_rid}],
+  // sources:[{source,cntr_rid}]}.
+  static String get sh5KirimSettings => '$baseUrl/api/sh5/kirim/settings';
+
   // Retseptni mahsulotga tex karta qilib qo'llash: POST {dish_guid,
   // overwrite} — muvaffaqiyatda mapping deduct_mode «ingredients» bo'ladi.
   // 409: mahsulotda tex karta bor (overwrite:true bilan qayta yuboriladi)

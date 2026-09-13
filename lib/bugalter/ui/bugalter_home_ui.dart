@@ -12,6 +12,7 @@ import 'package:uz_ai_dev/bugalter/provider/bugalter_provider.dart';
 import 'package:uz_ai_dev/bugalter/services/bugalter_service.dart';
 import 'package:uz_ai_dev/bugalter/ui/bugalter_edits_ui.dart';
 import 'package:uz_ai_dev/bugalter/ui/bugalter_production_ui.dart';
+import 'package:uz_ai_dev/bugalter/ui/sh5_kirim_ui.dart';
 import 'package:uz_ai_dev/bugalter/ui/widgets/edit_history.dart';
 import 'package:uz_ai_dev/core/auth/session.dart';
 import 'package:uz_ai_dev/core/context_extension.dart';
@@ -273,6 +274,13 @@ class _BugalterHomeUiState extends State<BugalterHomeUi> {
                 value: provider.ordersPeriod,
                 onChanged: (p) => provider.setOrdersPeriod(p),
               ),
+            ),
+            // SH5 kirim: bozor buyurtmalarini SH5 «Приходная накладная»
+            // qilib yuborish (PLAN_KIRIM — bugalter/Xilola ekrani).
+            IconButton(
+              tooltip: 'SH5 kirim',
+              onPressed: () => context.push(const Sh5KirimUi()),
+              icon: const Icon(Icons.move_to_inbox_outlined),
             ),
             // Ishlab chiqarish buyurtmalari (o'chirish + status — faqat bugalter).
             IconButton(
