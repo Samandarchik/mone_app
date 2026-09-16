@@ -24,11 +24,16 @@ class Sh5KirimSendResult {
   final List<String> unmapped;
   final String message;
 
+  /// Hamma qatori «SH5'da yo'q» bo'lgan buyurtmalar (`skipped_orders`) —
+  /// ular uchun hujjat YARATILMAYDI.
+  final List<int> skippedOrders;
+
   const Sh5KirimSendResult({
     this.docs = const [],
     this.needCredentials = false,
     this.unmapped = const [],
     this.message = '',
+    this.skippedOrders = const [],
   });
 
   bool get isOk => !needCredentials && unmapped.isEmpty;
@@ -68,18 +73,23 @@ class Sh5KirimService {
   // ─────────────────────────── Mapping ───────────────────────────
 
   /// Mone mahsulotini SH5 tovariga bog'lash (`manual` — eng ustun manba).
+  ///
+  /// [skip] `true` bo'lsa — «SH5'da yo'q, o'tkazib yuborilsin»: server
+  /// `source: "skip"`, `sh5_rid: 0` mapping yozadi, mahsulot bog'langan
+  /// hisoblanadi, lekin hujjatga qo'shilmaydi ([sh5Rid] e'tiborga olinmaydi).
   Future<void> setMap({
     required String key,
     required int productId,
     required String productName,
-    required int sh5Rid,
+    int sh5Rid = 0,
+    bool skip = false,
   }) async {
     try {
       await dio.put(AppUrls.sh5KirimMap, data: {
         'key': key,
         'product_id': productId,
         'product_name': productName,
-        'sh5_rid': sh5Rid,
+        if (skip) 'skip': true else 'sh5_rid': sh5Rid,
       });
     } on DioException catch (e) {
       throw Exception(_error(e));
@@ -111,11 +121,21 @@ class Sh5KirimService {
       final body = response.data;
       final data = body is Map ? body['data'] : null;
       final raw = data is Map ? data['docs'] : null;
+      final rawSkipped = data is Map ? data['skipped_orders'] : null;
       return Sh5KirimSendResult(
         docs: raw is List
             ? raw
                 .whereType<Map>()
                 .map((e) => Sh5KirimDoc.fromJson(Map<String, dynamic>.from(e)))
+                .toList(growable: false)
+            : const [],
+        // Hamma qatori o'tkazilgan buyurtmalar — hujjat yaratilmadi.
+        skippedOrders: rawSkipped is List
+            ? rawSkipped
+                .map((e) => e is num
+                    ? e.toInt()
+                    : (int.tryParse(e?.toString() ?? '') ?? 0))
+                .where((e) => e > 0)
                 .toList(growable: false)
             : const [],
       );

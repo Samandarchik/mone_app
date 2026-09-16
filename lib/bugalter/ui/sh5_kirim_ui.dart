@@ -3,6 +3,11 @@
 // ko'rsatiladi, bugalter bog'lanmaganlarini bog'laydi va «SH5 ga yuborish»
 // bilan «Приходная накладная» hujjatlarini navbatga qo'yadi.
 //
+// Bog'lanmagan mahsulot katta qizil «?» bo'lib ko'rinadi — bosilsa o'sha
+// yerda tanlash dialogi ochiladi. Mahsulot SH5 lug'atida bo'lmasa «SH5'da
+// yo'q — o'tkazib yuborish»: qator hujjatga qo'shilmaydi («o'tkazildi»),
+// lekin yuborishga to'siq bo'lmaydi.
+//
 // Hujjatni SH5 da BRIDGE yaratadi (shu kompyuterda), shuning uchun yuborgandan
 // keyin ekran 3 soniyada bir `docs?date=` ni so'raydi va statuslarni yangilaydi
 // (hammasi done/error bo'lguncha yoki ekran yopilguncha).
@@ -47,6 +52,10 @@ class _Sh5KirimUiState extends State<Sh5KirimUi> {
 
   // Auth xatosi uchun dialog bir marta chiqsin (poll har 3 s da keladi).
   bool _authDialogShown = false;
+
+  // So'nggi yuborishda hujjat yaratilmagan buyurtmalar (`skipped_orders`) —
+  // sana almashsa tozalanadi.
+  final Set<int> _skippedOrders = {};
 
   String get _dateStr => DateFormat('yyyy-MM-dd').format(_date);
 
@@ -98,7 +107,10 @@ class _Sh5KirimUiState extends State<Sh5KirimUi> {
       lastDate: DateTime(now.year, now.month, now.day),
     );
     if (picked == null || !mounted) return;
-    setState(() => _date = DateTime(picked.year, picked.month, picked.day));
+    setState(() {
+      _date = DateTime(picked.year, picked.month, picked.day);
+      _skippedOrders.clear();
+    });
     _poll?.cancel();
     await _load();
   }
@@ -107,7 +119,10 @@ class _Sh5KirimUiState extends State<Sh5KirimUi> {
     final next = _date.add(Duration(days: days));
     final now = DateTime.now();
     if (next.isAfter(DateTime(now.year, now.month, now.day))) return;
-    setState(() => _date = next);
+    setState(() {
+      _date = next;
+      _skippedOrders.clear();
+    });
     _poll?.cancel();
     _load();
   }
@@ -165,6 +180,16 @@ class _Sh5KirimUiState extends State<Sh5KirimUi> {
         await _service.deleteMap(item.key);
         if (!mounted) return;
         rk7Snack(context, 'Bog\'lanish o\'chirildi');
+      } else if (pick.action == Sh5KirimPickAction.skip) {
+        // «SH5'da yo'q» — qator hujjatga qo'shilmaydi, ammo «?» ham qolmaydi.
+        await _service.setMap(
+          key: item.key,
+          productId: item.productId,
+          productName: item.name,
+          skip: true,
+        );
+        if (!mounted) return;
+        rk7Snack(context, 'O\'tkazib yuboriladi: ${item.name}');
       } else {
         await _service.setMap(
           key: item.key,
@@ -186,30 +211,6 @@ class _Sh5KirimUiState extends State<Sh5KirimUi> {
     await _load();
   }
 
-  // Sariq «taklif» chipini bosish — birinchi taklifni darhol tasdiqlaydi.
-  Future<void> _acceptSuggestion(Sh5KirimItem item) async {
-    final best = item.suggestions.first;
-    setState(() => _busyKeys.add(item.key));
-    try {
-      await _service.setMap(
-        key: item.key,
-        productId: item.productId,
-        productName: item.name,
-        sh5Rid: best.sh5Rid,
-      );
-      if (!mounted) return;
-      rk7Snack(context, 'Tasdiqlandi: ${best.sh5Name}');
-    } catch (e) {
-      if (!mounted) return;
-      rk7Snack(context, e.toString().replaceFirst('Exception: ', ''),
-          error: true);
-    } finally {
-      if (mounted) setState(() => _busyKeys.remove(item.key));
-    }
-    if (!mounted) return;
-    await _load();
-  }
-
   // ─────────────────────────── Yuborish ───────────────────────────
 
   // Yuborishga to'siq bo'lgan sabab (null — yuborsa bo'ladi).
@@ -220,10 +221,16 @@ class _Sh5KirimUiState extends State<Sh5KirimUi> {
     if (!day.settingsOk || day.missingSklads.isNotEmpty) {
       return 'Sklad ↔ SH5 ombor sozlanmagan';
     }
+    // Faqat «?» qolganda to'siq bo'ladi — o'tkazilganlar yuborishga xalaqit
+    // qilmaydi (ular hujjatga qo'shilmaydi, xolos).
     if (day.unmappedCount > 0) {
-      return '${day.unmappedCount} ta mahsulot bog\'lanmagan';
+      return '${day.unmappedCount} ta mahsulotda «?» — SH5 tovarini tanlang';
     }
-    if (day.pendingOrders.isEmpty) return 'Hammasi SH5 ga yuborilgan';
+    if (day.pendingOrders.isEmpty) {
+      return day.orders.every((o) => o.allSkipped)
+          ? 'Hamma qatorlar o\'tkazilgan — hujjat yaratilmaydi'
+          : 'Hammasi SH5 ga yuborilgan';
+    }
     return null;
   }
 
@@ -263,7 +270,18 @@ class _Sh5KirimUiState extends State<Sh5KirimUi> {
         rk7Snack(context, result.message, error: true);
         return;
       }
-      rk7Snack(context, '${result.docs.length} ta hujjat navbatga qo\'yildi');
+      // Hamma qatori o'tkazilgan buyurtmalar uchun hujjat yaratilmaydi.
+      if (result.skippedOrders.isNotEmpty) {
+        setState(() => _skippedOrders.addAll(result.skippedOrders));
+      }
+      rk7Snack(
+        context,
+        [
+          '${result.docs.length} ta hujjat navbatga qo\'yildi',
+          if (result.skippedOrders.isNotEmpty)
+            '${result.skippedOrders.length} ta buyurtma o\'tkazildi',
+        ].join(' · '),
+      );
       await _load();
     } catch (e) {
       if (!mounted) return;
@@ -431,8 +449,9 @@ class _Sh5KirimUiState extends State<Sh5KirimUi> {
     );
   }
 
-  // Xulosa: «14 buyurtma · 56 mahsulot · 3 bog'lanmagan».
+  // Xulosa: «14 buyurtma · 56 mahsulot» + «3 ta «?»» / «2 o'tkazildi».
   Widget _summary(Sh5KirimDay day) {
+    final skipped = day.skippedTotal;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -452,13 +471,22 @@ class _Sh5KirimUiState extends State<Sh5KirimUi> {
               ),
             ),
           ),
-          rk7Badge(
-            day.unmappedCount == 0
-                ? 'hammasi bog\'langan'
-                : '${day.unmappedCount} bog\'lanmagan',
-            color: day.unmappedCount == 0
-                ? Colors.green.shade700
-                : Colors.red.shade700,
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            alignment: WrapAlignment.end,
+            children: [
+              if (skipped > 0)
+                rk7Badge('$skipped o\'tkazildi', color: Colors.grey.shade600),
+              rk7Badge(
+                day.unmappedCount == 0
+                    ? 'hammasi bog\'langan'
+                    : '${day.unmappedCount} ta «?»',
+                color: day.unmappedCount == 0
+                    ? Colors.green.shade700
+                    : Colors.red.shade700,
+              ),
+            ],
           ),
         ],
       ),
@@ -591,10 +619,14 @@ class _Sh5KirimUiState extends State<Sh5KirimUi> {
                       : Colors.orange.shade800,
                 ),
                 if (order.unmappedCount > 0)
-                  rk7Badge('bog\'lanmagan: ${order.unmappedCount}',
+                  rk7Badge('«?»: ${order.unmappedCount}',
                       color: Colors.red.shade700),
+                if (order.skippedCount > 0)
+                  rk7Badge('o\'tkazildi: ${order.skippedCount}',
+                      color: Colors.grey.shade600),
               ],
             ),
+            _skippedOrderNote(order),
             _docStatus(order),
             const Divider(height: 16),
             for (final item in order.items) _itemRow(item),
@@ -604,26 +636,63 @@ class _Sh5KirimUiState extends State<Sh5KirimUi> {
     );
   }
 
+  // Hamma qatorlar «SH5'da yo'q» — bu buyurtmadan hujjat chiqmaydi
+  // (`skipped_orders` yoki qatorlardan aniqlanadi).
+  Widget _skippedOrderNote(Sh5KirimOrder order) {
+    final skippedByServer = _skippedOrders.contains(order.id);
+    if (!order.allSkipped && !skippedByServer) return const SizedBox.shrink();
+    if (order.doc != null && !skippedByServer) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.block, size: 16, color: Colors.grey.shade600),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Hujjat yaratilmadi — hamma qatorlar o\'tkazilgan',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // SH5 hujjat holati: queued / sending (spinner) / done «SH5 № …» /
-  // error (qizil + «Qayta yuborish»).
+  // error (qizil + «Qayta yuborish»). Hujjatga tushmagan qatorlar bo'lsa
+  // ular kichik kulrang matnda ko'rsatiladi.
   Widget _docStatus(Sh5KirimOrder order) {
     final doc = order.doc;
     if (doc == null) return const SizedBox.shrink();
+    final skippedNote = doc.skippedLabel;
     if (doc.isDone) {
       return Padding(
         padding: const EdgeInsets.only(top: 6),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.check_circle, size: 16, color: Colors.green.shade700),
-            const SizedBox(width: 6),
-            Text(
-              doc.numLabel,
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: Colors.green.shade700,
-              ),
+            Row(
+              children: [
+                Icon(Icons.check_circle,
+                    size: 16, color: Colors.green.shade700),
+                const SizedBox(width: 6),
+                Text(
+                  doc.numLabel,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.green.shade700,
+                  ),
+                ),
+              ],
             ),
+            _skippedDocNote(skippedNote),
           ],
         ),
       );
@@ -651,6 +720,7 @@ class _Sh5KirimUiState extends State<Sh5KirimUi> {
                 ),
               ],
             ),
+            _skippedDocNote(skippedNote),
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
@@ -671,22 +741,40 @@ class _Sh5KirimUiState extends State<Sh5KirimUi> {
     // queued / sending — natija kutilyapti.
     return Padding(
       padding: const EdgeInsets.only(top: 6),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 14,
-            height: 14,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: kRk7AccentDark,
-            ),
+          Row(
+            children: [
+              const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: kRk7AccentDark,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                doc.isSending ? 'SH5 ga yuborilmoqda...' : 'Navbatda...',
+                style: const TextStyle(fontSize: 12.5, color: kRk7AccentDark),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Text(
-            doc.isSending ? 'SH5 ga yuborilmoqda...' : 'Navbatda...',
-            style: const TextStyle(fontSize: 12.5, color: kRk7AccentDark),
-          ),
+          _skippedDocNote(skippedNote),
         ],
+      ),
+    );
+  }
+
+  // Hujjatga qo'shilmagan qatorlar: «O'tkazildi: Сита, Ведро».
+  Widget _skippedDocNote(String note) {
+    if (note.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 3),
+      child: Text(
+        note,
+        style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
       ),
     );
   }
@@ -696,6 +784,7 @@ class _Sh5KirimUiState extends State<Sh5KirimUi> {
   Widget _itemRow(Sh5KirimItem item) {
     final map = item.map;
     final busy = _busyKeys.contains(item.key);
+    final skipped = item.isSkipped;
     return InkWell(
       onTap: busy ? null : () => _openMapDialog(item),
       borderRadius: BorderRadius.circular(8),
@@ -712,7 +801,10 @@ class _Sh5KirimUiState extends State<Sh5KirimUi> {
                 children: [
                   Text(
                     item.name,
-                    style: const TextStyle(fontSize: 13),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: skipped ? Colors.grey.shade500 : Colors.black87,
+                    ),
                   ),
                   const SizedBox(height: 1),
                   Text(
@@ -745,20 +837,22 @@ class _Sh5KirimUiState extends State<Sh5KirimUi> {
                       ],
                       Flexible(
                         child: Text(
-                          map == null
-                              ? '—'
-                              : (map.sh5Name.isEmpty
-                                  ? 'SH5 #${map.sh5Rid}'
-                                  : map.sh5Name),
+                          skipped
+                              ? 'SH5 ga yuborilmaydi'
+                              : (map == null
+                                  ? '—'
+                                  : (map.sh5Name.isEmpty
+                                      ? 'SH5 #${map.sh5Rid}'
+                                      : map.sh5Name)),
                           textAlign: TextAlign.right,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 12.5,
                             fontWeight: FontWeight.w600,
-                            color: map == null
-                                ? Colors.grey.shade500
-                                : Colors.black87,
+                            color: item.isLinked
+                                ? Colors.black87
+                                : Colors.grey.shade500,
                           ),
                         ),
                       ),
@@ -781,32 +875,82 @@ class _Sh5KirimUiState extends State<Sh5KirimUi> {
     );
   }
 
-  // Manba chipi: yashil «qo'lda», ko'k «tarixdan ×N», sariq «taklif»
-  // (bosilsa darhol tasdiqlanadi), qizil «bog'lanmagan».
+  // Manba chipi: yashil «qo'lda», ko'k «tarixdan ×N», kulrang «o'tkazildi»
+  // (bosilsa dialog qayta ochiladi), bog'lanmaganda — katta qizil «?».
   Widget _sourceChip(Sh5KirimItem item) {
     final map = item.map;
-    if (map != null) {
-      final unit = map.sh5UnitName.isEmpty ? '' : ' · ${map.sh5UnitName}';
-      if (map.isLearned) {
-        return rk7Badge(
-          'tarixdan ×${map.confidence}$unit',
-          color: Colors.blue.shade700,
-        );
-      }
-      return rk7Badge('qo\'lda$unit', color: Colors.green.shade700);
-    }
-    if (item.suggestions.isNotEmpty) {
-      final best = item.suggestions.first;
+    if (map == null) return _unknownChip(item);
+    if (map.isSkip) {
       return InkWell(
-        onTap: () => _acceptSuggestion(item),
+        onTap: () => _openMapDialog(item),
         borderRadius: BorderRadius.circular(8),
-        child: rk7Badge(
-          'taklif: ${best.sh5Name} (${best.scoreLabel})',
-          color: Colors.orange.shade800,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.block, size: 13, color: Colors.grey.shade600),
+            const SizedBox(width: 4),
+            rk7Badge('o\'tkazildi', color: Colors.grey.shade600),
+          ],
         ),
       );
     }
-    return rk7Badge('bog\'lanmagan', color: Colors.red.shade700);
+    final unit = map.sh5UnitName.isEmpty ? '' : ' · ${map.sh5UnitName}';
+    if (map.isLearned) {
+      return rk7Badge(
+        'tarixdan ×${map.confidence}$unit',
+        color: Colors.blue.shade700,
+      );
+    }
+    return rk7Badge('qo\'lda$unit', color: Colors.green.shade700);
+  }
+
+  // Bog'lanmagan mahsulot — katta «?»: bosilsa o'sha yerda tanlash dialogi
+  // (takliflar + qidiruv + «SH5'da yo'q — o'tkazib yuborish»).
+  Widget _unknownChip(Sh5KirimItem item) {
+    return InkWell(
+      onTap: () => _openMapDialog(item),
+      borderRadius: BorderRadius.circular(22),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(4, 4, 10, 4),
+        decoration: BoxDecoration(
+          color: Colors.red.shade50,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.red.shade300),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 26,
+              height: 26,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.red.shade600,
+                shape: BoxShape.circle,
+              ),
+              child: const Text(
+                '?',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  height: 1.2,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'tanlang',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: Colors.red.shade700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // ─────────────────────── Pastki «yuborish» paneli ───────────────────────

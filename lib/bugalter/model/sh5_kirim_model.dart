@@ -63,6 +63,11 @@ abstract final class Sh5KirimStatus {
 abstract final class Sh5KirimMapSource {
   static const String manual = 'manual'; // bugalter qo'lda bog'lagan
   static const String learned = 'learned'; // tarixdan o'rganilgan
+
+  /// «SH5'da yo'q» — mahsulot ataylab o'tkazib yuborilgan: hujjatga
+  /// qo'shilmaydi, lekin bog'lanmagan ham hisoblanmaydi
+  /// (`sh5_rid: 0`, `sh5_name: ""`).
+  static const String skip = 'skip';
 }
 
 /// Buyurtma manbalari (settings: manba ↔ kontragent). `''` — «boshqa»
@@ -107,6 +112,9 @@ class Sh5KirimMap {
 
   bool get isManual => source == Sh5KirimMapSource.manual;
   bool get isLearned => source == Sh5KirimMapSource.learned;
+
+  /// «SH5'da yo'q — o'tkazib yuborilgan» (hujjatga tushmaydi).
+  bool get isSkip => source == Sh5KirimMapSource.skip;
 
   factory Sh5KirimMap.fromJson(Map<String, dynamic> json) => Sh5KirimMap(
         sh5Rid: _asInt(json['sh5_rid']),
@@ -191,11 +199,19 @@ class Sh5KirimItem {
     this.suggestions = const [],
   });
 
-  /// Bog'lanmagan (yuborishga to'siq).
+  /// Bog'lanmagan — ekranda katta «?», yuborishga to'siq.
   bool get isUnmapped => map == null;
 
-  /// Bog'lanish yo'q, lekin tasdiqlash mumkin bo'lgan taklif bor.
-  bool get hasSuggestion => map == null && suggestions.isNotEmpty;
+  /// «SH5'da yo'q» deb belgilangan: bog'langan hisoblanadi, lekin hujjatga
+  /// qo'shilmaydi.
+  bool get isSkipped => map?.isSkip ?? false;
+
+  /// Haqiqiy SH5 tovariga bog'langan (o'tkazib yuborilgani emas).
+  bool get isLinked => map != null && !map!.isSkip;
+
+  /// Bog'lanish yo'q (yoki o'tkazilgan), lekin tanlash mumkin bo'lgan
+  /// taklif bor — dialog tepasida ko'rsatiladi.
+  bool get hasSuggestion => !isLinked && suggestions.isNotEmpty;
 
   factory Sh5KirimItem.fromJson(Map<String, dynamic> json) {
     final rawMap = json['map'];
@@ -217,6 +233,28 @@ class Sh5KirimItem {
           .toList(growable: false),
     );
   }
+}
+
+/// Hujjatga qo'shilmagan («SH5'da yo'q») qator — `doc.skipped`.
+class Sh5KirimSkippedLine {
+  final String key;
+  final String name;
+
+  /// Qator summasi — BUTUN so'm (hujjat jamiga kirmaydi).
+  final int subtotal;
+
+  const Sh5KirimSkippedLine({
+    this.key = '',
+    this.name = '',
+    this.subtotal = 0,
+  });
+
+  factory Sh5KirimSkippedLine.fromJson(Map<String, dynamic> json) =>
+      Sh5KirimSkippedLine(
+        key: _asStr(json['key']),
+        name: _asStr(json['name']),
+        subtotal: _asInt(json['subtotal']),
+      );
 }
 
 /// SH5 hujjati (navbat yozuvi): kun javobidagi `order.doc` va
@@ -241,6 +279,9 @@ class Sh5KirimDoc {
   final DateTime? sentAt;
   final int attempts;
 
+  /// Hujjatga qo'shilmagan qatorlar («SH5'da yo'q» belgilangani).
+  final List<Sh5KirimSkippedLine> skipped;
+
   const Sh5KirimDoc({
     required this.id,
     this.orderId = 0,
@@ -252,6 +293,7 @@ class Sh5KirimDoc {
     this.error = '',
     this.sentAt,
     this.attempts = 0,
+    this.skipped = const [],
   });
 
   bool get isDone => status == Sh5KirimStatus.done;
@@ -277,6 +319,18 @@ class Sh5KirimDoc {
     return 'SH5 ga yozildi';
   }
 
+  /// «O'tkazildi: Сита, Ведро» (bo'sh bo'lsa `''`).
+  String get skippedLabel {
+    if (skipped.isEmpty) return '';
+    final names = skipped
+        .map((e) => e.name.isEmpty ? e.key : e.name)
+        .where((e) => e.isNotEmpty)
+        .join(', ');
+    return names.isEmpty
+        ? 'O\'tkazildi: ${skipped.length} ta qator'
+        : 'O\'tkazildi: $names';
+  }
+
   factory Sh5KirimDoc.fromJson(Map<String, dynamic> json) => Sh5KirimDoc(
         id: _asInt(json['id']),
         orderId: _asInt(json['order_id']),
@@ -288,6 +342,9 @@ class Sh5KirimDoc {
         error: _asStr(json['error']),
         sentAt: _asDate(json['sent_at']),
         attempts: _asInt(json['attempts']),
+        skipped: _asMaps(json['skipped'])
+            .map(Sh5KirimSkippedLine.fromJson)
+            .toList(growable: false),
       );
 }
 
@@ -338,8 +395,14 @@ class Sh5KirimOrder {
     this.items = const [],
   });
 
-  /// Shu buyurtmadagi bog'lanmagan mahsulotlar soni.
+  /// Shu buyurtmadagi bog'lanmagan («?») mahsulotlar soni.
   int get unmappedCount => items.where((e) => e.isUnmapped).length;
+
+  /// «SH5'da yo'q» deb o'tkazib yuborilgan mahsulotlar soni.
+  int get skippedCount => items.where((e) => e.isSkipped).length;
+
+  /// Hamma qatorlar o'tkazilgan — bu buyurtmadan SH5 hujjati chiqmaydi.
+  bool get allSkipped => items.isNotEmpty && items.every((e) => e.isSkipped);
 
   /// SH5 ga yozilgan — qayta yuborilmaydi.
   bool get isDone => doc?.isDone ?? false;
@@ -421,6 +484,9 @@ class Sh5KirimDay {
   final int unmappedCount;
   final int mappedCount;
 
+  /// «SH5'da yo'q» deb o'tkazilgan qatorlar soni (`skipped_count`).
+  final int skippedCount;
+
   const Sh5KirimDay({
     this.date = '',
     this.settingsOk = false,
@@ -428,14 +494,25 @@ class Sh5KirimDay {
     this.orders = const [],
     this.unmappedCount = 0,
     this.mappedCount = 0,
+    this.skippedCount = 0,
   });
 
   /// Kundagi jami mahsulot qatorlari.
   int get itemCount => orders.fold(0, (sum, o) => sum + o.items.length);
 
-  /// Hali SH5 ga yozilmagan buyurtmalar (yuboriladiganlar).
+  /// O'tkazilganlar soni: server bergani, bo'lmasa qatorlardan sanaladi.
+  int get skippedTotal => skippedCount > 0
+      ? skippedCount
+      : orders.fold(0, (sum, o) => sum + o.skippedCount);
+
+  /// Hali SH5 ga yozilmagan buyurtmalar (yuboriladiganlar). Hamma qatori
+  /// o'tkazilgan buyurtmadan hujjat chiqmaydi — u yuborilmaydi.
   List<Sh5KirimOrder> get pendingOrders =>
-      orders.where((o) => !o.isDone).toList(growable: false);
+      orders.where((o) => !o.isDone && !o.allSkipped).toList(growable: false);
+
+  /// Hujjat yaratilmaydigan (hamma qatori o'tkazilgan) buyurtmalar.
+  List<Sh5KirimOrder> get fullySkippedOrders =>
+      orders.where((o) => o.allSkipped).toList(growable: false);
 
   /// Natija kutilayotgan hujjat bormi (3 s poll shunga qarab davom etadi).
   bool get hasPendingDocs => orders.any((o) => o.doc?.isPending ?? false);
@@ -451,6 +528,7 @@ class Sh5KirimDay {
             .toList(growable: false),
         unmappedCount: _asInt(json['unmapped_count']),
         mappedCount: _asInt(json['mapped_count']),
+        skippedCount: _asInt(json['skipped_count']),
       );
 
   /// Doc'lar ro'yxatidan (3 s poll) buyurtmalar statusini yangilaydi.
@@ -475,6 +553,7 @@ class Sh5KirimDay {
           .toList(growable: false),
       unmappedCount: unmappedCount,
       mappedCount: mappedCount,
+      skippedCount: skippedCount,
     );
   }
 }

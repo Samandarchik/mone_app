@@ -2,6 +2,8 @@
 // bog'lash dialogi (PLAN_KIRIM §6): tepada nom o'xshashligi bo'yicha takliflar
 // (score bilan), pastda SH5 lug'ati bo'yicha qidiruv (`goods?q=`, 300 ms
 // debounce). Mavjud bog'lanish bo'lsa «Bog'lanishni o'chirish» ham bor.
+// Mahsulot SH5 lug'atida umuman bo'lmasa — «SH5'da yo'q — o'tkazib yuborish»
+// (kulrang): shu qator hujjatga qo'shilmaydi, lekin «?» bo'lib qolmaydi.
 //
 // Dialog SERVERGA YOZMAYDI — faqat tanlovni qaytaradi; PUT/DELETE ni chaqirgan
 // ekran (sh5_kirim_ui.dart) bajaradi, shunda ro'yxat bir joyda yangilanadi.
@@ -12,8 +14,9 @@ import 'package:uz_ai_dev/admin/ui/widgets/rk7_common.dart';
 import 'package:uz_ai_dev/bugalter/model/sh5_kirim_model.dart';
 import 'package:uz_ai_dev/bugalter/services/sh5_kirim_service.dart';
 
-/// Dialog natijasi: tovar tanlandi yoki bog'lanish o'chirilsin.
-enum Sh5KirimPickAction { select, delete }
+/// Dialog natijasi: tovar tanlandi, «SH5'da yo'q» belgilandi yoki
+/// bog'lanish o'chirilsin.
+enum Sh5KirimPickAction { select, skip, delete }
 
 /// Dialog qaytaradigan natija (bekor qilinsa null).
 class Sh5KirimPick {
@@ -25,6 +28,12 @@ class Sh5KirimPick {
 
   const Sh5KirimPick.select(this.sh5Rid, this.sh5Name)
       : action = Sh5KirimPickAction.select;
+
+  /// «SH5'da yo'q — o'tkazib yuborish» (hujjatga qo'shilmaydi).
+  const Sh5KirimPick.skip()
+      : action = Sh5KirimPickAction.skip,
+        sh5Rid = 0,
+        sh5Name = '';
 
   const Sh5KirimPick.delete()
       : action = Sh5KirimPickAction.delete,
@@ -131,7 +140,9 @@ class _Sh5KirimGoodsDialogState extends State<_Sh5KirimGoodsDialog> {
           Text(
             [
               if (item.qtyDisplay.isNotEmpty) item.qtyDisplay,
-              if (map != null && map.sh5Name.isNotEmpty)
+              if (item.isSkipped)
+                'hozir: o\'tkazib yuborilgan'
+              else if (map != null && map.sh5Name.isNotEmpty)
                 'hozir: ${map.sh5Name}',
             ].join(' · '),
             style: TextStyle(
@@ -147,8 +158,8 @@ class _Sh5KirimGoodsDialogState extends State<_Sh5KirimGoodsDialog> {
         height: 440,
         child: Column(
           children: [
-            // Takliflar — faqat bog'lanish yo'q bo'lganda (tasdiqlash uchun).
-            if (map == null && suggestions.isNotEmpty) ...[
+            // Takliflar — bog'lanish yo'q (yoki o'tkazilgan) bo'lganda.
+            if (!item.isLinked && suggestions.isNotEmpty) ...[
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -198,7 +209,25 @@ class _Sh5KirimGoodsDialogState extends State<_Sh5KirimGoodsDialog> {
           ],
         ),
       ),
+      actionsOverflowAlignment: OverflowBarAlignment.center,
       actions: [
+        // Mahsulot SH5 lug'atida yo'q — qator hujjatga qo'shilmaydi, lekin
+        // mahsulot «?» bo'lib qolmaydi (kulrang tugma).
+        if (!item.isSkipped)
+          TextButton.icon(
+            onPressed: () => Navigator.pop(context, const Sh5KirimPick.skip()),
+            icon: const Icon(Icons.block, size: 16),
+            label: const Text(
+              'SH5\'da yo\'q — o\'tkazib yuborish',
+              style: TextStyle(fontSize: 12.5),
+            ),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.grey.shade700,
+              backgroundColor: Colors.grey.shade200,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
         // Mavjud bog'lanishni uzish — mahsulot yana «bog'lanmagan» bo'ladi.
         if (map != null)
           TextButton(
