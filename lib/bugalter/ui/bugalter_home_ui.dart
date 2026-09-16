@@ -19,6 +19,7 @@ import 'package:uz_ai_dev/core/context_extension.dart';
 import 'package:uz_ai_dev/core/utils/money_input.dart';
 import 'package:uz_ai_dev/core/utils/qty_units.dart';
 import 'package:uz_ai_dev/core/widgets/order_period.dart';
+import 'package:uz_ai_dev/core2/ui/widgets/core_entry_menu.dart';
 import 'package:uz_ai_dev/yuk/models/yuk_order_model.dart';
 import 'package:uz_ai_dev/yuk/ui/widgets/yuk_day_cards.dart';
 
@@ -251,6 +252,8 @@ class _BugalterHomeUiState extends State<BugalterHomeUi> {
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           actions: [
+            // Ombor 2.0 (mone_core) — hujjatlar/qoldiq/hub, perms bo'yicha.
+            const CoreEntryMenu(),
             // Excel hisobot (.xlsx): davr tanlab yuklab olish va ulashish.
             _exporting
                 ? const Padding(

@@ -99,13 +99,32 @@ Widget coreStatusChip(String status) {
   );
 }
 
-/// Xatoni SnackBar'da ko'rsatish (403 bo'lsa qaysi perm yetmagani bilan).
+/// Server xatosidagi `details` (422 validation / 409 conflict) — qisqa matn:
+/// «good_id: 33 · base_units: kg». Bo'sh bo'lsa bo'sh satr.
+String coreErrorDetails(CoreApiException err) {
+  if (err.details.isEmpty) return '';
+  final parts = <String>[];
+  for (final e in err.details.entries) {
+    final v = e.value;
+    final text = v is List ? v.take(5).join(', ') : '$v';
+    if (text.isEmpty) continue;
+    parts.add('${e.key}: $text');
+    if (parts.length >= 3) break;
+  }
+  return parts.join(' · ');
+}
+
+/// Xatoni SnackBar'da ko'rsatish: 403 — qaysi perm yetmagani, 409/422 —
+/// server `details` maydoni (qaysi qator/tovar) bilan.
 void showCoreError(BuildContext context, Object e) {
   final err = CoreClient.wrap(e);
   var msg = err.display;
   if (err.forbidden && err.perm.isNotEmpty) msg = '$msg (ruxsat: ${err.perm})';
+  final details = coreErrorDetails(err);
+  if (details.isNotEmpty) msg = '$msg\n$details';
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
     content: Text(msg),
+    duration: Duration(seconds: details.isEmpty ? 4 : 7),
     backgroundColor: err.notImplemented ? Colors.orange.shade800 : Colors.red.shade700,
   ));
 }

@@ -213,8 +213,25 @@ class _DocDetailUiState extends State<DocDetailUi> {
                   const SizedBox(height: 10),
                   _lines('Mahsulot (chiqish)',
                       doc.lines.where((l) => l.flag == 0).toList(), doc, dict),
+                ] else if (doc.type == CoreDocType.act &&
+                    doc.lines.any((l) => l.flag == 1)) ...[
+                  // Post paytida retsept yoyilgan bo'lsa hujjatda ikki xil
+                  // qator bo'ladi: taom (flag=0) va ingredient sarfi (flag=1).
+                  _lines('Taomlar',
+                      doc.lines.where((l) => l.flag == 0).toList(), doc, dict),
+                  const SizedBox(height: 10),
+                  _lines('Sarf (ingredientlar)',
+                      doc.lines.where((l) => l.flag == 1).toList(), doc, dict),
                 ] else
-                  _lines('Qatorlar', doc.lines, doc, dict),
+                  _lines(
+                      doc.type == CoreDocType.act
+                          ? 'Taomlar'
+                          : doc.type == CoreDocType.inventory
+                              ? 'Fakt qatorlari'
+                              : 'Qatorlar',
+                      doc.lines,
+                      doc,
+                      dict),
                 const SizedBox(height: 10),
                 _history(doc),
               ],

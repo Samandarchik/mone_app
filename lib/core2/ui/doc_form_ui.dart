@@ -173,7 +173,8 @@ class _DocFormState extends State<_DocForm> {
             CoreGood(
                 id: l.goodId,
                 name: l.goodName,
-                baseUnit: coreBaseUnitOf(l.unit));
+                baseUnit: coreBaseUnitOf(l.unit),
+                partial: true);
         final unit = good.selectableUnits.firstWhere(
           (u) => u.unit == l.unit,
           orElse: () => good.preferredUnit,
@@ -217,8 +218,16 @@ class _DocFormState extends State<_DocForm> {
   int get _total => _lines.fold(0, (s, l) => s + l.amount);
   int get _totalSale => _lines.fold(0, (s, l) => s + l.saleInt);
 
+  /// Qator qaysi ombor qoldig'ini ko'rsatadi: production'da sarf (flag=1)
+  /// «dan» omboridan yechiladi, mahsulot (flag=0) «ga» omboriga kiradi;
+  /// qolgan turlarda chiqim bo'lsa «dan», aks holda «ga».
+  int? _skladForFlag(int flag) {
+    if (isProduction) return flag == 1 ? _from : _to;
+    return hasFrom ? _from : _to;
+  }
+
   Future<void> _addLine({int flag = 0}) async {
-    final sklad = hasFrom ? _from : _to;
+    final sklad = _skladForFlag(flag);
     final good = await pickCoreGood(context, skladId: sklad);
     if (good == null || !mounted) return;
     setState(() {
@@ -241,7 +250,12 @@ class _DocFormState extends State<_DocForm> {
     if (hasFrom && _from == null) return 'Qaysi ombordan — tanlang';
     if (hasTo && _to == null) return 'Qaysi omborga — tanlang';
     if (hasCorr && _corr == null) return 'Kontragentni tanlang';
-    if (hasFrom && hasTo && _from == _to) return 'Ombor «dan» va «ga» bir xil';
+    // Faqat ko'chirish/rezervda omborlar farq qilishi shart; ishlab
+    // chiqarishda from = to bo'lishi mumkin (server ham ruxsat beradi).
+    if ((type == CoreDocType.transfer || type == CoreDocType.reserve) &&
+        _from == _to) {
+      return 'Ombor «dan» va «ga» bir xil';
+    }
     if (_lines.isEmpty) return 'Kamida bitta qator qo\'shing';
     for (final l in _lines) {
       if (l.baseQty <= 0) return '«${l.good.name}» miqdori 0';
@@ -474,7 +488,7 @@ class _DocFormState extends State<_DocForm> {
   }
 
   Widget _lineRow(_LineEdit l, bool editable) {
-    final sklad = hasFrom ? _from : _to;
+    final sklad = _skladForFlag(l.flag);
     final stockRow = sklad == null
         ? null
         : context.select<CoreStockProvider, CoreStockRow?>(
@@ -733,7 +747,8 @@ class _InventoryFormState extends State<_InventoryForm> {
             CoreGood(
                 id: l.goodId,
                 name: l.goodName,
-                baseUnit: coreBaseUnitOf(l.unit));
+                baseUnit: coreBaseUnitOf(l.unit),
+                partial: true);
         _extra.add(good);
         _ctrl(good.id).text = coreFormatQty(l.qty, good.baseUnit);
       }
@@ -747,11 +762,14 @@ class _InventoryFormState extends State<_InventoryForm> {
   }
 
   // Qoldiqni yuklash; qatorlardagi tovar nomi/base birligi dict keshiga.
+  // Orqa sana bo'lsa hisob qoldig'i O'SHA kun oxiriga olinadi (`?date=`) —
+  // aks holda inventar farqi bugungi qoldiqqa nisbatan chiqib ketardi.
   void _loadStock(int skladId) {
     final stock = context.read<CoreStockProvider>();
     final dict = context.read<CoreDictProvider>();
     stock.onRows = (rows) => dict.cacheGoods(rows.map((r) => r.toGood()));
-    stock.load(skladId, nonzero: true);
+    final today = todayIso();
+    stock.load(skladId, date: _date == today ? null : _date, nonzero: true);
   }
 
   // Ekrandagi qatorlar tovarlari (qoldiqdan yoki qo'lda) — `_build` uchun.
@@ -907,7 +925,10 @@ class _InventoryFormState extends State<_InventoryForm> {
                         : () async {
                             final d = await pickDate(context, _date,
                                 allowPast: session.canBackdate);
-                            if (d != null) setState(() => _date = d);
+                            if (d == null || d == _date) return;
+                            setState(() => _date = d);
+                            // Hisob qoldig'i sana bo'yicha qayta olinadi.
+                            if (_sklad != null) _loadStock(_sklad!);
                           },
                     child: InputDecorator(
                       decoration: coreInput('Sana'),

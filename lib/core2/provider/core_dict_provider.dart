@@ -78,30 +78,45 @@ class CoreDictProvider extends ChangeNotifier with ClearableProvider {
     return list;
   }
 
-  /// Tovarlarni keshga qo'yish (hujjat/qoldiq javoblaridan ham).
+  /// Tovarlarni keshga qo'yish (hujjat/qoldiq javoblaridan ham). TO'LIQ EMAS
+  /// (`partial`) kartochka to'liqning ustiga YOZILMAYDI — aks holda
+  /// `is_complect`/`units` yo'qolardi (inventar flag'i buzilardi).
   void cacheGoods(Iterable<CoreGood> goods, {bool notify = false}) {
     for (final g in goods) {
+      final old = _goodIdx[g.id];
+      if (g.partial && old != null && !old.partial) continue;
       _goodIdx[g.id] = g;
-      _missingGoods.remove(g.id);
+      if (!g.partial) _missingGoods.remove(g.id);
     }
     if (notify) notifyListeners();
   }
 
-  /// Keshda yo'q tovarlarni `/goods/{id}` bilan olib keladi (parallel).
+  /// Keshda yo'q — yoki faqat `partial` (qoldiq/hujjat qatoridan qurilgan) —
+  /// tovarlarni `/goods/{id}` bilan olib keladi (parallel).
   /// Xatolar yutiladi — nom/birlik qator ma'lumotidan olinadi.
   Future<void> ensureGoods(Iterable<int> ids) async {
     final need = ids
-        .where((id) => id > 0 && !_goodIdx.containsKey(id) && !_missingGoods.contains(id))
+        .where((id) =>
+            id > 0 &&
+            (_goodIdx[id]?.partial ?? true) &&
+            !_missingGoods.contains(id))
         .toSet();
     if (need.isEmpty) return;
-    await Future.wait(need.map((id) async {
-      try {
-        _goodIdx[id] = await _service.good(id);
-      } catch (e) {
-        _missingGoods.add(id);
-        debugPrint('ensureGoods($id): $e');
-      }
-    }));
+    // Inventarda yuzlab qator bo'lishi mumkin — serverni bosmaslik uchun
+    // bo'laklab (10 tadan parallel) so'raladi.
+    const chunk = 10;
+    final list = need.toList();
+    for (var i = 0; i < list.length; i += chunk) {
+      final part = list.sublist(i, (i + chunk).clamp(0, list.length));
+      await Future.wait(part.map((id) async {
+        try {
+          _goodIdx[id] = await _service.good(id);
+        } catch (e) {
+          _missingGoods.add(id);
+          debugPrint('ensureGoods($id): $e');
+        }
+      }));
+    }
     notifyListeners();
   }
 

@@ -115,6 +115,21 @@ class CoreStockService {
     }
   }
 
+  /// `GET /reports/sh5-compare?date=` — SH5 ↔ yadro kunlik solishtiruv
+  /// natijasi (sh5compare demoni yozadi). Hali hisoblanmagan kun uchun
+  /// server 404 qaytaradi — UI shuni alohida ko'rsatadi.
+  Future<CoreSh5Compare> sh5Compare({String? date}) async {
+    try {
+      final r = await CoreClient.dio.get(
+        CoreClient.url('/reports/sh5-compare'),
+        queryParameters: {if (date != null && date.isNotEmpty) 'date': date},
+      );
+      return CoreSh5Compare.fromJson(CoreClient.mapOf(r.data));
+    } catch (e) {
+      throw CoreClient.wrap(e);
+    }
+  }
+
   Future<List<CoreDeficitRow>> deficit({
     required String dateFrom,
     required String dateTo,

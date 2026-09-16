@@ -1,8 +1,8 @@
 // core2/ui/core_hub_ui.dart — «Ombor 2.0» markazi (CoreHubUi): mone_core
 // ekranlari grid'i — hujjatlar, bozor приход, qoldiq, lug'atlar (omborlar,
 // tovarlar, kontragentlar), retseptlar, ruxsatlar, foydalanuvchilar, sotuv
-// nuqtalari, API kalitlar, webhooklar, hisobotlar, sinxron holati. Kartalar
-// `perms` bo'yicha ko'rinadi/yashirinadi. Tepada ulanish holati (server,
+// nuqtalari, API kalitlar, webhooklar, hisobotlar, SH5 solishtiruv, sinxron
+// holati. Kartalar `perms` bo'yicha ko'rinadi/yashirinadi. Tepada ulanish holati (server,
 // foydalanuvchi, rol) va ⚙ server sozlamalari.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -21,6 +21,7 @@ import 'package:uz_ai_dev/core2/ui/integration_ui.dart';
 import 'package:uz_ai_dev/core2/ui/perms_ui.dart';
 import 'package:uz_ai_dev/core2/ui/recipes_ui.dart';
 import 'package:uz_ai_dev/core2/ui/reports_ui.dart';
+import 'package:uz_ai_dev/core2/ui/sh5_compare_ui.dart';
 import 'package:uz_ai_dev/core2/ui/stock_ui.dart';
 import 'package:uz_ai_dev/core2/ui/sync_status_ui.dart';
 import 'package:uz_ai_dev/core2/ui/widgets/core_widgets.dart';
@@ -86,6 +87,13 @@ class CoreHubUi extends StatelessWidget {
         title: 'Hisobotlar',
         subtitle: 'Aylanma, qoldiq qiymati, defitsit',
         page: const ReportsUi(),
+        visible: session.has(CorePerms.reportView),
+      ),
+      _HubItem(
+        icon: Icons.compare_arrows,
+        title: 'SH5 solishtiruv',
+        subtitle: 'Kunlik farq: qoldiq va hujjatlar',
+        page: const Sh5CompareUi(),
         visible: session.has(CorePerms.reportView),
       ),
       _HubItem(

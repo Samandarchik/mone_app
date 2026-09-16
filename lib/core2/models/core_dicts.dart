@@ -147,6 +147,10 @@ class CoreGood {
   final String rkCode;
   final bool active;
   final List<CoreGoodUnit> units;
+  // TO'LIQ kartochka emas (qoldiq/hujjat qatoridan qurilgan: faqat nom va
+  // base birlik ma'lum; `is_complect`, `units` ishonchsiz). Keshda shundaylar
+  // `/goods/{id}` bilan to'ldiriladi (CoreDictProvider.ensureGoods).
+  final bool partial;
 
   const CoreGood({
     required this.id,
@@ -158,6 +162,7 @@ class CoreGood {
     this.rkCode = '',
     this.active = true,
     this.units = const [],
+    this.partial = false,
   });
 
   factory CoreGood.fromJson(Map<String, dynamic> j) => CoreGood(

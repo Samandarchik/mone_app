@@ -48,8 +48,11 @@ class CoreStockRow {
         minQty: (j['min_qty'] as num?)?.toInt() ?? 0,
       );
 
-  /// Qoldiq keshidagi qatordan tovar kartochkasi (kesh uchun).
-  CoreGood toGood() => CoreGood(id: goodId, name: goodName, baseUnit: baseUnit);
+  /// Qoldiq keshidagi qatordan tovar kartochkasi (kesh uchun) — TO'LIQ EMAS
+  /// (`partial: true`): bu javobda `is_complect`/`units` yo'q, kerak bo'lganda
+  /// `/goods/{id}` bilan to'ldiriladi (CoreDictProvider.ensureGoods).
+  CoreGood toGood() => CoreGood(
+      id: goodId, name: goodName, baseUnit: baseUnit, partial: true);
 
   bool get negative => qty < 0;
   bool get hasDeficit => deficit != 0;
