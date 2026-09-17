@@ -3,7 +3,8 @@
 // (chip, ro'yxat GET /roles, superadmin tahrirlanmaydi), katalog (/perms)
 // guruh bo'yicha, har switch → PUT /roles/{role}/perms (butun map).
 // CoreUsersUi — foydalanuvchilar ro'yxati (`{items,total}`; rol, omborlar,
-// faol) + tahrir dialogi (nom, telefon, login_code, rol, omborlar chip,
+// faol, hisoblangan ruxsatlar chiplari = rol perms + override; ✏️ dialogni
+// ruxsatlar bo'limi ochiq holda ochadi) + tahrir dialogi (nom, telefon, login_code, rol, omborlar chip,
 // faol, parol ixtiyoriy, shaxsiy perm override).
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -203,10 +204,33 @@ class CoreUsersUi extends StatefulWidget {
   State<CoreUsersUi> createState() => _CoreUsersUiState();
 }
 
+/// Qatorda ko'rsatiladigan hisoblangan ruxsatlar: rol ruxsatlari + shaxsiy
+/// override. `granted` — sarlavhalar (override bilan qo'shilganlari
+/// `added` da ham), `revoked` — rolda bor, lekin shaxsan taqiqlangan.
+class _PermSummary {
+  final bool all;
+  final List<String> granted;
+  final Set<String> added;
+  final List<String> revoked;
+  // false — rol ruxsatlari yuklanmadi, faqat override ko'rsatiladi.
+  final bool roleKnown;
+  const _PermSummary({
+    this.all = false,
+    this.granted = const [],
+    this.added = const {},
+    this.revoked = const [],
+    this.roleKnown = true,
+  });
+}
+
 class _CoreUsersUiState extends State<CoreUsersUi> {
   final _service = CoreAdminService();
   List<CoreUser>? _users;
   List<CorePermDef>? _catalog;
+  // rol → {perm: bool}; har _load'da yangilanadi (PermsUi'da o'zgargan bo'lishi mumkin).
+  Map<String, Map<String, bool>> _rolePerms = {};
+  // user.id → hisoblangan ruxsatlar (build'da qayta hisoblanmaydi).
+  Map<int, _PermSummary> _summaries = {};
   String? _error;
   String _q = '';
 
@@ -221,16 +245,107 @@ class _CoreUsersUiState extends State<CoreUsersUi> {
     try {
       final u = await _service.users();
       _catalog ??= await _service.perms().catchError((_) => <CorePermDef>[]);
-      if (mounted) setState(() => _users = u);
+      final roles = {for (final x in u) x.role}..remove('superadmin');
+      final entries = await Future.wait(roles.map((r) => _service
+          .rolePerms(r)
+          .then<MapEntry<String, Map<String, bool>>?>((p) => MapEntry(r, p))
+          .catchError((_) => null)));
+      _rolePerms = Map.fromEntries(
+          entries.whereType<MapEntry<String, Map<String, bool>>>());
+      if (mounted) {
+        setState(() {
+          _users = u;
+          _summaries = {for (final x in u) x.id: _summarize(x)};
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     }
   }
 
-  Future<void> _edit(CoreUser? u) async {
+  _PermSummary _summarize(CoreUser u) {
+    if (u.role == 'superadmin') return const _PermSummary(all: true);
+    final rolePerms = _rolePerms[u.role];
+    final granted = <String>[];
+    final added = <String>{};
+    final revoked = <String>[];
+    for (final p in _catalog ?? const <CorePermDef>[]) {
+      final byRole = rolePerms?[p.perm] ?? false;
+      final own = u.permsOverride[p.perm];
+      final title = p.title.isNotEmpty ? p.title : p.perm;
+      if (own ?? byRole) {
+        granted.add(title);
+        if (own == true && !byRole) added.add(title);
+      } else if (own == false && byRole) {
+        revoked.add(title);
+      }
+    }
+    return _PermSummary(
+      granted: granted,
+      added: added,
+      revoked: revoked,
+      roleKnown: rolePerms != null,
+    );
+  }
+
+  Widget _permChip(String text, {Color? color, bool strike = false}) {
+    final c = color ?? Colors.grey.shade800;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: (color ?? Colors.grey).withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: (color ?? Colors.grey).withValues(alpha: 0.35)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          color: c,
+          decoration: strike ? TextDecoration.lineThrough : null,
+        ),
+      ),
+    );
+  }
+
+  // Ruxsatlar chiplari: shaxsan qo'shilgani yashil, taqiqlangani qizil
+  // (ustidan chizilgan); ko'p bo'lsa «+N» — to'liq ro'yxat tooltip'da.
+  Widget _permsBlock(CoreUser u) {
+    final s = _summaries[u.id];
+    if (s == null) return const SizedBox.shrink();
+    if (s.all) {
+      return Wrap(children: [
+        _permChip('Hamma ruxsat (superadmin)', color: kCoreAccentDark),
+      ]);
+    }
+    const maxShown = 4;
+    final chips = <Widget>[
+      if (s.roleKnown)
+        _permChip('${s.granted.length} ta ruxsat', color: kCoreAccentDark),
+      for (final t in s.granted.take(maxShown))
+        _permChip(t, color: s.added.contains(t) ? Colors.green.shade700 : null),
+      if (s.granted.length > maxShown)
+        Tooltip(
+          message: s.granted.skip(maxShown).join('\n'),
+          child: _permChip('+${s.granted.length - maxShown}'),
+        ),
+      for (final t in s.revoked)
+        _permChip(t, color: Colors.red.shade700, strike: true),
+      if (s.granted.isEmpty && s.revoked.isEmpty)
+        _permChip(s.roleKnown ? 'Ruxsat yo\'q' : 'Rol ruxsatlari yuklanmadi',
+            color: Colors.grey),
+    ];
+    return Wrap(spacing: 4, runSpacing: 4, children: chips);
+  }
+
+  Future<void> _edit(CoreUser? u, {bool permsOnly = false}) async {
     final result = await showDialog<_UserResult>(
       context: context,
-      builder: (_) => _UserDialog(user: u, catalog: _catalog ?? const []),
+      builder: (_) => _UserDialog(
+        user: u,
+        catalog: _catalog ?? const [],
+        initialShowPerms: permsOnly,
+      ),
     );
     if (result == null || !mounted) return;
     try {
@@ -296,19 +411,33 @@ class _CoreUsersUiState extends State<CoreUsersUi> {
                                     style: TextStyle(
                                         fontWeight: FontWeight.w600,
                                         color: u.active ? Colors.black87 : Colors.grey)),
-                                subtitle: Text(
-                                  [
-                                    u.role,
-                                    if (u.phone.isNotEmpty) u.phone,
-                                    if (u.loginCode.isNotEmpty) 'kod: ${u.loginCode}',
-                                    u.sklads.isEmpty
-                                        ? 'hamma ombor'
-                                        : u.sklads.map(dict.skladName).join(', '),
-                                    if (!u.active) 'nofaol',
-                                  ].join(' · '),
-                                  style: const TextStyle(fontSize: 11.5),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      [
+                                        u.role,
+                                        if (u.phone.isNotEmpty) u.phone,
+                                        if (u.loginCode.isNotEmpty) 'kod: ${u.loginCode}',
+                                        u.sklads.isEmpty
+                                            ? 'hamma ombor'
+                                            : u.sklads.map(dict.skladName).join(', '),
+                                        if (!u.active) 'nofaol',
+                                      ].join(' · '),
+                                      style: const TextStyle(fontSize: 11.5),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    _permsBlock(u),
+                                  ],
                                 ),
-                                trailing: const Icon(Icons.chevron_right),
+                                trailing: u.role == 'superadmin'
+                                    ? const Icon(Icons.chevron_right)
+                                    : IconButton(
+                                        tooltip: 'Ruxsatlarni o\'zgartirish',
+                                        icon: const Icon(Icons.edit_outlined,
+                                            size: 20, color: kCoreAccentDark),
+                                        onPressed: () => _edit(u, permsOnly: true),
+                                      ),
                               ),
                             );
                           },
@@ -336,7 +465,13 @@ class _UserResult {
 class _UserDialog extends StatefulWidget {
   final CoreUser? user;
   final List<CorePermDef> catalog;
-  const _UserDialog({this.user, required this.catalog});
+  // true — ✏️ dan ochilgan: «Shaxsiy ruxsatlar» bo'limi ochiq turadi.
+  final bool initialShowPerms;
+  const _UserDialog({
+    this.user,
+    required this.catalog,
+    this.initialShowPerms = false,
+  });
 
   @override
   State<_UserDialog> createState() => _UserDialogState();
@@ -351,7 +486,7 @@ class _UserDialogState extends State<_UserDialog> {
   late Set<int> _sklads = {...?widget.user?.sklads};
   late bool _active = widget.user?.active ?? true;
   late Map<String, bool> _override = {...?widget.user?.permsOverride};
-  bool _showPerms = false;
+  late bool _showPerms = widget.initialShowPerms;
 
   @override
   void dispose() {
