@@ -403,7 +403,14 @@ class _HomeBodyState extends State<_HomeBody> {
         _open(InventoryCountUi(skladId: _sklad));
         break;
       default:
-        _open(QuickDocUi(type: t.key, skladId: _sklad));
+        // Ishlab chiqarish: faqat `doc.act.create` ruxsati bo'lsa — akt
+        // (flag 0 taomlar, sarfni server retsept bo'yicha yozadi).
+        final session = context.read<CoreSession>();
+        final type = t.key == CoreDocType.production &&
+                !session.canCreate(CoreDocType.production)
+            ? CoreDocType.act
+            : t.key;
+        _open(QuickDocUi(type: type, skladId: _sklad));
     }
   }
 
