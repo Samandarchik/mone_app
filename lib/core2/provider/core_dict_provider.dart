@@ -3,8 +3,10 @@
 // marta to'liq yuklanadi (`ensureLoaded`). TOVARLAR (12 000+) to'liq
 // yuklanmaydi: qidiruv SERVER tomonda (`searchGoods` → `/goods?search=&limit=50`),
 // natijalar va tanlangan/ko'rilgan tovarlar `_goodIdx` keshiga tushadi;
-// `goodById` — O(1) kesh, `ensureGoods(ids)` — yetishmaganlarni `/goods/{id}`
-// bilan olib keladi. `skladById`/`corrById` — O(1) indeks Map'lar.
+// `goodById` — O(1) kesh, `ensureGoods(ids)` — yetishmaganlarni to'ldiradi
+// (50+ tovar kerak bo'lsa `loadActiveGoods()` — faol tovarlar ro'yxati
+// sahifalab, aks holda `/goods/{id}` bittalab). `skladById`/`corrById` —
+// O(1) indeks Map'lar.
 import 'package:flutter/foundation.dart';
 import 'package:uz_ai_dev/core/clearable_provider.dart';
 import 'package:uz_ai_dev/core2/models/core_dicts.dart';
@@ -30,6 +32,15 @@ class CoreDictProvider extends ChangeNotifier with ClearableProvider {
   bool _loading = false;
   String? _error;
   Future<void>? _inflight;
+
+  // Faol tovarlar to'liq ro'yxati (guruh/`is_complect` KO'P tovar uchun
+  // kerak bo'lganda — sanash/qoldiq ekranlari) bir marta sahifalab olinadi.
+  bool _allActiveLoaded = false;
+  Future<void>? _allActiveInflight;
+
+  /// Fonda tovar kartalari yuklanyaptimi (bo'lim sarlavhasidagi spinner).
+  int _ensuring = 0;
+  bool get goodsLoading => _ensuring > 0;
 
   List<CoreSklad> get sklads => _sklads;
   List<CoreSklad> get activeSklads =>
@@ -91,33 +102,90 @@ class CoreDictProvider extends ChangeNotifier with ClearableProvider {
     if (notify) notifyListeners();
   }
 
+  /// Keshda yo'q — yoki faqat `partial` (qoldiq/hujjat qatoridan qurilgan)
+  /// bo'lgan tovar id'lari.
+  Set<int> _needGoods(Iterable<int> ids) => ids
+      .where((id) =>
+          id > 0 &&
+          (_goodIdx[id]?.partial ?? true) &&
+          !_missingGoods.contains(id))
+      .toSet();
+
   /// Keshda yo'q — yoki faqat `partial` (qoldiq/hujjat qatoridan qurilgan) —
-  /// tovarlarni `/goods/{id}` bilan olib keladi (parallel).
-  /// Xatolar yutiladi — nom/birlik qator ma'lumotidan olinadi.
+  /// tovarlarni to'ldiradi. KO'P tovar kerak bo'lsa (sanash: 250+ qator)
+  /// bittalab `/goods/{id}` juda sekin — faol tovarlar ro'yxati sahifalab
+  /// (1000 tadan, 4 ta parallel) olinadi, qolgani bittalab.
+  /// Har bo'lakdan keyin `notifyListeners()` — ekran bosqichma-bosqich
+  /// qayta guruhlanadi. Xatolar yutiladi (nom/birlik qator ma'lumotidan).
   Future<void> ensureGoods(Iterable<int> ids) async {
-    final need = ids
-        .where((id) =>
-            id > 0 &&
-            (_goodIdx[id]?.partial ?? true) &&
-            !_missingGoods.contains(id))
-        .toSet();
+    var need = _needGoods(ids);
     if (need.isEmpty) return;
-    // Inventarda yuzlab qator bo'lishi mumkin — serverni bosmaslik uchun
-    // bo'laklab (10 tadan parallel) so'raladi.
-    const chunk = 10;
-    final list = need.toList();
-    for (var i = 0; i < list.length; i += chunk) {
-      final part = list.sublist(i, (i + chunk).clamp(0, list.length));
-      await Future.wait(part.map((id) async {
-        try {
-          _goodIdx[id] = await _service.good(id);
-        } catch (e) {
-          _missingGoods.add(id);
-          debugPrint('ensureGoods($id): $e');
-        }
-      }));
-    }
+    _ensuring++;
     notifyListeners();
+    try {
+      if (need.length >= 50 && !_allActiveLoaded) {
+        await loadActiveGoods();
+        need = _needGoods(ids);
+      }
+      // Qolganlari (faol bo'lmagan yoki o'chirilgan tovarlar) bittalab.
+      const chunk = 24;
+      final list = need.toList();
+      for (var i = 0; i < list.length; i += chunk) {
+        final part = list.sublist(i, (i + chunk).clamp(0, list.length));
+        await Future.wait(part.map((id) async {
+          try {
+            _goodIdx[id] = await _service.good(id);
+          } catch (e) {
+            _missingGoods.add(id);
+            debugPrint('ensureGoods($id): $e');
+          }
+        }));
+        notifyListeners();
+      }
+    } finally {
+      _ensuring--;
+      notifyListeners();
+    }
+  }
+
+  /// Faol tovarlar to'liq ro'yxati (guruh nomi va `is_complect` bilan) —
+  /// bir marta, sahifalab. Parallel chaqiruvlar bitta yuklashni kutadi.
+  Future<void> loadActiveGoods() {
+    if (_allActiveLoaded) return Future.value();
+    return _allActiveInflight ??=
+        _loadActiveGoods().whenComplete(() => _allActiveInflight = null);
+  }
+
+  Future<void> _loadActiveGoods() async {
+    const page = 1000; // serverdagi eng katta limit
+    const par = 4; // brauzerda bir vaqtda ochiladigan ulanishlar chegarasi
+    _ensuring++;
+    var offset = 0;
+    try {
+      while (offset < 60000) {
+        final parts = await Future.wait([
+          for (var i = 0; i < par; i++)
+            _service
+                .goods(active: true, limit: page, offset: offset + i * page)
+                .catchError((Object e) {
+              debugPrint('loadActiveGoods(offset ${offset + i * page}): $e');
+              return <CoreGood>[];
+            }),
+        ]);
+        var got = 0;
+        for (final p in parts) {
+          cacheGoods(p);
+          got += p.length;
+        }
+        notifyListeners();
+        if (got < page * par) break;
+        offset += page * par;
+      }
+      _allActiveLoaded = true;
+    } finally {
+      _ensuring--;
+      notifyListeners();
+    }
   }
 
   /// Bir marta yuklash; parallel chaqiruvlar bitta so'rovni kutadi.
@@ -199,6 +267,7 @@ class CoreDictProvider extends ChangeNotifier with ClearableProvider {
     _goodIdx.clear();
     _missingGoods.clear();
     _reindex();
+    _allActiveLoaded = false;
     _loaded = false;
     _loading = false;
     _error = null;

@@ -2,8 +2,9 @@
 //
 // Ro'yxat: qidiruv BIRINCHI (eng ko'p ishlatiladigan amal), ostida ombor
 // tanlagich va guruh chiplari; har qatorda tovar nomi va KATTA miqdor +
-// birlik. Ranglar: manfiy / partiyasiz (defitsit) — qizil, `min_qty` dan
-// past — sariq. Tovar bosilsa kartochka: harakatlar ODDIY TILDA
+// birlik. Ranglar: QIZIL faqat manfiy qoldiqda; partiyasiz (defitsit) yoki
+// `min_qty` dan past — sariq. Har bir rangli qatorda SABAB kichik yorliqda
+// («manfiy», «partiyasiz», «kam qoldi»). Tovar bosilsa kartochka: ODDIY TILDA
 // («17.09 · Kirim +5 kg · РЫНОК», «17.09 · Ko'chirish −2 kg → ГЕЛИОН БАР»)
 // va partiyalar (FIFO) tabi.
 //
@@ -309,11 +310,24 @@ class _StockTile extends StatelessWidget {
   const _StockTile(
       {required this.row, required this.showCost, required this.onTap});
 
+  /// Qator rangining SABABI — kichik yorliq (foydalanuvchi qizil/sariqning
+  /// nimadan ekanini darhol ko'rsin).
+  String? get _reason {
+    if (row.negative) return 'manfiy';
+    if (row.hasDeficit) return 'partiyasiz';
+    if (row.low) return 'kam qoldi';
+    return null;
+  }
+
   /// Ikkinchi qator — oddiy tilda: partiyasiz yechim, kam qolgani, qiymat.
   String _subtitle() {
     final parts = <String>[];
+    if (row.negative) {
+      parts.add('qoldiq manfiy — kirim kiritilmagan bo\'lishi mumkin');
+    }
     if (row.hasDeficit) {
-      parts.add('partiyasiz: ${coreQtyUnitUz(row.deficit, row.baseUnit)}');
+      parts.add(
+          'partiyasiz yechilgan: ${coreQtyUnitUz(row.deficit, row.baseUnit)}');
     }
     if (row.low) {
       parts.add('kam qoldi (eng kami ${coreQtyUnitUz(row.minQty, row.baseUnit)})');
@@ -336,12 +350,16 @@ class _StockTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bad = row.negative || row.hasDeficit;
-    final warn = !bad && row.low;
+    // QIZIL faqat manfiy qoldiqda. Partiyasiz (defitsit) yoki eng kam
+    // miqdordan past — sariq; sababi yorliqda yozilgan.
+    final bad = row.negative;
+    final warn = !bad && (row.hasDeficit || row.low);
     final qtyColor = bad
         ? Colors.red.shade700
         : (warn ? Colors.orange.shade800 : Colors.black87);
     final sub = _subtitle();
+    final reason = _reason;
+    final reasonColor = bad ? Colors.red.shade700 : Colors.orange.shade800;
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
@@ -364,9 +382,34 @@ class _StockTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(row.goodName,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 14)),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(row.goodName,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 14)),
+                        ),
+                        if (reason != null)
+                          Container(
+                            margin: const EdgeInsets.only(left: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: reasonColor.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                  color: reasonColor.withValues(alpha: 0.45)),
+                            ),
+                            child: Text(reason,
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: reasonColor)),
+                          ),
+                      ],
+                    ),
                     if (sub.isNotEmpty) ...[
                       const SizedBox(height: 2),
                       Text(sub,

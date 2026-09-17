@@ -16,6 +16,15 @@
 //  • fakt kiritilmagan qator hujjatga YUBORILMAYDI (hisob o'zgarmaydi);
 //  • miqdor serverga butun BASE birlikda (g/ml/mpcs/mm) ketadi.
 //
+// Guruh bo'limlari: qoldiq javobida `group_id` yo'q — tovar kartalari fonda
+// olinadi (`CoreDictProvider.ensureGoods` → 50+ tovar bo'lsa faol tovarlar
+// ro'yxati 1000 talik sahifalarda). Kelgani sari ro'yxat QAYTA guruhlanadi;
+// yuklanayotganda «Boshqa» sarlavhasida kichik spinner turadi; guruh
+// ma'lumoti umuman bo'lmasa — alifbo bo'yicha yagona ro'yxat (sarlavhasiz).
+//
+// Ranglar: QIZIL faqat manfiy qoldiqda; partiyasiz yechilgan yoki eng kam
+// miqdordan past qatorlar sariq, sababi kichik yorliqda yozilgan.
+//
 // Avto-saqlash: har o'zgarishdan 2 s keyin qoralama saqlanadi (birinchi marta
 // `POST /docs`, keyin `PUT /docs/{id}`); tarmoq xatosida qayta urinadi va
 // tepada «saqlanmadi» belgisi ko'rinadi. `docId` berilsa (yoki shu ombor+sana
@@ -254,7 +263,8 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
         current: r.qty,
         lastPrice: r.lastPrice,
         low: r.low,
-        negative: r.negative || r.hasDeficit,
+        negative: r.negative,
+        deficit: r.hasDeficit,
       ));
     }
     for (final g in _extra) {
@@ -268,6 +278,7 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
         lastPrice: row?.lastPrice,
         low: row?.low ?? false,
         negative: row?.negative ?? false,
+        deficit: row?.hasDeficit ?? false,
       ));
     }
     rows.sort((a, b) =>
@@ -294,21 +305,35 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
     }
   }
 
+  static const String _kOther = 'Boshqa';
+
   String _groupOf(CoreGood g) {
     final name = _dict.groupById(g.groupId)?.name.trim() ?? '';
-    return name.isEmpty ? 'Boshqa' : name;
+    return name.isEmpty ? _kOther : name;
   }
 
   /// Bo'limlar (guruh nomi bo'yicha), har birida saralangan qatorlar.
+  /// Guruh ma'lumoti UMUMAN bo'lmasa (tovar kartalari hali kelmagan yoki
+  /// serverda guruh yo'q) — bitta nomsiz bo'lim: alifbo bo'yicha yagona
+  /// ro'yxat, «Boshqa» sarlavhasisiz.
   List<_Section> _sections(List<_InvRow> rows) {
     final map = <String, List<_InvRow>>{};
     for (final r in rows) {
       map.putIfAbsent(_groupOf(r.good), () => []).add(r);
     }
+    if (map.length <= 1) {
+      return [
+        _Section(
+          name: '',
+          rows: rows,
+          counted: rows.where((r) => _factBase(r) != null).length,
+        ),
+      ];
+    }
     final names = map.keys.toList()
       ..sort((a, b) {
-        if (a == 'Boshqa') return 1;
-        if (b == 'Boshqa') return -1;
+        if (a == _kOther) return 1;
+        if (b == _kOther) return -1;
         return a.toLowerCase().compareTo(b.toLowerCase());
       });
     return [
@@ -578,8 +603,39 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
 
   // ───────────────────────────── UI ─────────────────────────────
 
+  /// Avto-saqlash bor — faqat SAQLANMAGAN holatda chiqishda ogohlantiriladi.
+  Future<void> _onPopBlocked() async {
+    final ok = await confirmDialog(
+      context,
+      'Saqlanmadi',
+      'Oxirgi o\'zgarishlar serverga saqlanmadi'
+          '${_saveError == null ? '' : ':\n$_saveError'}\n\n'
+          'Baribir chiqasizmi?',
+      okText: 'Chiqish',
+      danger: true,
+    );
+    if (!mounted) return;
+    if (ok) {
+      setState(() => _saveState = _SaveState.idle);
+      Navigator.pop(context);
+    } else {
+      _autoSave();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    return PopScope(
+      canPop: _saveState != _SaveState.failed,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || _posting) return;
+        _onPopBlocked();
+      },
+      child: _scaffold(),
+    );
+  }
+
+  Widget _scaffold() {
     return Scaffold(
       backgroundColor: kCoreBg,
       appBar: AppBar(
@@ -879,8 +935,9 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
     final sections = _sections(rows);
     final items = <_ListItem>[];
     for (final s in sections) {
-      items.add(_ListItem.header(s));
-      if (_closed.contains(s.name)) continue;
+      // Nomsiz bo'lim — sarlavhasiz yagona ro'yxat.
+      if (s.name.isNotEmpty) items.add(_ListItem.header(s));
+      if (s.name.isNotEmpty && _closed.contains(s.name)) continue;
       for (final r in s.rows) {
         items.add(_ListItem.row(r));
       }
@@ -890,21 +947,48 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
       for (final i in items)
         if (i.row != null) i.row!.good.id
     ];
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(10, 4, 10, 100),
-      itemCount: items.length,
-      itemBuilder: (_, i) {
-        final item = items[i];
-        if (item.section != null) return _sectionHeader(item.section!);
-        final r = item.row!;
-        return wide
-            ? _wideRow(r, order, showCost)
-            : _phoneRow(r, showCost);
-      },
+    // Tovar kartalari (guruh + `is_complect`) fonda kelmoqda — sarlavhada
+    // kichik spinner, ro'yxat kelgani sari qayta guruhlanadi.
+    final grouping = _dict.goodsLoading;
+    return Column(
+      children: [
+        if (grouping)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 6, 14, 0),
+            child: Row(
+              children: [
+                const SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(strokeWidth: 2)),
+                const SizedBox(width: 8),
+                Text('Guruhlar yuklanmoqda…',
+                    style:
+                        TextStyle(fontSize: 11.5, color: Colors.grey.shade600)),
+              ],
+            ),
+          ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(10, 4, 10, 100),
+            itemCount: items.length,
+            itemBuilder: (_, i) {
+              final item = items[i];
+              if (item.section != null) {
+                return _sectionHeader(item.section!, loading: grouping);
+              }
+              final r = item.row!;
+              return wide
+                  ? _wideRow(r, order, showCost)
+                  : _phoneRow(r, showCost);
+            },
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _sectionHeader(_Section s) {
+  Widget _sectionHeader(_Section s, {bool loading = false}) {
     final closed = _closed.contains(s.name);
     return InkWell(
       onTap: () => setState(() {
@@ -921,13 +1005,22 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
             Icon(closed ? Icons.chevron_right : Icons.expand_more,
                 size: 20, color: Colors.grey.shade700),
             const SizedBox(width: 2),
-            Expanded(
+            Flexible(
               child: Text(s.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       fontSize: 13, fontWeight: FontWeight.bold)),
             ),
+            // «Boshqa» — hali guruhi aniqlanmagan tovarlar shu yerda turadi.
+            if (loading && s.name == _kOther) ...[
+              const SizedBox(width: 6),
+              const SizedBox(
+                  width: 11,
+                  height: 11,
+                  child: CircularProgressIndicator(strokeWidth: 2)),
+            ],
+            const Spacer(),
             Text('${s.counted}/${s.rows.length}',
                 style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
           ],
@@ -936,14 +1029,37 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
     );
   }
 
+  /// Qator rangi sababi — kichik yorliq («partiyasiz», «manfiy», «kam qoldi»).
+  Widget _reasonBadge(_InvRow r) {
+    final text = r.reason;
+    final color = r.reasonColor;
+    if (text == null || color == null) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(left: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.45)),
+      ),
+      child: Text(text,
+          style: TextStyle(
+              fontSize: 10, fontWeight: FontWeight.w600, color: color)),
+    );
+  }
+
   // ── Telefon qatori: bosilsa klaviatura ──
   Widget _phoneRow(_InvRow r, bool showCost) {
     final fact = _factBase(r);
     final delta = fact == null ? null : fact - r.current;
+    // Ramka: sanalmagan qatorda QIZIL faqat manfiy qoldiqda; partiyasiz /
+    // kam qolgan — sariq (sababi yorliqda yozilgan).
     final border = delta == null
         ? (r.negative
-            ? Colors.red.shade200
-            : (r.low ? Colors.orange.shade200 : Colors.grey.shade300))
+            ? Colors.red.shade300
+            : ((r.deficit || r.low)
+                ? Colors.orange.shade200
+                : Colors.grey.shade300))
         : (delta == 0
             ? Colors.green.shade200
             : (delta < 0 ? Colors.red.shade300 : Colors.green.shade400));
@@ -965,9 +1081,18 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(r.good.name,
-                        style: const TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600)),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(r.good.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: 14, fontWeight: FontWeight.w600)),
+                        ),
+                        _reasonBadge(r),
+                      ],
+                    ),
                     const SizedBox(height: 2),
                     Text(
                       _subtitle(r, fact, showCost),
@@ -1023,9 +1148,11 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
             : 'ortiqcha ${coreQtyUnitUz(d, r.good.baseUnit)}$money');
       }
     } else if (r.negative) {
-      parts.add('qoldiq manfiy');
+      parts.add('qoldiq manfiy — kirim kiritilmagan bo\'lishi mumkin');
+    } else if (r.deficit) {
+      parts.add('partiyasiz yechilgan (tannarxsiz)');
     } else if (r.low) {
-      parts.add('kam qoldi');
+      parts.add('eng kam miqdordan past');
     }
     return parts.join('  ·  ');
   }
@@ -1060,7 +1187,11 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: delta == null
-              ? (r.negative ? Colors.red.shade200 : Colors.grey.shade300)
+              ? (r.negative
+                  ? Colors.red.shade300
+                  : ((r.deficit || r.low)
+                      ? Colors.orange.shade200
+                      : Colors.grey.shade300))
               : (delta == 0
                   ? Colors.green.shade200
                   : (delta < 0 ? Colors.red.shade300 : Colors.green.shade400)),
@@ -1069,14 +1200,23 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
       child: Row(
         children: [
           Expanded(
-            child: Text(r.good.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(r.good.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 13.5, fontWeight: FontWeight.w600)),
+                ),
+                _reasonBadge(r),
+              ],
+            ),
           ),
           SizedBox(
             width: 140,
             child: Text(
+              // Hisob qoldig'i oddiy KULRANG — qizil faqat manfiy qoldiqda.
               coreQtyUnitUz(r.current, r.good.baseUnit),
               textAlign: TextAlign.right,
               style: TextStyle(
@@ -1202,18 +1342,37 @@ class _InvRow {
   final CoreGood good;
   final int current; // hisob qoldig'i (base birlik)
   final int? lastPrice; // 1 base birlik narxi (stock.cost.view bo'lsa)
-  final bool low;
-  final bool negative;
+  final bool low; // `min_qty` dan past
+  final bool negative; // qoldiq MANFIY (faqat shu holat qizil)
+  final bool deficit; // partiyasiz yechilgan (qoldiq musbat bo'lishi mumkin)
   const _InvRow({
     required this.good,
     required this.current,
     required this.lastPrice,
     required this.low,
     required this.negative,
+    this.deficit = false,
   });
+
+  /// Qator rangining SABABI — kichik yorliq uchun («partiyasiz», «manfiy»,
+  /// «kam qoldi»). Qizil faqat manfiy qoldiqda.
+  String? get reason {
+    if (negative) return 'manfiy';
+    if (deficit) return 'partiyasiz';
+    if (low) return 'kam qoldi';
+    return null;
+  }
+
+  Color? get reasonColor {
+    if (negative) return Colors.red.shade700;
+    if (deficit || low) return Colors.orange.shade800;
+    return null;
+  }
 }
 
 class _Section {
+  /// Bo'lim nomi. BO'SH bo'lsa — guruh ma'lumoti yo'q, yagona alifbo ro'yxati
+  /// (sarlavha ko'rsatilmaydi).
   final String name;
   final List<_InvRow> rows;
   final int counted;

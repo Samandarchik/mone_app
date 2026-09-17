@@ -111,6 +111,10 @@ class _QuickDocUiState extends State<QuickDocUi> {
   final List<_QLine> _lines = [];
   int _draftId = 0;
 
+  /// Oxirgi SAQLANGAN holat «barmoq izi». Joriy holat bundan farq qilsa —
+  /// saqlanmagan o'zgarish bor (chiqishda tasdiq so'raladi).
+  String _savedSig = '';
+
   // Qidiruv (server tomonda, 250 ms debounce).
   final _search = TextEditingController();
   final _searchFocus = FocusNode();
@@ -214,7 +218,10 @@ class _QuickDocUiState extends State<QuickDocUi> {
     try {
       final doc = await _docService.get(id);
       if (!mounted) return;
-      setState(() => _loadLines(doc.lines, context.read<CoreDictProvider>()));
+      setState(() {
+        _loadLines(doc.lines, context.read<CoreDictProvider>());
+        _savedSig = _sig();
+      });
     } catch (e) {
       if (mounted) showErrorUz(context, e);
     }
@@ -260,6 +267,9 @@ class _QuickDocUiState extends State<QuickDocUi> {
       if (isTransfer && _to == null) {
         _to = prefs.getInt('core_quick_to_$type');
       }
+      // Boshlang'ich holat «saqlangan» deb belgilanadi (qoralamani ochib,
+      // hech narsa o'zgartirmay chiqishda ortiqcha savol bo'lmasin).
+      _savedSig = _sig();
     });
   }
 
@@ -639,6 +649,7 @@ class _QuickDocUiState extends State<QuickDocUi> {
         res = await docs.quick(doc);
       }
       if (!mounted) return;
+      _savedSig = _sig(); // o'tkazildi — chiqish qo'riqchisi kerak emas
       await _savePrefs();
       stock.refreshSklads([res.doc.fromSklad, res.doc.toSklad]);
       if (!mounted) return;
@@ -659,6 +670,69 @@ class _QuickDocUiState extends State<QuickDocUi> {
     }
   }
 
+  // ───────────────── Saqlanmagan qatorlar (chiqish qo'riqchisi) ─────────────────
+
+  /// Joriy hujjat mazmuni — saqlangan holat bilan taqqoslash uchun.
+  String _sig() => [
+        _date,
+        _from,
+        _to,
+        _corr,
+        _comment.text.trim(),
+        for (final l in _lines)
+          '${l.good.id}:${l.flag}:${l.baseQty}:${l.unit.unit}:${l.amount}',
+      ].join('|');
+
+  /// Saqlanmagan qator bormi (bo'sh hujjatdan chiqish erkin).
+  bool get _unsaved => _lines.isNotEmpty && _sig() != _savedSig;
+
+  /// «Orqaga»/Esc: saqlanmagan qatorlar jimgina yo'qolmasin.
+  /// 0 — qolish, 1 — qoralama saqlab chiqish, 2 — saqlamay chiqish.
+  Future<int> _askExit() async {
+    final r = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Saqlanmagan qatorlar bor'),
+        content: Text(
+          'Saqlanmagan ${_lines.length} qator bor.\n'
+          'Chiqsangiz ular yo\'qoladi.',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, 0),
+              child: const Text('Qolish')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 2),
+            child: Text('Chiqish',
+                style: TextStyle(color: Colors.red.shade700)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, 1),
+            child: const Text('Qoralama saqlash'),
+          ),
+        ],
+      ),
+    );
+    return r ?? 0;
+  }
+
+  Future<void> _onPopBlocked() async {
+    final choice = await _askExit();
+    if (!mounted) return;
+    switch (choice) {
+      case 1:
+        await _saveDraft(closeAfter: true);
+        break;
+      case 2:
+        // Qatorlar ataylab tashlab ketiladi — qo'riqchi o'chiriladi.
+        setState(() => _savedSig = _sig());
+        if (mounted) Navigator.pop(context);
+        break;
+      default:
+        break;
+    }
+  }
+
   Future<void> _saveDraft({bool inTransit = false, bool closeAfter = false}) async {
     final err = _validate();
     if (err != null) {
@@ -674,6 +748,7 @@ class _QuickDocUiState extends State<QuickDocUi> {
           : await docs.create(doc);
       if (!mounted) return;
       _draftId = saved.id;
+      _savedSig = _sig();
       await _savePrefs();
       if (!mounted) return;
       showInfoUz(
@@ -730,6 +805,19 @@ class _QuickDocUiState extends State<QuickDocUi> {
   Widget build(BuildContext context) {
     final task = coreTaskOf(type);
     final wide = MediaQuery.of(context).size.width >= kWideBreakpoint;
+    return PopScope(
+      // Saqlanmagan qatorlar bo'lsa «orqaga» (tizim tugmasi, Esc, AppBar)
+      // jimgina chiqib ketmaydi — tasdiq so'raladi.
+      canPop: !_unsaved,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || _busy) return;
+        _onPopBlocked();
+      },
+      child: _scaffold(task, wide),
+    );
+  }
+
+  Widget _scaffold(CoreTask? task, bool wide) {
     return Scaffold(
       backgroundColor: kCoreBg,
       appBar: AppBar(

@@ -109,6 +109,13 @@ class _HomeBodyState extends State<_HomeBody> {
     }
     setState(() => _sklad = pick);
     _load();
+    // Bugalter/admin (user.sklads bo'sh = hamma ombor) birinchi kirishda:
+    // tanlagich O'ZI ochiladi, aks holda plitkalar «ishlamaydi» bo'lib ko'rinadi.
+    if (pick == null && _mySklads().isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _sklad == null) _pickSklad();
+      });
+    }
   }
 
   Future<void> _setSklad(int id) async {
@@ -116,6 +123,38 @@ class _HomeBodyState extends State<_HomeBody> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_kSkladPref, id);
     _load();
+  }
+
+  /// Foydalanuvchiga ruxsat etilgan omborlar (bo'sh `user.sklads` = hammasi).
+  List<CoreSklad> _mySklads() {
+    final dict = context.read<CoreDictProvider>();
+    final allowed = context.read<CoreSession>().user?.sklads ?? const <int>[];
+    return dict.activeSklads
+        .where((s) => allowed.isEmpty || allowed.contains(s.id))
+        .toList();
+  }
+
+  /// Ombor tanlagich varag'i. Tanlansa saqlanadi va qaytariladi.
+  Future<int?> _pickSklad({String title = 'Ombor'}) async {
+    final sklads = _mySklads();
+    if (sklads.isEmpty) {
+      showInfoUz(context, 'Sizga ombor biriktirilmagan');
+      return null;
+    }
+    final id = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) =>
+          _SkladSheet(sklads: sklads, current: _sklad, title: title),
+    );
+    if (id == null) return null;
+    if (!mounted) return null;
+    await _setSklad(id);
+    return id;
   }
 
   Future<void> _load() async {
@@ -200,12 +239,24 @@ class _HomeBodyState extends State<_HomeBody> {
             const SizedBox(height: 10),
             _errorCard(),
           ],
-          if (_incoming.isNotEmpty || _drafts.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            _pending(),
-          ],
           const SizedBox(height: 14),
-          _todayDocs(),
+          // Keng ekranda ikki ustun — plitka ostida darhol ko'rinadi.
+          if (wide)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: _pending()),
+                const SizedBox(width: 14),
+                Expanded(child: _todayDocs()),
+              ],
+            )
+          else ...[
+            if (_incoming.isNotEmpty || _drafts.isNotEmpty) ...[
+              _pending(),
+              const SizedBox(height: 14),
+            ],
+            _todayDocs(),
+          ],
           if (session.has(CorePerms.reportView) ||
               session.has(CorePerms.usersManage) ||
               session.has(CorePerms.dictEdit)) ...[
@@ -263,7 +314,7 @@ class _HomeBodyState extends State<_HomeBody> {
               style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600)),
           if (sklads.length > 1 || _sklad == null) ...[
             const SizedBox(height: 8),
-            _skladPicker(sklads),
+            _skladPicker(),
           ] else if (_sklad != null)
             Padding(
               padding: const EdgeInsets.only(top: 4),
@@ -285,20 +336,9 @@ class _HomeBodyState extends State<_HomeBody> {
     );
   }
 
-  Widget _skladPicker(List<CoreSklad> sklads) {
+  Widget _skladPicker() {
     return InkWell(
-      onTap: () async {
-        final id = await showModalBottomSheet<int>(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.white,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-          ),
-          builder: (ctx) => _SkladSheet(sklads: sklads, current: _sklad),
-        );
-        if (id != null) _setSklad(id);
-      },
+      onTap: () => _pickSklad(),
       borderRadius: BorderRadius.circular(10),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -336,15 +376,33 @@ class _HomeBodyState extends State<_HomeBody> {
     if (items.isEmpty) {
       return const SizedBox.shrink();
     }
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: wide ? 3 : 2,
-      mainAxisSpacing: 10,
-      crossAxisSpacing: 10,
-      childAspectRatio: 1.45,
-      children: [for (final t in items) _taskTile(t)],
-    );
+    // Telefon: 2 ustun, katta plitka (o'zgarmagan).
+    if (!wide) {
+      return GridView.count(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisCount: 2,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        childAspectRatio: 1.45,
+        children: [for (final t in items) _taskTile(t)],
+      );
+    }
+    // Kompyuter: bitta qatorda 6 tagacha IXCHAM plitka — ostidagi
+    // «Kutilmoqda» va «Bugungi hujjatlar» darhol ko'rinsin.
+    return LayoutBuilder(builder: (_, c) {
+      const gap = 10.0;
+      final cols = items.length < 6 ? items.length : 6;
+      final w = (c.maxWidth - gap * (cols - 1)) / cols;
+      return Wrap(
+        spacing: gap,
+        runSpacing: gap,
+        children: [
+          for (final t in items)
+            SizedBox(width: w, height: 116, child: _taskTile(t, compact: true)),
+        ],
+      );
+    });
   }
 
   bool _taskVisible(CoreSession session, CoreTask t) {
@@ -355,7 +413,7 @@ class _HomeBodyState extends State<_HomeBody> {
     return session.has(t.perm);
   }
 
-  Widget _taskTile(CoreTask t) {
+  Widget _taskTile(CoreTask t, {bool compact = false}) {
     return Material(
       color: t.color.withValues(alpha: 0.10),
       shape: RoundedRectangleBorder(
@@ -366,34 +424,60 @@ class _HomeBodyState extends State<_HomeBody> {
       child: InkWell(
         onTap: () => _openTask(t),
         child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(t.icon, size: 28, color: t.color),
-              const Spacer(),
-              Text(t.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: t.color)),
-              Text(t.sh5,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-            ],
-          ),
+          padding: EdgeInsets.all(compact ? 8 : 12),
+          child: compact
+              ? Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(t.icon, size: 26, color: t.color),
+                    const SizedBox(height: 6),
+                    Text(t.title,
+                        maxLines: 1,
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: t.color)),
+                    Text(t.sh5,
+                        maxLines: 1,
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(t.icon, size: 28, color: t.color),
+                    const Spacer(),
+                    Text(t.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: t.color)),
+                    Text(t.sh5,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                  ],
+                ),
         ),
       ),
     );
   }
 
-  void _openTask(CoreTask t) {
+  Future<void> _openTask(CoreTask t) async {
+    // Ombor tanlanmagan bo'lsa amal «jim» qolmasin — tanlagich ochiladi,
+    // tanlangach o'sha amal davom etadi.
     if (_sklad == null && t.key != coreTaskStock) {
-      showInfoUz(context, 'Avval omborni tanlang');
-      return;
+      final id = await _pickSklad(title: 'Avval omborni tanlang');
+      if (id == null) return;
+      if (!mounted) return;
     }
     switch (t.key) {
       case coreTaskStock:
@@ -435,15 +519,24 @@ class _HomeBodyState extends State<_HomeBody> {
   // ───────────────────────────── Kutilmoqda ─────────────────────────────
 
   Widget _pending() {
+    final empty = _incoming.isEmpty && _drafts.isEmpty;
     return _section(
       title: 'Kutilmoqda',
       badge: _incoming.length + _drafts.length,
-      child: Column(
-        children: [
-          for (final d in _incoming) _pendingTile(d, incoming: true),
-          for (final d in _drafts) _pendingTile(d, incoming: false),
-        ],
-      ),
+      child: empty
+          ? Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Text(
+                _loading ? 'Yuklanmoqda…' : 'Kutayotgan ish yo\'q',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+              ),
+            )
+          : Column(
+              children: [
+                for (final d in _incoming) _pendingTile(d, incoming: true),
+                for (final d in _drafts) _pendingTile(d, incoming: false),
+              ],
+            ),
     );
   }
 
@@ -674,7 +767,8 @@ class _HomeBodyState extends State<_HomeBody> {
 class _SkladSheet extends StatefulWidget {
   final List<CoreSklad> sklads;
   final int? current;
-  const _SkladSheet({required this.sklads, this.current});
+  final String title;
+  const _SkladSheet({required this.sklads, this.current, this.title = 'Ombor'});
 
   @override
   State<_SkladSheet> createState() => _SkladSheetState();
@@ -697,9 +791,9 @@ class _SkladSheetState extends State<_SkladSheet> {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
             child: Row(
               children: [
-                const Expanded(
-                  child: Text('Ombor',
-                      style: TextStyle(
+                Expanded(
+                  child: Text(widget.title,
+                      style: const TextStyle(
                           fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
                 IconButton(
