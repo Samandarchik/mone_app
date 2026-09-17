@@ -1,7 +1,7 @@
 name: uz_ai_dev
 description: "A new Flutter project."
 publish_to: 'none'
-version: 0.7.5+75
+version: 0.7.6+76
 
 environment:
   sdk: ^3.6.1
@@ -47,4 +47,4 @@ flutter:
 flutter_icons:
   android: true
   ios: true
-  image_path: "assets/assets/image.png"
+  image_path: "assets/image.png"

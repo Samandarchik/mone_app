@@ -2,15 +2,33 @@
 // (UserManagementScreen): UserManagementService orqali ro'yxat/o'chirish, qator
 // bosilsa UserEditDialog, login+parolni Telegram orqali yuborish.
 // Foydalanuvchilar ro'yxati: oq karta ichida qatorlar, har qatorda avatar
-// (bosh harflar), telefon, ochiq parol, Telegram holati va rol pill'i.
+// (bosh harflar), telefon, ochiq parol, Telegram holati, rol pill'i va dostup.
 // Qator bosilsa — tahrirlash dialogi, uzoq bosilsa — o'chirish tasdig'i.
 // Yuborish tugmalari login+parolni Telegram orqali jo'natadi.
+// Har qatorda berilgan dostup (filial/sklad/kategoriya/Ostatka/manba) nomlari
+// bilan ko'rinadi (_accessBlock) — dialogni ochmasdan; ✏️ tahrirlash dialogini
+// ochadi. Kategoriya nomlari ProductProvider'dan, Ostatka omborlari
+// Sh5Service.fetchSklads'dan bir marta yuklanadi (yuklanmaguncha — soni).
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/admin/model/user_model.dart';
+import 'package:uz_ai_dev/admin/services/sh5_service.dart';
 import 'package:uz_ai_dev/admin/services/user_management_service.dart';
 import 'package:uz_ai_dev/admin/ui/user_edit_dialog.dart';
 import 'package:uz_ai_dev/core/constants/roles.dart';
+import 'package:uz_ai_dev/core/data/sklad_registry.dart';
+import 'package:uz_ai_dev/user/provider/provider.dart';
+
+// Bitta dostup guruhi (masalan «Kategoriya: Tortlar, Pirojniy +3»).
+class _AccessGroup {
+  final IconData icon;
+  final String title;
+  final List<String> items;
+  // items bo'sh bo'lganda ko'rsatiladigan matn.
+  final String emptyText;
+  const _AccessGroup(this.icon, this.title, this.items, this.emptyText);
+}
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -28,10 +46,37 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   String _errorMessage = '';
   String _query = '';
 
+  // Dostup nomlari uchun: id → nom.
+  Map<int, String> _categoryNames = {};
+  Map<int, String> _sh5Names = {};
+
   @override
   void initState() {
     super.initState();
     _loadUsers();
+    // Provider darhol notify qiladi — build fazasidan keyinga.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadAccessNames();
+    });
+  }
+
+  // Kategoriya va Ostatka ombor nomlari. Xato bo'lsa jim — qatorda soni chiqadi.
+  Future<void> _loadAccessNames() async {
+    final products = context.read<ProductProvider>();
+    try {
+      if (products.categories.isEmpty) await products.fetchCategories();
+      if (!mounted) return;
+      setState(() {
+        _categoryNames = {for (final c in products.categories) c.id: c.name};
+      });
+    } catch (_) {}
+    try {
+      final sklads = await Sh5Service().fetchSklads();
+      if (!mounted) return;
+      setState(() {
+        _sh5Names = {for (final s in sklads) s.id: s.name};
+      });
+    } catch (_) {}
   }
 
   @override
@@ -476,6 +521,139 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     );
   }
 
+  static const Map<String, String> _sourceLabels = {
+    'samarqand': 'Samarqand',
+    'toshkent': 'Toshkent',
+    'zagranitsa': 'Zagranitsa',
+  };
+
+  List<String> _categoryList(User u) => [
+        for (final id in u.categoryIds ?? const <int>[])
+          _categoryNames[id] ?? '#$id',
+      ];
+
+  List<String> _skladList(User u) =>
+      [for (final id in u.sklads) SkladRegistry.nameOf(id)];
+
+  // Rolga qarab qaysi dostup maydonlari ma'noli — user_edit_dialog.dart
+  // dagi rol → maydon qoidalari bilan bir xil.
+  List<_AccessGroup> _accessGroups(User u) {
+    if (_isAdminUser(u)) {
+      return const [
+        _AccessGroup(Icons.verified_user_outlined, 'To\'liq dostup', [], ''),
+      ];
+    }
+    switch (u.role) {
+      case AppRoles.seller:
+        return [
+          _AccessGroup(Icons.store_outlined, 'Filial',
+              [if (u.filial != null) u.filial!.name], 'tanlanmagan'),
+          _AccessGroup(Icons.category_outlined, 'Kategoriya',
+              _categoryList(u), 'yo\'q'),
+          _AccessGroup(Icons.inventory_2_outlined, 'Ostatka', [
+            for (final id in u.sh5Sklads) _sh5Names[id] ?? '#$id',
+          ], 'yo\'q'),
+        ];
+      case AppRoles.ombor:
+        return [
+          _AccessGroup(
+              Icons.warehouse_outlined, 'Sklad', _skladList(u), 'tanlanmagan'),
+          _AccessGroup(Icons.category_outlined, 'Kategoriya',
+              _categoryList(u), 'yo\'q'),
+        ];
+      case AppRoles.shef:
+        return [
+          _AccessGroup(
+              Icons.warehouse_outlined, 'Sklad', _skladList(u), 'tanlanmagan'),
+          _AccessGroup(Icons.menu_book_outlined, 'Тех карта',
+              _categoryList(u), 'yo\'q'),
+        ];
+      case AppRoles.yukKeltiruvchi:
+        return [
+          _AccessGroup(
+              Icons.warehouse_outlined, 'Sklad', _skladList(u), 'tanlanmagan'),
+          _AccessGroup(Icons.local_shipping_outlined, 'Manba', [
+            for (final s in u.sources) _sourceLabels[s] ?? s,
+          ], 'hammasi'),
+        ];
+      case AppRoles.bugalter:
+        return const [
+          _AccessGroup(Icons.lock_open_outlined, 'Cheklovsiz', [], ''),
+        ];
+      default:
+        return const [];
+    }
+  }
+
+  // «Kategoriya: A, B, C +4» — to'liq ro'yxat tooltip'da.
+  Widget _accessChip(_AccessGroup g) {
+    const maxShown = 3;
+    final bool noValue = g.items.isEmpty && g.emptyText.isNotEmpty;
+    final String value;
+    if (g.items.isEmpty) {
+      value = g.emptyText;
+    } else if (g.items.length <= maxShown) {
+      value = g.items.join(', ');
+    } else {
+      value = '${g.items.take(maxShown).join(', ')} '
+          '+${g.items.length - maxShown}';
+    }
+    final fg = noValue ? const Color(0xFF9CA3AF) : const Color(0xFF374151);
+    final chip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: noValue ? const Color(0xFFF9FAFB) : const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(g.icon, size: 13, color: fg),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text.rich(
+              TextSpan(children: [
+                TextSpan(
+                  text: value.isEmpty ? g.title : '${g.title}: ',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                if (value.isNotEmpty) TextSpan(text: value),
+              ]),
+              style: TextStyle(fontSize: 12, color: fg),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+    if (g.items.length <= maxShown) return chip;
+    return Tooltip(message: g.items.join('\n'), child: chip);
+  }
+
+  // Dostup chiplari + ✏️ (tahrirlash dialogi).
+  Widget _accessBlock(User u) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [for (final g in _accessGroups(u)) _accessChip(g)],
+          ),
+        ),
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          tooltip: 'Dostupni o\'zgartirish',
+          icon: const Icon(Icons.edit_outlined,
+              size: 18, color: Color(0xFF4F46E5)),
+          onPressed: () => _openEditDialog(u),
+        ),
+      ],
+    );
+  }
+
   // Tor (telefon) ekran qatori: tepada avatar + ism/telefon/parol/Telegram,
   // o'ngda yuborish tugmasi; pastda rol pill + filial.
   Widget _rowNarrow(User u, int index) {
@@ -528,25 +706,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               ],
             ),
             const SizedBox(height: 10),
-            // Rol va filial — pastda alohida qatorda.
-            Row(
-              children: [
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 170),
-                  child: _rolePill(u),
-                ),
-                if (u.filial != null) ...[
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      u.filial!.name,
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ],
+            // Rol — pastda alohida qatorda, uning ostida dostup.
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 170),
+              child: _rolePill(u),
             ),
+            const SizedBox(height: 8),
+            _accessBlock(u),
           ],
         ),
       ),
@@ -555,9 +721,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   // Keng ekran qatori: hamma element bitta gorizontal qatorda.
   Widget _rowWide(User u, int index) {
-    final catCount = u.categoryIds?.length ?? 0;
-    // Ostatka (SH5) ruxsati berilgan ombor soni (0 — ruxsat yo'q).
-    final sh5Count = u.sh5Sklads.length;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => _openEditDialog(u),
@@ -607,35 +770,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 child: _rolePill(u),
               ),
             ),
-            Expanded(
-              flex: 2,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    u.filial?.name ?? '—',
-                    style: const TextStyle(
-                        fontSize: 13, color: Color(0xFF374151)),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '$catCount ta kategoriya',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  ),
-                  if (sh5Count > 0)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        'Ostatka: $sh5Count ta ombor',
-                        style: TextStyle(
-                            fontSize: 12, color: Colors.blue.shade700),
-                      ),
-                    ),
-                ],
-              ),
-            ),
+            Expanded(flex: 3, child: _accessBlock(u)),
             _sendButton(u),
           ],
         ),
