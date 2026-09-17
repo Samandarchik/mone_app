@@ -18,6 +18,7 @@ import 'package:uz_ai_dev/core2/ui/dict_sklads_ui.dart';
 import 'package:uz_ai_dev/core2/ui/doc_form_ui.dart';
 import 'package:uz_ai_dev/core2/ui/docs_list_ui.dart';
 import 'package:uz_ai_dev/core2/ui/integration_ui.dart';
+import 'package:uz_ai_dev/core2/ui/inventory_count_ui.dart';
 import 'package:uz_ai_dev/core2/ui/perms_ui.dart';
 import 'package:uz_ai_dev/core2/ui/recipes_ui.dart';
 import 'package:uz_ai_dev/core2/ui/reports_ui.dart';
@@ -46,6 +47,13 @@ class CoreHubUi extends StatelessWidget {
         subtitle: 'Tez kirim: РЫНОК → ombor',
         page: const DocFormUi.marketReceipt(),
         visible: session.canCreate(CoreDocType.receipt),
+      ),
+      _HubItem(
+        icon: Icons.fact_check_outlined,
+        title: 'Sanash (oson)',
+        subtitle: 'Inventarizatsiya: guruhlar, fakt, farq',
+        page: const InventoryCountUi(),
+        visible: session.canCreate(CoreDocType.inventory),
       ),
       _HubItem(
         icon: Icons.inventory_2_outlined,

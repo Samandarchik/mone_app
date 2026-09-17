@@ -125,6 +125,9 @@ class CoreCardEntry {
   final int qtyDelta;
   final int? costDelta; // faqat stock.cost.view
   final int? batchId; // null — partiyasiz (defitsit) chiqim
+  /// Ledger yozuvi turi: `in` kirim (partiya), `out` FIFO chiqim,
+  /// `deficit` partiyasiz chiqim, `repay`/`repay_adj` defitsit qoplash.
+  final String kind;
   final int balance;
   final String postedAt;
 
@@ -140,6 +143,7 @@ class CoreCardEntry {
     this.qtyDelta = 0,
     this.costDelta,
     this.batchId,
+    this.kind = '',
     this.balance = 0,
     this.postedAt = '',
   });
@@ -156,6 +160,7 @@ class CoreCardEntry {
         qtyDelta: (j['qty_delta'] as num?)?.toInt() ?? 0,
         costDelta: (j['cost_delta'] as num?)?.toInt(),
         batchId: (j['batch_id'] as num?)?.toInt(),
+        kind: (j['kind'] ?? '').toString(),
         balance: (j['balance'] as num?)?.toInt() ?? 0,
         postedAt: (j['posted_at'] ?? '').toString(),
       );
