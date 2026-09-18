@@ -8,7 +8,7 @@
 // o'zgartira olmaydi.
 // Mahsulot o'chirish/tartiblash/PDF bu yerda YO'Q; qo'shish — faqat Biskvit
 // bo'limidan ochilganda (canAddProducts).
-// Бисквит / Начинка / Крем / Украшения kategoriyalari bu ro'yxatda
+// «Biskvit» bo'limiga bog'langan kategoriyalar (BiskvitLinks) bu ro'yxatda
 // ko'rinmaydi — ular bosh menyudagi «Biskvit» bo'limida (biskvit_page.dart).
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -55,6 +55,10 @@ class _ShefTechCardCategoriesPageState
   @override
   void initState() {
     super.initState();
+    // Biskvit bo'limi bog'lanishlari — yashiriladigan kategoriyalar uchun.
+    BiskvitLinks.load().then((_) {
+      if (mounted) setState(() {});
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<CategoryProviderAdmin>().getCategories();
@@ -117,10 +121,11 @@ class _ShefTechCardCategoriesPageState
             );
           }
 
-          // Бисквит / Начинка / Крем / Украшения — bosh menyudagi «Biskvit»
-          // bo'limiga ko'chirilgan (biskvit_page.dart), bu yerda ko'rinmaydi.
+          // «Biskvit» bo'limiga bog'langan kategoriyalar (biskvit_page.dart)
+          // endi o'sha yerda — bu ro'yxatda ko'rinmaydi.
+          final hidden = BiskvitLinks.linkedIds;
           final categories = provider.categories
-              .where((c) => !isBiskvitCategoryName(c.name))
+              .where((c) => !hidden.contains(c.id))
               .toList();
 
           return RefreshIndicator(
