@@ -1,8 +1,6 @@
-// shef/ui/pf_hub_page.dart — shef «Полуфабрикат» bo'limining kirish ekrani.
-// PfHubPage: rasmli guruh kartalari — «Biskvit» (assets/biskvit.png) va
-// «Barcha полуфабрикатлар» (eski PfStockPage, tab-bar bilan).
-// BiskvitPage: biskvitning to'rt bo'limi — Shakllar / Nachinka / Krem /
-// Bezaklar. Har bo'lim backend'dagi ODDIY kategoriya (nomi _BiskvitSection.
+// shef/ui/biskvit_page.dart — shef bosh menyusidagi «Biskvit» bo'limi
+// (BiskvitPage): tepada biskvit rasmi (assets/biskvit.png), ostida to'rt
+// bo'lim — Shakllar / Nachinka / Krem / Bezaklar. Har bo'lim backend'dagi ODDIY kategoriya (nomi _BiskvitSection.
 // categoryName): birinchi ochilganda yo'q bo'lsa avtomatik yaratiladi, so'ng
 // PfStockPage shu kategoriyaga qulflangan holda ochiladi. Backend'da
 // kategoriya ierarxiyasi yo'q — «Biskvit» guruhi faqat shu ekranda.
@@ -43,70 +41,6 @@ const List<_BiskvitSection> _biskvitSections = [
 
 String _norm(String s) => s.trim().toLowerCase();
 
-// «Полуфабрикат» — guruhlar ekrani.
-class PfHubPage extends StatefulWidget {
-  const PfHubPage({super.key});
-
-  @override
-  State<PfHubPage> createState() => _PfHubPageState();
-}
-
-class _PfHubPageState extends State<PfHubPage> {
-  @override
-  void initState() {
-    super.initState();
-    // Biskvit kartasidagi son uchun — qoldiq bir marta yuklanadi.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      context.read<ShefProvider>().fetchPfStock();
-    });
-  }
-
-  void _open(Widget page) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _bgColor,
-      appBar: AppBar(
-        backgroundColor: _bgColor,
-        elevation: 0,
-        title: const Text(
-          'Полуфабрикат',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-        children: [
-          // Biskvit — rasmli katta karta; ostida uning bo'limlaridagi пф soni.
-          Selector<ShefProvider, int>(
-            selector: (_, p) => _countIn(p.pfStock,
-                _biskvitSections.map((s) => _norm(s.categoryName)).toSet()),
-            builder: (context, count, _) => _ImageGroupCard(
-              image: _biskvitImage,
-              title: 'Biskvit',
-              subtitle: count > 0
-                  ? 'Shakllar · Nachinka · Krem · Bezaklar — $count ta'
-                  : 'Shakllar · Nachinka · Krem · Bezaklar',
-              onTap: () => _open(const BiskvitPage()),
-            ),
-          ),
-          const SizedBox(height: 12),
-          _ListCard(
-            icon: Icons.inventory_2_outlined,
-            title: 'Barcha полуфабрикатлар',
-            subtitle: 'Qoldiq: bor / band / mumkin',
-            onTap: () => _open(const PfStockPage()),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // Berilgan kategoriyalar (normallashgan nom) ichidagi пф soni.
 int _countIn(List<PfStockRow> rows, Set<String> categoryNames) {
   var n = 0;
@@ -134,6 +68,8 @@ class _BiskvitPageState extends State<BiskvitPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<CategoryProviderAdmin>().getCategories();
+      // Kartalardagi «N ta» soni uchun.
+      context.read<ShefProvider>().fetchPfStock();
     });
   }
 
@@ -254,151 +190,6 @@ class _BiskvitPageState extends State<BiskvitPage> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// Rasmli katta guruh kartasi (chapda rasm, o'ngda nom va izoh).
-class _ImageGroupCard extends StatelessWidget {
-  final String image;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  const _ImageGroupCard({
-    required this.image,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Container(
-          height: 130,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade300),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 120,
-                decoration: BoxDecoration(
-                  color: _accentColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                padding: const EdgeInsets.all(6),
-                child: Image.asset(
-                  image,
-                  cacheWidth: 360,
-                  fit: BoxFit.contain,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      subtitle,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right, color: Colors.black38),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// Oddiy qatorli karta (ikonka + nom + izoh).
-class _ListCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  const _ListCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade300),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: _accentColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: _accentColor, size: 26),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style:
-                          TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right, color: Colors.black38),
-            ],
-          ),
-        ),
       ),
     );
   }

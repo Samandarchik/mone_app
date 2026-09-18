@@ -1,6 +1,6 @@
 // shef/ui/shef_home_ui.dart — shef bosh ekrani: ShefHomeUi — menyu kartalari.
-// 2026-09-06 dan menyuda FAQAT ikki bo'lim: «Полуфабрикат» (qoldiq) va
-// «Тех карта». Buyurtmalar / yangi buyurtma / ishlab chiqarish rejasi kartalari
+// Menyuda to'rt bo'lim: «Biskvit» (rasmli), «Полуфабрикат» (qoldiq),
+// «Готовый» va «Тех карта». Buyurtmalar / yangi buyurtma / ishlab chiqarish rejasi kartalari
 // olib tashlandi (ShefOrdersPage klassi shu faylda qoldi — boshqa joydan
 // ochilishi mumkin). productionStatusChip shu yerdan eksport qilinadi (boshqa
 // rollar ham ishlatadi).
@@ -11,7 +11,7 @@ import 'package:uz_ai_dev/core/auth/session.dart';
 import 'package:uz_ai_dev/core2/ui/widgets/core_entry_menu.dart';
 import 'package:uz_ai_dev/shef/model/production_model.dart';
 import 'package:uz_ai_dev/shef/provider/shef_provider.dart';
-import 'package:uz_ai_dev/shef/ui/pf_hub_page.dart';
+import 'package:uz_ai_dev/shef/ui/biskvit_page.dart';
 import 'package:uz_ai_dev/shef/ui/pf_stock_page.dart';
 // ShefOrdersPage ichidagi «Yangi buyurtma» tugmasi uchun kerak (bosh menyudan
 // olib tashlangan bo'lsa ham).
@@ -58,13 +58,21 @@ class ShefHomeUi extends StatelessWidget {
         mainAxisSpacing: 12,
         childAspectRatio: 1.05,
         children: [
-          // Полуфабрикат — avval guruhlar (Biskvit: shakllar / nachinka /
-          // krem / bezaklar), ichida esa qoldiq: bor / band / mumkin.
+          // Biskvit — rasmli karta; ichida shakllar / nachinka / krem /
+          // bezaklar bo'limlari (biskvit_page.dart → BiskvitPage).
+          _MenuCard(
+            icon: Icons.cake_outlined,
+            image: 'assets/biskvit.png',
+            title: 'Biskvit',
+            subtitle: 'Shakllar · Nachinka · Krem · Bezaklar',
+            onTap: () => _open(context, const BiskvitPage()),
+          ),
+          // Полуфабрикат qoldig'i — qaysi pf bor, nechtasi band/mumkin.
           _MenuCard(
             icon: Icons.inventory_2_outlined,
             title: 'Полуфабрикат',
-            subtitle: 'Biskvit va boshqa пф qoldig\'i',
-            onTap: () => _open(context, const PfHubPage()),
+            subtitle: 'Qoldiq: bor / band / mumkin',
+            onTap: () => _open(context, const PfStockPage()),
           ),
           // Готовый — «Полуфабрикат» bilan AYNAN bir xil ekran, faqat пф
           // BO'LMAGAN (tayyor) mahsulotlar ro'yxati (GET pf-stock?kind=ready).
@@ -91,12 +99,15 @@ class ShefHomeUi extends StatelessWidget {
 // Bosh menyudagi bitta bo'lim kartasi.
 class _MenuCard extends StatelessWidget {
   final IconData icon;
+  // Berilsa ikonka o'rnida shu asset rasmi (kattaroq) ko'rsatiladi.
+  final String? image;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
 
   const _MenuCard({
     required this.icon,
+    this.image,
     required this.title,
     required this.subtitle,
     required this.onTap,
@@ -119,15 +130,31 @@ class _MenuCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: _accentColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
+              if (image != null)
+                Expanded(
+                  flex: 3,
+                  child: Center(
+                    child: Image.asset(
+                      image!,
+                      cacheWidth: 360,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) =>
+                          Icon(icon, color: _accentColor, size: 40),
+                    ),
+                  ),
+                )
+              else ...[
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: _accentColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: _accentColor, size: 26),
                 ),
-                child: Icon(icon, color: _accentColor, size: 26),
-              ),
-              const Spacer(),
+                const Spacer(),
+              ],
+              if (image != null) const SizedBox(height: 6),
               Text(
                 title,
                 maxLines: 2,

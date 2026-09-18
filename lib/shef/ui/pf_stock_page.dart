@@ -21,7 +21,7 @@
 // `ready: true` — «Готовый»: пф BO'LMAGAN tayyor mahsulotlar
 // (GET pf-stock?kind=ready → readyStock). Ekran tuzilishi bir xil, faqat
 // manba ro'yxat va AppBar sarlavhasi boshqa.
-// QULFLANGAN REJIM (`lockedCategoryId`): pf_hub_page.dart → Biskvit
+// QULFLANGAN REJIM (`lockedCategoryId`): biskvit_page.dart → Biskvit
 // bo'limlaridan ochiladi — faqat shu kategoriya, tab-bar yo'q, pastda
 // «Qo'shish» FAB (kategoriya tanlangan, «пф» yoqilgan forma).
 import 'package:flutter/gestures.dart';
@@ -142,7 +142,7 @@ class PfStockPage extends StatefulWidget {
   // Ekran tuzilishi bir xil, faqat manba ro'yxat va sarlavha boshqa.
   final bool ready;
 
-  // Berilsa ekran SHU BITTA kategoriyaga qulflanadi (pf_hub_page.dart →
+  // Berilsa ekran SHU BITTA kategoriyaga qulflanadi (biskvit_page.dart →
   // Biskvit → Krem va h.k.): tab-bar yo'q, qidiruv ham shu kategoriya
   // ichida, pastda «Qo'shish» — kategoriya oldindan tanlangan forma.
   final int? lockedCategoryId;
