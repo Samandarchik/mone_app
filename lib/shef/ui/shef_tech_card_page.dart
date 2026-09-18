@@ -10,6 +10,7 @@
 // bo'limidan ochilganda (canAddProducts).
 // «Biskvit» bo'limiga bog'langan kategoriyalar (BiskvitLinks) bu ro'yxatda
 // ko'rinmaydi — ular bosh menyudagi «Biskvit» bo'limida (biskvit_page.dart).
+// Shef bosh ekraniga «+» bilan qo'shilganlar (ShefHomeLinks) ham shunday.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/admin/model/category_model.dart';
@@ -56,7 +57,7 @@ class _ShefTechCardCategoriesPageState
   void initState() {
     super.initState();
     // Biskvit bo'limi bog'lanishlari — yashiriladigan kategoriyalar uchun.
-    BiskvitLinks.load().then((_) {
+    Future.wait([BiskvitLinks.load(), ShefHomeLinks.load()]).then((_) {
       if (mounted) setState(() {});
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -122,11 +123,14 @@ class _ShefTechCardCategoriesPageState
           }
 
           // «Biskvit» bo'limiga bog'langan kategoriyalar (biskvit_page.dart)
-          // endi o'sha yerda — bu ro'yxatda ko'rinmaydi.
-          final hidden = BiskvitLinks.linkedIds;
-          final categories = provider.categories
-              .where((c) => !hidden.contains(c.id))
-              .toList();
+          // va shef bosh ekraniga qo'shilganlar (ShefHomeLinks) endi o'sha
+          // yerda — bu ro'yxatda ko'rinmaydi.
+          final hidden = {
+            ...BiskvitLinks.linkedIds,
+            ...ShefHomeLinks.linkedIds,
+          };
+          final categories =
+              provider.categories.where((c) => !hidden.contains(c.id)).toList();
 
           return RefreshIndicator(
             onRefresh: _refresh,

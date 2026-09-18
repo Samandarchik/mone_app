@@ -94,6 +94,135 @@ class BiskvitLinks {
       prefs.setString(_prefsKey, jsonEncode(_ids));
 }
 
+// Shef bosh menyusiga «+» bilan qo'shilgan kategoriyalar (id'lar, qo'shilgan
+// tartibida) — BiskvitLinks bilan bir xil, faqat bo'lim bosh ekranning o'zi
+// (shef_home_ui.dart). Bular ham «Тех карта» ro'yxatidan yashiriladi.
+class ShefHomeLinks {
+  ShefHomeLinks._();
+
+  static const String _prefsKey = 'shef_home_categories';
+
+  static List<int> _ids = [];
+  static bool _loaded = false;
+
+  static List<int> get ids => List.unmodifiable(_ids);
+  static Set<int> get linkedIds => _ids.toSet();
+
+  static Future<void> load() async {
+    if (_loaded) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_prefsKey);
+      if (raw != null && raw.isNotEmpty) {
+        _ids = [
+          for (final v in jsonDecode(raw) as List)
+            if (v is num) v.toInt(),
+        ];
+      }
+    } catch (_) {
+      _ids = [];
+    }
+    _loaded = true;
+  }
+
+  static Future<void> add(int categoryId) async {
+    if (_ids.contains(categoryId)) return;
+    _ids = [..._ids, categoryId];
+    await _save(await SharedPreferences.getInstance());
+  }
+
+  static Future<void> remove(int categoryId) async {
+    _ids = _ids.where((id) => id != categoryId).toList();
+    await _save(await SharedPreferences.getInstance());
+  }
+
+  static Future<void> _save(SharedPreferences prefs) =>
+      prefs.setString(_prefsKey, jsonEncode(_ids));
+}
+
+// «+» oynasi: «Тех карта»dagi kategoriyalardan birini tanlash (rasm, nom va
+// mahsulot soni bilan). [exclude] — allaqachon biror bo'limga qo'shilganlar.
+// Biskvit bo'limi va shef bosh ekrani shu oynani ishlatadi.
+Future<CategoryProductAdmin?> pickTechCardCategory(
+  BuildContext context, {
+  required Set<int> exclude,
+  required String hint,
+}) async {
+  final cats = context.read<CategoryProviderAdmin>();
+  if (cats.categories.isEmpty) await cats.getCategories();
+  if (!context.mounted) return null;
+  final counts = <int, int>{};
+  for (final p in context.read<ProductProviderAdmin>().products) {
+    counts[p.categoryId] = (counts[p.categoryId] ?? 0) + 1;
+  }
+  final options =
+      cats.categories.where((c) => !exclude.contains(c.id)).toList();
+
+  return showModalBottomSheet<CategoryProductAdmin>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) => DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.7,
+      maxChildSize: 0.92,
+      builder: (ctx, scroll) => Column(
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 4),
+            child: Text(
+              'Kategoriya qo\'shish',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Text(
+              hint,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: options.isEmpty
+                ? const Center(
+                    child: Text(
+                      'Qo\'shiladigan kategoriya qolmadi',
+                      style: TextStyle(color: Colors.black54),
+                    ),
+                  )
+                : ListView.separated(
+                    controller: scroll,
+                    itemCount: options.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (ctx, i) {
+                      final c = options[i];
+                      return ListTile(
+                        onTap: () => Navigator.pop(ctx, c),
+                        leading: CategoryThumb(category: c, size: 44),
+                        title: Text(
+                          c.name,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        trailing: Text(
+                          '${counts[c.id] ?? 0} ta',
+                          style: TextStyle(
+                              fontSize: 12.5, color: Colors.grey.shade600),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 // Kategoriya rasmi to'liq manzili (backend nisbiy yo'l qaytaradi).
 String _imageUrlOf(CategoryProductAdmin c) {
   final url = c.imageUrl ?? '';
@@ -140,86 +269,16 @@ class _BiskvitPageState extends State<BiskvitPage> {
     );
   }
 
-  // «+» — hali qo'shilmagan kategoriyalardan birini tanlash (rasm, nom va
-  // mahsulot soni bilan). Tanlangani darhol karta bo'lib chiqadi.
+  // «+» — hali qo'shilmagan kategoriyalardan birini tanlash. Tanlangani
+  // darhol karta bo'lib chiqadi. Bosh ekranga qo'shilganlar ham chiqmaydi.
   Future<void> _addCategory() async {
-    await BiskvitLinks.load();
+    await Future.wait([BiskvitLinks.load(), ShefHomeLinks.load()]);
     if (!mounted) return;
-    final cats = context.read<CategoryProviderAdmin>();
-    if (cats.categories.isEmpty) await cats.getCategories();
-    if (!mounted) return;
-    final counts = <int, int>{};
-    for (final p in context.read<ProductProviderAdmin>().products) {
-      counts[p.categoryId] = (counts[p.categoryId] ?? 0) + 1;
-    }
-    final added = BiskvitLinks.linkedIds;
-    final options =
-        cats.categories.where((c) => !added.contains(c.id)).toList();
-
-    final picked = await showModalBottomSheet<CategoryProductAdmin>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.7,
-        maxChildSize: 0.92,
-        builder: (ctx, scroll) => Column(
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 16, 20, 4),
-              child: Text(
-                'Kategoriya qo\'shish',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Text(
-                '«Тех карта»dagi kategoriya hamma mahsulotlari bilan '
-                'Biskvit bo\'limiga o\'tadi',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
-              ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: options.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'Qo\'shiladigan kategoriya qolmadi',
-                        style: TextStyle(color: Colors.black54),
-                      ),
-                    )
-                  : ListView.separated(
-                      controller: scroll,
-                      itemCount: options.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (ctx, i) {
-                        final c = options[i];
-                        return ListTile(
-                          onTap: () => Navigator.pop(ctx, c),
-                          leading: _CategoryThumb(category: c, size: 44),
-                          title: Text(
-                            c.name,
-                            style:
-                                const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          trailing: Text(
-                            '${counts[c.id] ?? 0} ta',
-                            style: TextStyle(
-                                fontSize: 12.5, color: Colors.grey.shade600),
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
+    final picked = await pickTechCardCategory(
+      context,
+      exclude: {...BiskvitLinks.linkedIds, ...ShefHomeLinks.linkedIds},
+      hint: '«Тех карта»dagi kategoriya hamma mahsulotlari bilan '
+          'Biskvit bo\'limiga o\'tadi',
     );
     if (picked == null || !mounted) return;
     await BiskvitLinks.add(picked.id);
@@ -377,13 +436,18 @@ class _EmptyHint extends StatelessWidget {
 }
 
 // Kategoriya rasmi (bo'lmasa ikonka) — kvadrat, yumaloq burchak.
-class _CategoryThumb extends StatelessWidget {
+class CategoryThumb extends StatelessWidget {
   final CategoryProductAdmin category;
   final double size;
   // null — kvadrat (size × size).
   final double? width;
 
-  const _CategoryThumb({required this.category, required this.size, this.width});
+  const CategoryThumb({
+    super.key,
+    required this.category,
+    required this.size,
+    this.width,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -393,8 +457,8 @@ class _CategoryThumb extends StatelessWidget {
       width: w,
       height: size,
       color: _accentColor.withValues(alpha: 0.15),
-      child: Icon(Icons.category_outlined,
-          color: _accentColor, size: size * 0.45),
+      child:
+          Icon(Icons.category_outlined, color: _accentColor, size: size * 0.45),
     );
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),
@@ -446,7 +510,7 @@ class _CategoryTile extends StatelessWidget {
             children: [
               Expanded(
                 child: LayoutBuilder(
-                  builder: (context, box) => _CategoryThumb(
+                  builder: (context, box) => CategoryThumb(
                     category: category,
                     size: box.maxHeight,
                     width: box.maxWidth,

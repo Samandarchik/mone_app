@@ -7,6 +7,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:uz_ai_dev/admin/model/category_model.dart';
+import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
+import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/core/auth/session.dart';
 import 'package:uz_ai_dev/core2/ui/widgets/core_entry_menu.dart';
 import 'package:uz_ai_dev/shef/model/production_model.dart';
@@ -24,11 +27,95 @@ const Color _accentColor = Color(0xFFC5A97B);
 
 // Shef roli uchun bosh ekran: bo'limlar menyusi. Buyurtmalar ro'yxati bu yerda
 // chizilmaydi — «Buyurtmalar» kartasi orqali ShefOrdersPage ochiladi.
-class ShefHomeUi extends StatelessWidget {
+// AppBar'dagi «+» — Biskvit bo'limidagi kabi «Тех карта»dagi kategoriyani
+// tanlab, shu menyuga karta qilib qo'shish (ShefHomeLinks, qurilmada
+// saqlanadi); kartani bosib turish — menyudan olib tashlash.
+class ShefHomeUi extends StatefulWidget {
   const ShefHomeUi({super.key});
+
+  @override
+  State<ShefHomeUi> createState() => _ShefHomeUiState();
+}
+
+class _ShefHomeUiState extends State<ShefHomeUi> {
+  bool _linksLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    ShefHomeLinks.load().then((_) {
+      if (mounted) setState(() => _linksLoaded = true);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<CategoryProviderAdmin>().getCategories();
+      // Kartalardagi «N ta» soni uchun (allaqachon yuklangan bo'lsa — jim).
+      context.read<ProductProviderAdmin>().initializeProducts();
+    });
+  }
 
   void _open(BuildContext context, Widget page) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  }
+
+  void _openCategory(CategoryProductAdmin category) {
+    _open(
+      context,
+      ShefTechCardProductsPage(
+        categoryId: category.id,
+        categoryName: category.name,
+        canAddProducts: true,
+      ),
+    );
+  }
+
+  // «+» — Biskvit bo'limidagi oynaning o'zi; Biskvit'ga yoki bu menyuga
+  // allaqachon qo'shilganlar ro'yxatda chiqmaydi.
+  Future<void> _addCategory() async {
+    await Future.wait([ShefHomeLinks.load(), BiskvitLinks.load()]);
+    if (!mounted) return;
+    final picked = await pickTechCardCategory(
+      context,
+      exclude: {...ShefHomeLinks.linkedIds, ...BiskvitLinks.linkedIds},
+      hint: '«Тех карта»dagi kategoriya hamma mahsulotlari bilan '
+          'bosh menyuga o\'tadi',
+    );
+    if (picked == null || !mounted) return;
+    await ShefHomeLinks.add(picked.id);
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  // Kartani bosib turish — menyudan olib tashlash (tasdiq bilan).
+  Future<void> _removeCategory(CategoryProductAdmin category) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Menyudan olib tashlash'),
+        content: Text(
+          '«${category.name}» bosh menyudan olinib, yana «Тех карта»da '
+          'ko\'rinadi. Kategoriya va mahsulotlar o\'chmaydi.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Bekor qilish'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _accentColor,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Olib tashlash'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await ShefHomeLinks.remove(category.id);
+    if (!mounted) return;
+    setState(() {});
   }
 
   @override
@@ -43,6 +130,13 @@ class ShefHomeUi extends StatelessWidget {
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         actions: [
+          IconButton(
+            onPressed: _addCategory,
+            tooltip: 'Kategoriya qo\'shish',
+            icon: const Icon(Icons.add_circle_outline),
+            color: Colors.brown.shade700,
+            iconSize: 28,
+          ),
           // Ombor 2.0 (mone_core): retseptlar/hujjatlar — perms bo'yicha.
           const CoreEntryMenu(),
           IconButton(
@@ -51,47 +145,88 @@ class ShefHomeUi extends StatelessWidget {
           ),
         ],
       ),
-      body: GridView.count(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 1.05,
-        children: [
-          // Biskvit — rasmli karta; ichida shakllar / nachinka / krem /
-          // bezaklar bo'limlari (biskvit_page.dart → BiskvitPage).
-          _MenuCard(
-            icon: Icons.cake_outlined,
-            image: 'assets/biskvit.png',
-            title: 'Biskvit',
-            subtitle: 'Biskvit · Nachinka · Krem · Bezaklar',
-            onTap: () => _open(context, const BiskvitPage()),
-          ),
-          // Полуфабрикат qoldig'i — qaysi pf bor, nechtasi band/mumkin.
-          _MenuCard(
-            icon: Icons.inventory_2_outlined,
-            title: 'Полуфабрикат',
-            subtitle: 'Qoldiq: bor / band / mumkin',
-            onTap: () => _open(context, const PfStockPage()),
-          ),
-          // Готовый — «Полуфабрикат» bilan AYNAN bir xil ekran, faqat пф
-          // BO'LMAGAN (tayyor) mahsulotlar ro'yxati (GET pf-stock?kind=ready).
-          _MenuCard(
-            icon: Icons.cake_outlined,
-            title: 'Готовый',
-            subtitle: 'Tayyor mahsulot qoldig\'i',
-            onTap: () => _open(context, const PfStockPage(ready: true)),
-          ),
-          // Тех карта — shefga belgilangan kategoriyalar retsepti
-          // (narxlarsiz: faqat tarkib tahrirlanadi).
-          _MenuCard(
-            icon: Icons.menu_book_outlined,
-            title: 'Тех карта',
-            subtitle: 'Retsept tarkibini tahrirlash',
-            onTap: () => _open(context, const ShefTechCardCategoriesPage()),
-          ),
-        ],
+      // Qo'shilgan kategoriyalar soni kichik — ikkala provider'ni kuzatish
+      // arzon.
+      body: Consumer2<CategoryProviderAdmin, ProductProviderAdmin>(
+        builder: (context, cats, products, _) {
+          final byId = {for (final c in cats.categories) c.id: c};
+          final counts = <int, int>{};
+          for (final p in products.products) {
+            counts[p.categoryId] = (counts[p.categoryId] ?? 0) + 1;
+          }
+          // Backend'da o'chirilgan (ro'yxatda yo'q) id'lar ko'rsatilmaydi.
+          final linked = [
+            if (_linksLoaded)
+              for (final id in ShefHomeLinks.ids)
+                if (byId[id] != null) byId[id]!,
+          ];
+          return _buildGrid(context, linked, counts);
+        },
       ),
+    );
+  }
+
+  Widget _buildGrid(
+    BuildContext context,
+    List<CategoryProductAdmin> linked,
+    Map<int, int> counts,
+  ) {
+    return GridView.count(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+      crossAxisCount: 2,
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
+      childAspectRatio: 1.05,
+      children: [
+        // Biskvit — rasmli karta; ichida shakllar / nachinka / krem /
+        // bezaklar bo'limlari (biskvit_page.dart → BiskvitPage).
+        _MenuCard(
+          icon: Icons.cake_outlined,
+          image: 'assets/biskvit.png',
+          title: 'Biskvit',
+          subtitle: 'Biskvit · Nachinka · Krem · Bezaklar',
+          onTap: () => _open(context, const BiskvitPage()),
+        ),
+        // Полуфабрикат qoldig'i — qaysi pf bor, nechtasi band/mumkin.
+        _MenuCard(
+          icon: Icons.inventory_2_outlined,
+          title: 'Полуфабрикат',
+          subtitle: 'Qoldiq: bor / band / mumkin',
+          onTap: () => _open(context, const PfStockPage()),
+        ),
+        // Готовый — «Полуфабрикат» bilan AYNAN bir xil ekran, faqat пф
+        // BO'LMAGAN (tayyor) mahsulotlar ro'yxati (GET pf-stock?kind=ready).
+        _MenuCard(
+          icon: Icons.cake_outlined,
+          title: 'Готовый',
+          subtitle: 'Tayyor mahsulot qoldig\'i',
+          onTap: () => _open(context, const PfStockPage(ready: true)),
+        ),
+        // Тех карта — shefga belgilangan kategoriyalar retsepti
+        // (narxlarsiz: faqat tarkib tahrirlanadi).
+        _MenuCard(
+          icon: Icons.menu_book_outlined,
+          title: 'Тех карта',
+          subtitle: 'Retsept tarkibini tahrirlash',
+          onTap: () => _open(context, const ShefTechCardCategoriesPage()),
+        ),
+        // «+» bilan qo'shilgan kategoriyalar — rasmi, nomi va soni bilan.
+        for (final c in linked)
+          _MenuCard(
+            icon: Icons.category_outlined,
+            thumb: LayoutBuilder(
+              builder: (context, box) => CategoryThumb(
+                category: c,
+                size: box.maxHeight,
+                width: box.maxWidth,
+              ),
+            ),
+            title: c.name,
+            subtitle: '${counts[c.id] ?? 0} ta mahsulot',
+            onTap: () => _openCategory(c),
+            onLongPress: () => _removeCategory(c),
+          ),
+      ],
     );
   }
 }
@@ -101,26 +236,33 @@ class _MenuCard extends StatelessWidget {
   final IconData icon;
   // Berilsa ikonka o'rnida shu asset rasmi (kattaroq) ko'rsatiladi.
   final String? image;
+  // Berilsa rasm o'rnida shu vidjet (masalan kategoriyaning tarmoq rasmi).
+  final Widget? thumb;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   const _MenuCard({
     required this.icon,
     this.image,
+    this.thumb,
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.onLongPress,
   });
 
   @override
   Widget build(BuildContext context) {
+    final hasPicture = image != null || thumb != null;
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -130,7 +272,9 @@ class _MenuCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (image != null)
+              if (thumb != null)
+                Expanded(flex: 3, child: thumb!)
+              else if (image != null)
                 Expanded(
                   flex: 3,
                   child: Center(
@@ -154,7 +298,7 @@ class _MenuCard extends StatelessWidget {
                 ),
                 const Spacer(),
               ],
-              if (image != null) const SizedBox(height: 6),
+              if (hasPicture) const SizedBox(height: 6),
               Text(
                 title,
                 maxLines: 2,
