@@ -18,7 +18,17 @@ import 'package:uz_ai_dev/admin/ui/widgets/tech_card_section.dart';
 import 'package:uz_ai_dev/core/data/sklad_registry.dart';
 
 class AddProductPage extends StatefulWidget {
-  const AddProductPage({super.key});
+  // Ixtiyoriy oldindan to'ldirish: kategoriya ichidan ochilganda (masalan
+  // shef → Полуфабрикат → Biskvit → Krem) kategoriya tanlangan va «пф»
+  // yoqilgan holda ochiladi.
+  final int? initialCategoryId;
+  final bool initialSemiFinished;
+
+  const AddProductPage({
+    super.key,
+    this.initialCategoryId,
+    this.initialSemiFinished = false,
+  });
 
   @override
   State<AddProductPage> createState() => _AddProductPageState();
@@ -27,7 +37,8 @@ class AddProductPage extends StatefulWidget {
 class _AddProductPageState extends State<AddProductPage> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  String? _selectedType;
+  // «пф» oldindan yoqilgan bo'lsa — switch'dagidek odatiy birlik «шт».
+  late String? _selectedType = widget.initialSemiFinished ? 'шт' : null;
   final ingredientsControlle = TextEditingController();
   final grammController = TextEditingController(text: '1');
   final bozorGrammController = TextEditingController();
@@ -39,7 +50,7 @@ class _AddProductPageState extends State<AddProductPage> {
   final pieceWeightController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
 
-  int? _selectedCategoryId;
+  late int? _selectedCategoryId = widget.initialCategoryId;
   final List<int> _selectedFilials = [];
   File? _selectedImage;
 
@@ -51,7 +62,7 @@ class _AddProductPageState extends State<AddProductPage> {
 
   // Полуфабрикат (masalan «Классик бисквит») — ishlab chiqariladi,
   // sotilmaydi; boshqa tex kartalarda ingredient bo'ladi.
-  bool _isSemiFinished = false;
+  late bool _isSemiFinished = widget.initialSemiFinished;
 
   // Tarkib (tex karta)
   final TechCardController _techController = TechCardController();
@@ -449,6 +460,12 @@ class _AddProductPageState extends State<AddProductPage> {
                       child: CircularProgressIndicator.adaptive());
                 }
                 return DropdownButtonFormField<int>(
+                  // Oldindan berilgan kategoriya ro'yxatda bo'lsagina
+                  // (aks holda Dropdown assert bilan yiqiladi).
+                  initialValue: provider.categories
+                          .any((c) => c.id == _selectedCategoryId)
+                      ? _selectedCategoryId
+                      : null,
                   decoration: const InputDecoration(
                     labelText: 'Kategoriya',
                     border: OutlineInputBorder(),

@@ -11,6 +11,7 @@ import 'package:uz_ai_dev/core/auth/session.dart';
 import 'package:uz_ai_dev/core2/ui/widgets/core_entry_menu.dart';
 import 'package:uz_ai_dev/shef/model/production_model.dart';
 import 'package:uz_ai_dev/shef/provider/shef_provider.dart';
+import 'package:uz_ai_dev/shef/ui/pf_hub_page.dart';
 import 'package:uz_ai_dev/shef/ui/pf_stock_page.dart';
 // ShefOrdersPage ichidagi «Yangi buyurtma» tugmasi uchun kerak (bosh menyudan
 // olib tashlangan bo'lsa ham).
@@ -57,12 +58,13 @@ class ShefHomeUi extends StatelessWidget {
         mainAxisSpacing: 12,
         childAspectRatio: 1.05,
         children: [
-          // Полуфабрикат qoldig'i — qaysi pf bor, nechtasi band/mumkin.
+          // Полуфабрикат — avval guruhlar (Biskvit: shakllar / nachinka /
+          // krem / bezaklar), ichida esa qoldiq: bor / band / mumkin.
           _MenuCard(
             icon: Icons.inventory_2_outlined,
             title: 'Полуфабрикат',
-            subtitle: 'Qoldiq: bor / band / mumkin',
-            onTap: () => _open(context, const PfStockPage()),
+            subtitle: 'Biskvit va boshqa пф qoldig\'i',
+            onTap: () => _open(context, const PfHubPage()),
           ),
           // Готовый — «Полуфабрикат» bilan AYNAN bir xil ekran, faqat пф
           // BO'LMAGAN (tayyor) mahsulotlar ro'yxati (GET pf-stock?kind=ready).
