@@ -51,6 +51,9 @@ class _ShefHomeUiState extends State<ShefHomeUi> {
       context.read<CategoryProviderAdmin>().getCategories();
       // Kartalardagi «N ta» soni uchun (allaqachon yuklangan bo'lsa — jim).
       context.read<ProductProviderAdmin>().initializeProducts();
+      // Qo'shilgan пф kategoriyalari nomi shu ro'yxatdan topiladi.
+      final shef = context.read<ShefProvider>();
+      if (shef.pfStock.isEmpty) shef.fetchPfStock();
     });
   }
 
@@ -149,7 +152,11 @@ class _ShefHomeUiState extends State<ShefHomeUi> {
       // arzon.
       body: Consumer2<CategoryProviderAdmin, ProductProviderAdmin>(
         builder: (context, cats, products, _) {
-          final byId = {for (final c in cats.categories) c.id: c};
+          // Пф kategoriyalari «Тех карта» ro'yxatida bo'lmasligi mumkin.
+          final pf = context.select<ShefProvider, List<PfStockRow>>(
+            (p) => p.pfStock,
+          );
+          final byId = shefCategoriesById(cats.categories, pf);
           final counts = <int, int>{};
           for (final p in products.products) {
             counts[p.categoryId] = (counts[p.categoryId] ?? 0) + 1;

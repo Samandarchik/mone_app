@@ -21,6 +21,8 @@ import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
+import 'package:uz_ai_dev/shef/model/production_model.dart';
+import 'package:uz_ai_dev/shef/provider/shef_provider.dart';
 import 'package:uz_ai_dev/shef/ui/shef_tech_card_page.dart';
 
 const Color _bgColor = Color(0xFFFAF6F1);
@@ -140,23 +142,91 @@ class ShefHomeLinks {
       prefs.setString(_prefsKey, jsonEncode(_ids));
 }
 
-// «+» oynasi: «Тех карта»dagi kategoriyalardan birini tanlash (rasm, nom va
-// mahsulot soni bilan). [exclude] — allaqachon biror bo'limga qo'shilganlar.
-// Biskvit bo'limi va shef bosh ekrani shu oynani ishlatadi.
+// Shef ko'radigan hamma kategoriyalar (id → kategoriya): «Тех карта»
+// ro'yxati + полуфабрикат qoldig'ida uchraydigan, lekin u ro'yxatda YO'Q
+// kategoriyalar (shefga belgilanmagan пф kategoriyalari). Ikkinchilarining
+// rasmi yo'q — kartada ikonka chiqadi.
+Map<int, CategoryProductAdmin> shefCategoriesById(
+  List<CategoryProductAdmin> categories,
+  List<PfStockRow> pf,
+) {
+  final byId = {for (final c in categories) c.id: c};
+  for (final r in pf) {
+    final name = r.categoryName.trim();
+    if (r.categoryId <= 0 || name.isEmpty || byId.containsKey(r.categoryId)) {
+      continue;
+    }
+    byId[r.categoryId] = CategoryProductAdmin(
+      id: r.categoryId,
+      name: name,
+      imageUrl: null,
+      printerId: 1,
+    );
+  }
+  return byId;
+}
+
+// «+» oynasi: kategoriyalardan birini tanlash (rasm, nom va mahsulot soni
+// bilan). Ikki bo'lim: «Полуфабрикат» (ichida пф bor kategoriyalar) va
+// «Тех карта» (qolganlari). [exclude] — allaqachon biror bo'limga
+// qo'shilganlar. Biskvit bo'limi va shef bosh ekrani shu oynani ishlatadi.
 Future<CategoryProductAdmin?> pickTechCardCategory(
   BuildContext context, {
   required Set<int> exclude,
   required String hint,
 }) async {
   final cats = context.read<CategoryProviderAdmin>();
-  if (cats.categories.isEmpty) await cats.getCategories();
+  final shef = context.read<ShefProvider>();
+  await Future.wait([
+    if (cats.categories.isEmpty) cats.getCategories(),
+    if (shef.pfStock.isEmpty) shef.fetchPfStock(),
+  ]);
   if (!context.mounted) return null;
   final counts = <int, int>{};
   for (final p in context.read<ProductProviderAdmin>().products) {
     counts[p.categoryId] = (counts[p.categoryId] ?? 0) + 1;
   }
-  final options =
-      cats.categories.where((c) => !exclude.contains(c.id)).toList();
+  // Har kategoriyadagi пф soni — bo'limga ajratish va «N ta пф» uchun.
+  final pfCounts = <int, int>{};
+  for (final r in shef.pfStock) {
+    if (r.categoryId > 0) {
+      pfCounts[r.categoryId] = (pfCounts[r.categoryId] ?? 0) + 1;
+    }
+  }
+  final all = shefCategoriesById(cats.categories, shef.pfStock)
+      .values
+      .where((c) => !exclude.contains(c.id));
+  final pfOptions = all.where((c) => pfCounts.containsKey(c.id)).toList();
+  final otherOptions = all.where((c) => !pfCounts.containsKey(c.id)).toList();
+  final empty = pfOptions.isEmpty && otherOptions.isEmpty;
+
+  Widget sectionHeader(String title) => Container(
+        width: double.infinity,
+        color: _bgColor,
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 6),
+        child: Text(
+          title,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: Colors.brown.shade700,
+          ),
+        ),
+      );
+
+  Widget optionTile(BuildContext ctx, CategoryProductAdmin c, String count) =>
+      ListTile(
+        onTap: () => Navigator.pop(ctx, c),
+        leading: CategoryThumb(category: c, size: 44),
+        title: Text(
+          c.name,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        trailing: Text(
+          count,
+          style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
+        ),
+      );
 
   return showModalBottomSheet<CategoryProductAdmin>(
     context: context,
@@ -188,33 +258,31 @@ Future<CategoryProductAdmin?> pickTechCardCategory(
           ),
           const Divider(height: 1),
           Expanded(
-            child: options.isEmpty
+            child: empty
                 ? const Center(
                     child: Text(
                       'Qo\'shiladigan kategoriya qolmadi',
                       style: TextStyle(color: Colors.black54),
                     ),
                   )
-                : ListView.separated(
+                : ListView(
                     controller: scroll,
-                    itemCount: options.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (ctx, i) {
-                      final c = options[i];
-                      return ListTile(
-                        onTap: () => Navigator.pop(ctx, c),
-                        leading: CategoryThumb(category: c, size: 44),
-                        title: Text(
-                          c.name,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        trailing: Text(
-                          '${counts[c.id] ?? 0} ta',
-                          style: TextStyle(
-                              fontSize: 12.5, color: Colors.grey.shade600),
-                        ),
-                      );
-                    },
+                    children: [
+                      if (pfOptions.isNotEmpty) ...[
+                        sectionHeader('Полуфабрикат'),
+                        for (final c in pfOptions) ...[
+                          optionTile(ctx, c, '${pfCounts[c.id]} ta пф'),
+                          const Divider(height: 1),
+                        ],
+                      ],
+                      if (otherOptions.isNotEmpty) ...[
+                        sectionHeader('Тех карта'),
+                        for (final c in otherOptions) ...[
+                          optionTile(ctx, c, '${counts[c.id] ?? 0} ta'),
+                          const Divider(height: 1),
+                        ],
+                      ],
+                    ],
                   ),
           ),
         ],
@@ -252,6 +320,9 @@ class _BiskvitPageState extends State<BiskvitPage> {
       context.read<CategoryProviderAdmin>().getCategories();
       // Kartalardagi «N ta» soni uchun (allaqachon yuklangan bo'lsa — jim).
       context.read<ProductProviderAdmin>().initializeProducts();
+      // Qo'shilgan пф kategoriyalari nomi shu ro'yxatdan topiladi.
+      final shef = context.read<ShefProvider>();
+      if (shef.pfStock.isEmpty) shef.fetchPfStock();
     });
   }
 
@@ -363,7 +434,11 @@ class _BiskvitPageState extends State<BiskvitPage> {
           Consumer2<CategoryProviderAdmin, ProductProviderAdmin>(
             builder: (context, cats, products, _) {
               if (!_linksLoaded) return const SizedBox.shrink();
-              final byId = {for (final c in cats.categories) c.id: c};
+              // Пф kategoriyalari «Тех карта» ro'yxatida bo'lmasligi mumkin.
+              final pf = context.select<ShefProvider, List<PfStockRow>>(
+                (p) => p.pfStock,
+              );
+              final byId = shefCategoriesById(cats.categories, pf);
               final counts = <int, int>{};
               for (final p in products.products) {
                 counts[p.categoryId] = (counts[p.categoryId] ?? 0) + 1;
