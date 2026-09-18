@@ -1,53 +1,111 @@
 // shef/ui/biskvit_page.dart — shef bosh menyusidagi «Biskvit» bo'limi
 // (BiskvitPage): tepada biskvit rasmi (assets/biskvit.png), ostida to'rt
-// bo'lim — Shakllar / Nachinka / Krem / Bezaklar. Har bo'lim backend'dagi ODDIY kategoriya (nomi _BiskvitSection.
-// categoryName): birinchi ochilganda yo'q bo'lsa avtomatik yaratiladi, so'ng
-// PfStockPage shu kategoriyaga qulflangan holda ochiladi. Backend'da
-// kategoriya ierarxiyasi yo'q — «Biskvit» guruhi faqat shu ekranda.
+// bo'lim — Biskvit / Nachinka / Krem / Bezaklar.
+// Har bo'lim backend'dagi MAVJUD oddiy kategoriyaga (Бисквит, Начинка, Крем,
+// Украшения) NOMI bo'yicha bog'lanadi (_BiskvitSection.aliases — ruscha /
+// lotincha, birlik / ko'plik). Bo'lim bosilsa ShefTechCardProductsPage —
+// ya'ni «Тех карта»dagi o'sha kategoriya sahifasi, ichidagi hamma mahsulot
+// va retseptlari bilan — ochiladi. Kategoriya topilmasa yaratiladi.
+// Bu kategoriyalar «Тех карта» ro'yxatidan YASHIRILADI
+// (isBiskvitCategoryName → shef_tech_card_page.dart): endi ular faqat shu yerda.
+// Backend'da kategoriya ierarxiyasi yo'q — «Biskvit» guruhi faqat ilovada.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/admin/model/category_model.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
+import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/provider/upload_image_provider.dart';
-import 'package:uz_ai_dev/shef/model/production_model.dart';
-import 'package:uz_ai_dev/shef/provider/shef_provider.dart';
-import 'package:uz_ai_dev/shef/ui/pf_stock_page.dart';
+import 'package:uz_ai_dev/shef/ui/shef_tech_card_page.dart';
 
 const Color _bgColor = Color(0xFFFAF6F1);
 const Color _accentColor = Color(0xFFC5A97B);
 
 const String _biskvitImage = 'assets/biskvit.png';
 
-// Biskvitning bitta bo'limi: ekrandagi nomi, backend kategoriya nomi, ikonka.
+String _norm(String s) => s.trim().toLowerCase();
+
+// Biskvitning bitta bo'limi.
 class _BiskvitSection {
   final String title;
-  final String categoryName;
   final String subtitle;
   final IconData icon;
+  // Backend kategoriya nomining mumkin bo'lgan variantlari (kichik harfda),
+  // USTUNLIK tartibida: birinchi topilgani olinadi. Oxirgilari — avvalgi
+  // versiya avtomatik yaratgan nomlar.
+  final List<String> aliases;
+  // Hech biri topilmasa shu nom bilan yaratiladi.
+  final String createName;
 
-  const _BiskvitSection(this.title, this.categoryName, this.subtitle, this.icon);
+  const _BiskvitSection({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.aliases,
+    required this.createName,
+  });
 }
 
 const List<_BiskvitSection> _biskvitSections = [
-  _BiskvitSection('Shakllar', 'Biskvit shakllari', 'Biskvit shakllari',
-      Icons.interests_outlined),
-  _BiskvitSection('Nachinka', 'Biskvit nachinkasi', 'Qatlamlar orasiga',
-      Icons.layers_outlined),
-  _BiskvitSection('Krem', 'Biskvit kremi', 'Krem turlari',
-      Icons.icecream_outlined),
-  _BiskvitSection('Bezaklar', 'Biskvit bezaklari', 'Tort bezaklari',
-      Icons.auto_awesome_outlined),
+  _BiskvitSection(
+    title: 'Biskvit',
+    subtitle: 'Biskvit shakllari',
+    icon: Icons.interests_outlined,
+    aliases: ['бисквит', 'бисквиты', 'biskvit', 'biskvitlar',
+        'biskvit shakllari'],
+    createName: 'Бисквит',
+  ),
+  _BiskvitSection(
+    title: 'Nachinka',
+    subtitle: 'Qatlamlar orasiga',
+    icon: Icons.layers_outlined,
+    aliases: ['начинка', 'начинки', 'nachinka', 'nachinkalar',
+        'biskvit nachinkasi'],
+    createName: 'Начинка',
+  ),
+  _BiskvitSection(
+    title: 'Krem',
+    subtitle: 'Krem turlari',
+    icon: Icons.icecream_outlined,
+    aliases: ['крем', 'кремы', 'krem', 'kremlar', 'biskvit kremi'],
+    createName: 'Крем',
+  ),
+  _BiskvitSection(
+    title: 'Bezaklar',
+    subtitle: 'Украшения',
+    icon: Icons.auto_awesome_outlined,
+    aliases: ['украшения', 'украшение', 'ukrasheniya', 'ukrasheniye',
+        'bezak', 'bezaklar', 'biskvit bezaklari'],
+    createName: 'Украшения',
+  ),
 ];
 
-String _norm(String s) => s.trim().toLowerCase();
+final Set<String> _allAliases = {
+  for (final s in _biskvitSections) ...s.aliases,
+};
 
-// Berilgan kategoriyalar (normallashgan nom) ichidagi пф soni.
-int _countIn(List<PfStockRow> rows, Set<String> categoryNames) {
-  var n = 0;
-  for (final r in rows) {
-    if (categoryNames.contains(_norm(r.categoryName))) n++;
+// Kategoriya Biskvit bo'limiga tegishlimi — «Тех карта» ro'yxati shu bilan
+// ularni yashiradi.
+bool isBiskvitCategoryName(String name) => _allAliases.contains(_norm(name));
+
+// Bo'lim kategoriyasi (aliases tartibida birinchi topilgani) yoki null.
+CategoryProductAdmin? _resolve(
+  _BiskvitSection s,
+  Map<String, CategoryProductAdmin> byName,
+) {
+  for (final a in s.aliases) {
+    final c = byName[a];
+    if (c != null) return c;
   }
-  return n;
+  return null;
+}
+
+Map<String, CategoryProductAdmin> _indexByName(
+    List<CategoryProductAdmin> cats) {
+  final map = <String, CategoryProductAdmin>{};
+  for (final c in cats) {
+    map.putIfAbsent(_norm(c.name), () => c);
+  }
+  return map;
 }
 
 // «Biskvit» — to'rt bo'lim.
@@ -59,7 +117,7 @@ class BiskvitPage extends StatefulWidget {
 }
 
 class _BiskvitPageState extends State<BiskvitPage> {
-  // Kategoriya yaratilayotganda ikkinchi bosish yangi dublikat ochmasin.
+  // Kategoriya yaratilayotganda ikkinchi bosish dublikat ochmasin.
   bool _busy = false;
 
   @override
@@ -68,60 +126,51 @@ class _BiskvitPageState extends State<BiskvitPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<CategoryProviderAdmin>().getCategories();
-      // Kartalardagi «N ta» soni uchun.
-      context.read<ShefProvider>().fetchPfStock();
+      // Kartalardagi «N ta» soni uchun (allaqachon yuklangan bo'lsa — jim).
+      context.read<ProductProviderAdmin>().initializeProducts();
     });
   }
 
-  CategoryProductAdmin? _findCategory(String name) {
-    final key = _norm(name);
-    for (final c in context.read<CategoryProviderAdmin>().categories) {
-      if (_norm(c.name) == key) return c;
-    }
-    return null;
-  }
-
   // Bo'lim kategoriyasi — bor bo'lsa o'sha, yo'q bo'lsa backend'da yaratiladi.
-  Future<int?> _ensureCategory(String name) async {
+  Future<CategoryProductAdmin?> _ensureCategory(_BiskvitSection s) async {
     final cats = context.read<CategoryProviderAdmin>();
     if (cats.categories.isEmpty) await cats.getCategories();
     if (!mounted) return null;
-    final existing = _findCategory(name);
-    if (existing != null) return existing.id;
+    final existing = _resolve(s, _indexByName(cats.categories));
+    if (existing != null) return existing;
 
     final upload = context.read<CategoryProviderAdminUpload>();
     final ok = await upload.createCategory(
-      CategoryProductAdmin(id: 0, name: name, imageUrl: null, printerId: 1),
+      CategoryProductAdmin(
+          id: 0, name: s.createName, imageUrl: null, printerId: 1),
     );
     if (!mounted) return null;
     if (!ok) {
-      _snack(upload.error ?? '«$name» kategoriyasi yaratilmadi');
+      _snack(upload.error ?? '«${s.createName}» kategoriyasi yaratilmadi');
       return null;
     }
     await cats.getCategories();
     if (!mounted) return null;
-    return _findCategory(name)?.id;
+    return _resolve(s, _indexByName(cats.categories));
   }
 
   Future<void> _openSection(_BiskvitSection s) async {
     if (_busy) return;
     setState(() => _busy = true);
-    final id = await _ensureCategory(s.categoryName);
+    final category = await _ensureCategory(s);
     if (!mounted) return;
     setState(() => _busy = false);
-    if (id == null) return;
+    if (category == null) return;
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => PfStockPage(
-          lockedCategoryId: id,
-          title: 'Biskvit — ${s.title}',
+        builder: (_) => ShefTechCardProductsPage(
+          categoryId: category.id,
+          categoryName: 'Biskvit — ${s.title}',
+          canAddProducts: true,
         ),
       ),
     );
-    // Qaytganda kartadagi sonlar yangilansin (пф qo'shilgan bo'lishi mumkin).
-    if (!mounted) return;
-    context.read<ShefProvider>().fetchPfStock();
   }
 
   void _snack(String text) {
@@ -170,24 +219,31 @@ class _BiskvitPageState extends State<BiskvitPage> {
             ),
           ),
           const SizedBox(height: 12),
-          Selector<ShefProvider, List<PfStockRow>>(
-            selector: (_, p) => p.pfStock,
-            builder: (context, rows, _) => GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 1.05,
-              children: [
-                for (final s in _biskvitSections)
-                  _SectionCard(
-                    section: s,
-                    count: _countIn(rows, {_norm(s.categoryName)}),
-                    onTap: () => _openSection(s),
-                  ),
-              ],
-            ),
+          // Sahifada atigi 4 karta — ikkala provider'ni kuzatish arzon.
+          Consumer2<CategoryProviderAdmin, ProductProviderAdmin>(
+            builder: (context, cats, products, _) {
+              final byName = _indexByName(cats.categories);
+              final counts = <int, int>{};
+              for (final p in products.products) {
+                counts[p.categoryId] = (counts[p.categoryId] ?? 0) + 1;
+              }
+              return GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 1.05,
+                children: [
+                  for (final s in _biskvitSections)
+                    _SectionCard(
+                      section: s,
+                      count: counts[_resolve(s, byName)?.id] ?? 0,
+                      onTap: () => _openSection(s),
+                    ),
+                ],
+              );
+            },
           ),
         ],
       ),

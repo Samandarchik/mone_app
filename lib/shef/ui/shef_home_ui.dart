@@ -64,7 +64,7 @@ class ShefHomeUi extends StatelessWidget {
             icon: Icons.cake_outlined,
             image: 'assets/biskvit.png',
             title: 'Biskvit',
-            subtitle: 'Shakllar · Nachinka · Krem · Bezaklar',
+            subtitle: 'Biskvit · Nachinka · Krem · Bezaklar',
             onTap: () => _open(context, const BiskvitPage()),
           ),
           // Полуфабрикат qoldig'i — qaysi pf bor, nechtasi band/mumkin.

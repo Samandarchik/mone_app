@@ -21,9 +21,6 @@
 // `ready: true` — «Готовый»: пф BO'LMAGAN tayyor mahsulotlar
 // (GET pf-stock?kind=ready → readyStock). Ekran tuzilishi bir xil, faqat
 // manba ro'yxat va AppBar sarlavhasi boshqa.
-// QULFLANGAN REJIM (`lockedCategoryId`): biskvit_page.dart → Biskvit
-// bo'limlaridan ochiladi — faqat shu kategoriya, tab-bar yo'q, pastda
-// «Qo'shish» FAB (kategoriya tanlangan, «пф» yoqilgan forma).
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -142,19 +139,7 @@ class PfStockPage extends StatefulWidget {
   // Ekran tuzilishi bir xil, faqat manba ro'yxat va sarlavha boshqa.
   final bool ready;
 
-  // Berilsa ekran SHU BITTA kategoriyaga qulflanadi (biskvit_page.dart →
-  // Biskvit → Krem va h.k.): tab-bar yo'q, qidiruv ham shu kategoriya
-  // ichida, pastda «Qo'shish» — kategoriya oldindan tanlangan forma.
-  final int? lockedCategoryId;
-  // AppBar sarlavhasi (null — rejimga qarab standart).
-  final String? title;
-
-  const PfStockPage({
-    super.key,
-    this.ready = false,
-    this.lockedCategoryId,
-    this.title,
-  });
+  const PfStockPage({super.key, this.ready = false});
 
   @override
   State<PfStockPage> createState() => _PfStockPageState();
@@ -275,21 +260,17 @@ class _PfStockPageState extends State<PfStockPage> {
 
   @override
   Widget build(BuildContext context) {
-    final lockedId = widget.lockedCategoryId;
     return Scaffold(
       backgroundColor: _bgColor,
       appBar: AppBar(
         backgroundColor: _bgColor,
         elevation: 0,
         title: Text(
-          widget.title ??
-              (widget.ready ? 'Готовый qoldig\'i' : 'Полуфабрикат qoldig\'i'),
+          widget.ready ? 'Готовый qoldig\'i' : 'Полуфабрикат qoldig\'i',
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         actions: [
           // Jami soni — ro'yxat yuklanganda ko'rinadi (qidiruvdan mustaqil).
-          // Qulflangan rejimda kerak emas: xulosa qatorida allaqachon bor.
-          if (lockedId == null)
           Selector<ShefProvider, int>(
             selector: (_, p) =>
                 widget.ready ? p.readyStock.length : p.pfStock.length,
@@ -333,41 +314,6 @@ class _PfStockPageState extends State<PfStockPage> {
             );
           }
 
-          final query = _searchQuery.trim().toLowerCase();
-          final searching = query.isNotEmpty;
-
-          // Qulflangan rejim: faqat shu kategoriya, tab-bar yo'q, qidiruv
-          // ham shu kategoriya ichida.
-          if (lockedId != null) {
-            final scoped =
-                all.where((r) => r.categoryId == lockedId).toList();
-            final rows = searching
-                ? scoped
-                    .where((r) => r.name.toLowerCase().contains(query))
-                    .toList()
-                : scoped;
-            final emptyCount = scoped.where((r) => r.isEmptyStock).length;
-            return Column(
-              children: [
-                if (scoped.isNotEmpty) ...[
-                  _searchField(),
-                  if (!searching) _summaryLine(scoped.length, emptyCount),
-                  _columnsHeader(),
-                ],
-                Expanded(
-                  child: _rowsList(
-                    provider,
-                    rows,
-                    emptyText: scoped.isEmpty
-                        ? 'Hozircha $_noun yo\'q.\n'
-                            '«Qo\'shish» bilan yangisini kiriting.'
-                        : 'Topilmadi',
-                  ),
-                ),
-              ],
-            );
-          }
-
           // Bo'sh (mahsulotsiz) kategoriyalar ham tab bo'lib chiqishi uchun —
           // «+» bilan qo'shilgani darhol ko'rinsin.
           _rebuildCats(
@@ -375,6 +321,8 @@ class _PfStockPageState extends State<PfStockPage> {
             context.watch<CategoryProviderAdmin>().categories,
             context.watch<ProductProviderAdmin>().products,
           );
+          final query = _searchQuery.trim().toLowerCase();
+          final searching = query.isNotEmpty;
 
           // Qidiruvda kategoriya chegarasi olib tashlanadi — пф qaysi
           // kategoriyada ekanini bilmasdan ham topiladi.
@@ -400,66 +348,38 @@ class _PfStockPageState extends State<PfStockPage> {
                 _columnsHeader(),
               ],
               Expanded(
-                child: _rowsList(
-                  provider,
-                  rows,
-                  emptyText: all.isEmpty ? '$_nounCap yo\'q' : 'Topilmadi',
+                child: RefreshIndicator(
+                  onRefresh: () => provider.fetchPfStock(ready: ready),
+                  child: rows.isEmpty
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: [
+                            const SizedBox(height: 140),
+                            Center(
+                              child: Text(
+                                all.isEmpty ? '$_nounCap yo\'q' : 'Topilmadi',
+                                style: const TextStyle(color: Colors.black54),
+                              ),
+                            ),
+                          ],
+                        )
+                      : ListView.separated(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.only(bottom: 24),
+                          itemCount: rows.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, index) => _PfStockTile(
+                            row: rows[index],
+                            onTap: () => _openTechCard(rows[index]),
+                            onLongPress: () => _editProduct(rows[index]),
+                          ),
+                        ),
                 ),
               ),
             ],
           );
         },
       ),
-      // Qulflangan rejimda tab-bar (va uning «⋮» menyusi) yo'q — mahsulot
-      // qo'shish shu tugmada, kategoriya oldindan tanlangan holda.
-      floatingActionButton: lockedId == null
-          ? null
-          : FloatingActionButton.extended(
-              onPressed: () => _addProduct(categoryId: lockedId),
-              backgroundColor: _accentColor,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.add),
-              label: const Text('Qo\'shish'),
-            ),
-    );
-  }
-
-  // Qoldiq ro'yxati (pull-to-refresh bilan); bo'sh bo'lsa `emptyText`.
-  Widget _rowsList(
-    ShefProvider provider,
-    List<PfStockRow> rows, {
-    required String emptyText,
-  }) {
-    return RefreshIndicator(
-      onRefresh: () => provider.fetchPfStock(ready: widget.ready),
-      child: rows.isEmpty
-          ? ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: [
-                const SizedBox(height: 140),
-                Center(
-                  child: Text(
-                    emptyText,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.black54),
-                  ),
-                ),
-              ],
-            )
-          : ListView.separated(
-              physics: const AlwaysScrollableScrollPhysics(),
-              // Pastki joy — FAB qatorni yopib qo'ymasin.
-              padding: EdgeInsets.only(
-                bottom: widget.lockedCategoryId == null ? 24 : 88,
-              ),
-              itemCount: rows.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, index) => _PfStockTile(
-                row: rows[index],
-                onTap: () => _openTechCard(rows[index]),
-                onLongPress: () => _editProduct(rows[index]),
-              ),
-            ),
     );
   }
 
@@ -906,17 +826,12 @@ class _PfStockPageState extends State<PfStockPage> {
     await _refreshCatalog();
   }
 
-  // Yangi mahsulot — admin'dagi to'liq forma. `categoryId` berilsa
-  // (qulflangan rejim) kategoriya tanlangan va «пф» yoqilgan holda ochiladi.
-  Future<void> _addProduct({int? categoryId}) async {
+  // Yangi mahsulot — admin'dagi to'liq forma (kategoriya shu yerda tanlanadi:
+  // sahifa oldindan tanlangan kategoriyani qabul qilmaydi).
+  Future<void> _addProduct() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => AddProductPage(
-          initialCategoryId: categoryId,
-          initialSemiFinished: categoryId != null && !widget.ready,
-        ),
-      ),
+      MaterialPageRoute(builder: (_) => const AddProductPage()),
     );
     if (!mounted) return;
     await _refreshCatalog();

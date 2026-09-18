@@ -6,16 +6,21 @@
 // (canEditPrices: false): shef retseptni tahrirlaydi, masalliq narxi /
 // «Сумма» / tannarx / sotuv narxini KO'RADI, lekin narx/foyda/nakladnoyni
 // o'zgartira olmaydi.
-// Mahsulot qo'shish/o'chirish/tartiblash/PDF bu yerda YO'Q.
+// Mahsulot o'chirish/tartiblash/PDF bu yerda YO'Q; qo'shish — faqat Biskvit
+// bo'limidan ochilganda (canAddProducts).
+// Бисквит / Начинка / Крем / Украшения kategoriyalari bu ro'yxatda
+// ko'rinmaydi — ular bosh menyudagi «Biskvit» bo'limida (biskvit_page.dart).
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/admin/model/category_model.dart';
 import 'package:uz_ai_dev/admin/model/product_model.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
+import 'package:uz_ai_dev/admin/ui/admin_add_product_ui.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
+import 'package:uz_ai_dev/shef/ui/biskvit_page.dart';
 
 // Shef ekranlarining umumiy ranglari (shef_home_ui / pf_stock_page bilan bir xil).
 const Color _bgColor = Color(0xFFFAF6F1);
@@ -112,9 +117,15 @@ class _ShefTechCardCategoriesPageState
             );
           }
 
+          // Бисквит / Начинка / Крем / Украшения — bosh menyudagi «Biskvit»
+          // bo'limiga ko'chirilgan (biskvit_page.dart), bu yerda ko'rinmaydi.
+          final categories = provider.categories
+              .where((c) => !isBiskvitCategoryName(c.name))
+              .toList();
+
           return RefreshIndicator(
             onRefresh: _refresh,
-            child: provider.categories.isEmpty
+            child: categories.isEmpty
                 ? ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     children: const [
@@ -140,9 +151,9 @@ class _ShefTechCardCategoriesPageState
                 : ListView.builder(
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-                    itemCount: provider.categories.length,
+                    itemCount: categories.length,
                     itemBuilder: (context, index) {
-                      final category = provider.categories[index];
+                      final category = categories[index];
                       return _CategoryCard(
                         category: category,
                         productCount: counts[category.id] ?? 0,
@@ -249,11 +260,15 @@ class _CategoryCard extends StatelessWidget {
 class ShefTechCardProductsPage extends StatefulWidget {
   final int categoryId;
   final String categoryName;
+  // true — pastda «Qo'shish» (kategoriya tanlangan, «пф» yoqilgan forma).
+  // Faqat Biskvit bo'limidan ochilganda (biskvit_page.dart).
+  final bool canAddProducts;
 
   const ShefTechCardProductsPage({
     super.key,
     required this.categoryId,
     required this.categoryName,
+    this.canAddProducts = false,
   });
 
   @override
@@ -301,10 +316,33 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
     );
   }
 
+  Future<void> _addProduct() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddProductPage(
+          initialCategoryId: widget.categoryId,
+          initialSemiFinished: true,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    await _refresh();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bgColor,
+      floatingActionButton: widget.canAddProducts
+          ? FloatingActionButton.extended(
+              onPressed: _addProduct,
+              backgroundColor: _accentColor,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add),
+              label: const Text('Qo\'shish'),
+            )
+          : null,
       appBar: AppBar(
         backgroundColor: _bgColor,
         elevation: 0,
@@ -357,7 +395,9 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                         )
                       : ListView.separated(
                           physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.fromLTRB(8, 4, 8, 24),
+                          // Pastki joy — FAB oxirgi qatorni yopmasin.
+                          padding: EdgeInsets.fromLTRB(
+                              8, 4, 8, widget.canAddProducts ? 88 : 24),
                           itemCount: rows.length,
                           separatorBuilder: (_, __) => const Divider(height: 1),
                           itemBuilder: (context, index) => _ProductTile(
