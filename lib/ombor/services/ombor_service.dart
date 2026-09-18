@@ -13,7 +13,9 @@ class OmborService {
   final Dio dio = sl<Dio>();
 
   // POST /api/orders -> savatdagi mahsulotlarni buyurtma qilish.
-  // items: [{"product_id": 1, "count": 5}, ...]
+  // items: [{"product_id": 1, "count": 5, "source": "toshkent"}, ...] —
+  // source HAR qatorda; bitta product_id turli manbalar bilan bir necha
+  // marta kelishi mumkin (backend har manbaga alohida buyurtma yaratadi).
   // Javob: {"success": true, "message": "...", "data": {order}}
   Future<String> submitOrder(List<Map<String, dynamic>> items) async {
     try {

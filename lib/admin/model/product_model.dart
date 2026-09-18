@@ -3,10 +3,11 @@
 // tarkib), type, is_semi_finished (полуфабрикат), piece_weight_g (1 шт = X gr),
 // waste_base/waste_amount (tozalash yo'qotishi -> wasteFactor),
 // manual_price/manual_price_at (hech sotib olinmagan masalliqning QO'LDA
-// kiritilgan xarid narxi), mone_app/bozor/source/sklads (ombor → yuk
+// kiritilgan xarid narxi), mone_app/bozor/source/sources/sklads (ombor → yuk
 // keltiruvchi oqimi).
 import 'package:uz_ai_dev/admin/model/composition_item.dart';
 import 'package:uz_ai_dev/admin/model/tech_card.dart';
+import 'package:uz_ai_dev/core/utils/product_sources.dart';
 
 class ProductModelAdmin {
   final int id;
@@ -27,6 +28,11 @@ class ProductModelAdmin {
   // Ombor → yuk keltiruvchi oqimi uchun yangi maydonlar
   final bool moneApp;
   final bool bozor;
+  // Yuk qayerdan keladi — bir nechta bo'lishi mumkin (Samarqand + Toshkent).
+  // Kanonik tartib, dublikatsiz, hech qachon bo'sh emas
+  // (core/utils/product_sources.dart).
+  final List<String> sources;
+  // Asosiy manba = sources.first — eski APK'lar uchun alohida yuboriladi.
   final String source;
   final List<int> sklads;
 
@@ -84,7 +90,9 @@ class ProductModelAdmin {
     required this.filialNames,
     this.moneApp = true,
     this.bozor = false,
-    this.source = 'samarqand',
+    // source faqat sources berilmaganda (yoki bo'sh bo'lsa) ishlatiladi.
+    String source = kDefaultProductSource,
+    List<String>? sources,
     this.sklads = const [],
     this.composition = const [],
     this.techCard,
@@ -96,7 +104,9 @@ class ProductModelAdmin {
     this.pieceWeightG = 0,
     this.manualPrice = 0,
     this.manualPriceAt,
-  });
+  })  : sources = parseProductSources(sources, source),
+        // Kontrakt: source DOIM sources[0] ga teng.
+        source = parseProductSources(sources, source).first;
 
   // Tozalash yo'qotishi koeffitsiyenti: xarid narxi shu koeffitsiyentga
   // ko'paytiriladi (masalan 8000 dan 100 yo'qolsa — 8000/7900).
@@ -124,10 +134,8 @@ class ProductModelAdmin {
       filialNames: List<String>.from(json['filial_names'] ?? []),
       moneApp: json['mone_app'] ?? true,
       bozor: json['bozor'] ?? false,
-      source: (json['source'] == null ||
-              (json['source'] as String).isEmpty)
-          ? 'samarqand'
-          : json['source'],
+      // sources yo'q/bo'sh (eski backend) -> [source] -> ['samarqand'].
+      sources: parseProductSources(json['sources'], json['source']),
       sklads: (json['sklads'] as List?)?.map((e) => e as int).toList() ?? [],
       composition: CompositionItem.listFromJson(json['composition']),
       techCard: json['tech_card'] != null
@@ -162,6 +170,7 @@ class ProductModelAdmin {
       'mone_app': moneApp,
       'bozor': bozor,
       'source': source,
+      'sources': sources,
       'composition': composition.map((e) => e.toJson()).toList(),
       'tech_card': techCard?.toJson(),
       'comment': comment,
@@ -189,6 +198,7 @@ class ProductModelAdmin {
       'mone_app': moneApp,
       'bozor': bozor,
       'source': source,
+      'sources': sources,
       'sklads': sklads,
       'composition': composition.map((e) => e.toJson()).toList(),
       'tech_card': techCard?.toJson(),
@@ -218,6 +228,7 @@ class ProductModelAdmin {
       'mone_app': moneApp,
       'bozor': bozor,
       'source': source,
+      'sources': sources,
       'sklads': sklads,
       'composition': composition.map((e) => e.toJson()).toList(),
       'tech_card': techCard?.toJson(),
@@ -253,6 +264,7 @@ class ProductModelAdmin {
     bool? moneApp,
     bool? bozor,
     String? source,
+    List<String>? sources,
     List<int>? sklads,
     List<CompositionItem>? composition,
     TechCard? techCard,
@@ -280,7 +292,10 @@ class ProductModelAdmin {
       filialNames: filialNames ?? this.filialNames,
       moneApp: moneApp ?? this.moneApp,
       bozor: bozor ?? this.bozor,
+      // Faqat source berilsa (eski chaqiruv) — bitta manbaga aylanadi;
+      // sources berilsa source undan (sources.first) hisoblanadi.
       source: source ?? this.source,
+      sources: sources ?? (source != null ? null : this.sources),
       sklads: sklads ?? this.sklads,
       composition: composition ?? this.composition,
       techCard: techCard ?? this.techCard,

@@ -1,6 +1,7 @@
 // ombor/provider/ombor_provider.dart — Ombor (bozor) roli markaziy provideri: OmborProvider
-// (ChangeNotifier). Holat: productsByCategory, allCategories, savat (_cart — milli-birlik butun
-// son), myOrders; submitOrder/acceptOrderItem/deleteOrderItem va WebSocket real-time yangilanish.
+// (ChangeNotifier). Holat: productsByCategory, allCategories, savat (_cart — kalit (mahsulot,
+// manba), qiymat milli-birlik butun son), myOrders; submitOrder/acceptOrderItem/deleteOrderItem
+// va WebSocket real-time yangilanish.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -13,6 +14,12 @@ import 'package:uz_ai_dev/ombor/models/ombor_product_model.dart';
 import 'package:uz_ai_dev/core/widgets/order_period.dart';
 import 'package:uz_ai_dev/ombor/services/ombor_service.dart';
 import 'package:uz_ai_dev/production/models/stock_model.dart';
+
+// Savat qatori kaliti: (mahsulot, manba). Bitta mahsulot bir nechta manbadan
+// (masalan Samarqand + Toshkent) ALOHIDA miqdor bilan buyurtma qilinishi
+// mumkin — backend har manbani o'z bozorchisiga alohida buyurtma qiladi.
+// Record qiymat bo'yicha solishtiriladi (== / hashCode), Map kaliti bo'la oladi.
+typedef OmborCartKey = ({int productId, String source});
 
 // Ombor bosh ekrani uchun holat boshqaruvchi.
 class OmborProvider extends ChangeNotifier with ClearableProvider {
@@ -88,14 +95,16 @@ class OmborProvider extends ChangeNotifier with ClearableProvider {
   }
 
   // ─────────────────────── Savatcha holati ───────────────────────
-  // product_id -> miqdor * 1000 ("milli-birlik", BUTUN son). Float emas:
-  // 0.4 -> 400; 400+400+400 = 1200 -> 1.2 (float xatosi yo'q). Ko'rsatishda
-  // va yuborishda /1000 qilinadi.
-  final Map<int, int> _cart = {};
+  // (product_id, manba) -> miqdor * 1000 ("milli-birlik", BUTUN son). Float
+  // emas: 0.4 -> 400; 400+400+400 = 1200 -> 1.2 (float xatosi yo'q).
+  // Ko'rsatishda va yuborishda /1000 qilinadi. Bitta manbali mahsulot —
+  // bitta qator (o'sha yagona manba bilan), ko'p manbali — har manbaga
+  // alohida qator.
+  final Map<OmborCartKey, int> _cart = {};
 
-  Map<int, int> get cart => Map.unmodifiable(_cart);
+  Map<OmborCartKey, int> get cart => Map.unmodifiable(_cart);
 
-  // Savatdagi har xil mahsulotlar soni.
+  // Savatdagi qatorlar soni (mahsulot × manba — har biri alohida item).
   int get cartItemCount => _cart.length;
 
   // Savatdagi umumiy miqdor (milli-birlik yig'indisi; ko'rsatishda /1000).
@@ -103,35 +112,59 @@ class OmborProvider extends ChangeNotifier with ClearableProvider {
 
   bool isSubmitting = false;
 
-  // Mahsulot miqdori milli-birlikda (0 = savatda yo'q).
-  int countMilli(int productId) => _cart[productId] ?? 0;
+  // Mahsulotning shu manbadagi miqdori milli-birlikda (0 = savatda yo'q).
+  int countMilli(int productId, String source) =>
+      _cart[(productId: productId, source: source)] ?? 0;
 
   // Bir qadam (stepMilli = bozor gramm * 1000) qo'shish.
-  void addToCart(int productId, int stepMilli) {
-    _cart[productId] = (_cart[productId] ?? 0) + stepMilli;
+  void addToCart(int productId, String source, int stepMilli) {
+    final key = (productId: productId, source: source);
+    _cart[key] = (_cart[key] ?? 0) + stepMilli;
     notifyListeners();
   }
 
   // Bir qadam kamaytirish; 0 ga tushsa savatdan olib tashlanadi.
-  void decrement(int productId, int stepMilli) {
-    final next = (_cart[productId] ?? 0) - stepMilli;
+  void decrement(int productId, String source, int stepMilli) {
+    final key = (productId: productId, source: source);
+    final next = (_cart[key] ?? 0) - stepMilli;
     if (next <= 0) {
-      _cart.remove(productId);
+      _cart.remove(key);
     } else {
-      _cart[productId] = next;
+      _cart[key] = next;
     }
     notifyListeners();
   }
 
   // Miqdorni to'g'ridan-to'g'ri o'rnatish (qo'lda kiritilganda).
   // 0 yoki manfiy bo'lsa savatdan olib tashlanadi.
-  void setCountMilli(int productId, int milli) {
+  void setCountMilli(int productId, String source, int milli) {
+    final key = (productId: productId, source: source);
     if (milli <= 0) {
-      _cart.remove(productId);
+      _cart.remove(key);
     } else {
-      _cart[productId] = milli;
+      _cart[key] = milli;
     }
     notifyListeners();
+  }
+
+  // Katalog yangilanganda: savatdagi qator manbasi mahsulotda endi YO'Q
+  // bo'lsa (admin manbani o'zgartirgan) — miqdor mahsulotning asosiy
+  // manbasiga ko'chiriladi (u yerda bor bo'lsa qo'shiladi). Aks holda qator
+  // kartochkada ko'rinmay qolib, yuborishda server uni rad etardi.
+  // Katalogdan butunlay chiqib ketgan mahsulot qatoriga tegilmaydi.
+  void _reconcileCartSources() {
+    if (_cart.isEmpty) return;
+    final moved = <OmborCartKey, int>{};
+    _cart.removeWhere((key, milli) {
+      final product = findProductById(key.productId);
+      if (product == null || product.sources.contains(key.source)) {
+        return false;
+      }
+      final to = (productId: key.productId, source: product.primarySource);
+      moved[to] = (moved[to] ?? 0) + milli;
+      return true;
+    });
+    moved.forEach((key, milli) => _cart[key] = (_cart[key] ?? 0) + milli);
   }
 
   void clearCart() {
@@ -154,6 +187,7 @@ class OmborProvider extends ChangeNotifier with ClearableProvider {
         allCategories = [];
       }
       productsByCategory = await productsFuture;
+      _reconcileCartSources();
     } catch (e) {
       errorMessage = e.toString().replaceFirst('Exception: ', '');
     } finally {
@@ -352,8 +386,12 @@ class OmborProvider extends ChangeNotifier with ClearableProvider {
       // API kontrakt: кг/л mahsulotda count — BUTUN gramm/ml. Savat milli
       // birlikda saqlanadi (kg×1000 == gramm), shuning uchun qiymat
       // o'zgarishsiz yuboriladi. Boshqa birliklar: /1000 (eski semantika).
+      // Har savat qatori — alohida item, source bilan: bitta product_id
+      // turli manbalar bilan bir necha marta kelishi mumkin (backend har
+      // manbani o'z bozorchisiga alohida buyurtma qiladi).
       final items = _cart.entries.map((e) {
-        final type = findProductById(e.key)?.type;
+        final productId = e.key.productId;
+        final type = findProductById(productId)?.type;
         final num count;
         if (qtyUnitFactor(type) == 1000) {
           count = e.value; // milli == gramm/ml, butun son
@@ -361,7 +399,11 @@ class OmborProvider extends ChangeNotifier with ClearableProvider {
           final v = e.value / 1000.0;
           count = v % 1 == 0 ? v.toInt() : v;
         }
-        return {'product_id': e.key, 'count': count};
+        return {
+          'product_id': productId,
+          'count': count,
+          'source': e.key.source,
+        };
       }).toList();
       final message = await _service.submitOrder(items);
       _cart.clear();
