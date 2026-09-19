@@ -36,6 +36,14 @@ class TechCardController {
   // «Almashtirish» bosganda o'zgaradi.
   int salePrice;
 
+  // Pishirish vaqti/harorati — muharrirda tahrirlanmaydi, faqat karta
+  // qayta yig'ilganda yo'qolmasligi uchun o'tkaziladi.
+  int bakeTimeMin;
+  int bakeTempC;
+
+  // Tayyor biskvit fotosi ("/static/..." yoki '') — tex kartada saqlanadi.
+  String biscuitPhotoUrl;
+
   TechCardController([TechCard? initial])
       : batchQty = (initial?.batchQty ?? 1) < 1 ? 1 : (initial?.batchQty ?? 1),
         batchUnit = initial?.batchUnit == 'g' ? 'g' : '',
@@ -52,7 +60,10 @@ class TechCardController {
         profitValue = initial?.profitValue ?? 0,
         overheadMode = initial?.overheadMode ?? '',
         overheadValue = initial?.overheadValue ?? 0,
-        salePrice = initial?.salePrice ?? 0;
+        salePrice = initial?.salePrice ?? 0,
+        bakeTimeMin = initial?.bakeTimeMin ?? 0,
+        bakeTempC = initial?.bakeTempC ?? 0,
+        biscuitPhotoUrl = initial?.biscuitPhotoUrl ?? '';
 
   // Partiya JAMI donasi = bitta list donasi (batchQty) × list soni (listQty).
   // Barcha «1 dona» / «за N штук» hisob-ko'rsatishlar shu songa tayanadi.
@@ -77,6 +88,9 @@ class TechCardController {
         overheadMode: overheadMode,
         overheadValue: overheadValue,
         salePrice: salePrice,
+        bakeTimeMin: bakeTimeMin,
+        bakeTempC: bakeTempC,
+        biscuitPhotoUrl: biscuitPhotoUrl,
       );
 
   // «Состав» uchun showInSostav=true bo'lgan nomlar.

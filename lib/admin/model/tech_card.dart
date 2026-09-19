@@ -278,6 +278,16 @@ class TechCard {
   // FAQAT admin «Almashtirish» bosganda o'zgaradi — avto yangilanmaydi.
   final int salePrice;
 
+  // Pishirish vaqti (daqiqa) va harorati (°C); 0 — kiritilmagan. Faqat
+  // Biskvit bo'limidagi «Бисквит» kategoriyasi retseptlarida ko'rsatiladi
+  // (shef_tech_card_page.dart → isBiskvitCategory).
+  final int bakeTimeMin;
+  final int bakeTempC;
+  // Tayyor biskvit fotosi — tex kartada saqlanadi va ko'rsatiladi (shef
+  // «П/Ф Бисквит»). "/static/..." yoki '' (yo'q). JSON: biscuit_photo_url.
+  // 3D rasmga foto QO'YILMAYDI — u тех карта tarkibidan chiziladi.
+  final String biscuitPhotoUrl;
+
   const TechCard({
     this.batchQty = 1,
     this.batchUnit = '',
@@ -297,6 +307,9 @@ class TechCard {
     this.overheadMode = '',
     this.overheadValue = 0,
     this.salePrice = 0,
+    this.bakeTimeMin = 0,
+    this.bakeTempC = 0,
+    this.biscuitPhotoUrl = '',
   });
 
   factory TechCard.fromJson(Map<String, dynamic> json) {
@@ -327,6 +340,9 @@ class TechCard {
           : '',
       overheadValue: _asDouble(json['overhead_value']),
       salePrice: _asInt(json['sale_price']),
+      bakeTimeMin: _asInt(json['bake_time_min']),
+      bakeTempC: _asInt(json['bake_temp_c']),
+      biscuitPhotoUrl: json['biscuit_photo_url']?.toString() ?? '',
     );
   }
 
@@ -365,6 +381,9 @@ class TechCard {
         'overhead_mode': overheadMode,
         'overhead_value': overheadValue,
         'sale_price': salePrice,
+        'bake_time_min': bakeTimeMin,
+        'bake_temp_c': bakeTempC,
+        'biscuit_photo_url': biscuitPhotoUrl,
       };
 
   TechCard copyWith({
@@ -390,6 +409,9 @@ class TechCard {
     String? overheadMode,
     double? overheadValue,
     int? salePrice,
+    int? bakeTimeMin,
+    int? bakeTempC,
+    String? biscuitPhotoUrl,
   }) {
     return TechCard(
       batchQty: batchQty ?? this.batchQty,
@@ -410,6 +432,9 @@ class TechCard {
       overheadMode: overheadMode ?? this.overheadMode,
       overheadValue: overheadValue ?? this.overheadValue,
       salePrice: salePrice ?? this.salePrice,
+      bakeTimeMin: bakeTimeMin ?? this.bakeTimeMin,
+      bakeTempC: bakeTempC ?? this.bakeTempC,
+      biscuitPhotoUrl: biscuitPhotoUrl ?? this.biscuitPhotoUrl,
     );
   }
 

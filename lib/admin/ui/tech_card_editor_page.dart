@@ -173,10 +173,16 @@ class TechCardEditorPage extends StatefulWidget {
   /// narxi sheet'i ochilmaydi. Retseptning qolgan qismi to'liq ishlaydi.
   final bool canEditPrices;
 
+  /// true — «Biskvit fotosi» bo'limi: tayyor biskvit fotosini qo'shish,
+  /// almashtirish, o'chirish (tech_card.biscuit_photo_url). Faqat shef
+  /// «П/Ф Бисквит» oynasidan ochganda.
+  final bool showBiscuitPhoto;
+
   const TechCardEditorPage({
     super.key,
     required this.product,
     this.canEditPrices = true,
+    this.showBiscuitPhoto = false,
   });
 
   @override
@@ -1746,6 +1752,7 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
                   // jadvaldan oldin. Sxema yo'q bo'lsa (shakl kiritilmagan
                   // yoki Штук = 1 — kesish yo'q) faqat mahsulot rasmi chiqadi.
                   if (_schemeVisible) _cuttingScheme() else _productPhoto(),
+                  if (widget.showBiscuitPhoto) _biscuitPhotoSection(),
                   _headerTables(wide),
                   _stagesRow(),
                   const SizedBox(height: 12),
@@ -1808,6 +1815,149 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
           ),
         ),
       );
+
+  // --- Biskvit fotosi (tex kartada saqlanadi) ---
+
+  bool _uploadingBiscuitPhoto = false;
+
+  // Foto tanlash (galereya / kamera) → yuklash. Tex karta
+  // «Сохранить» bosilganda saqlanadi (boshqa maydonlar kabi).
+  Future<void> _pickBiscuitPhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Galereyadan tanlash'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Suratga olish'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+    XFile? picked;
+    try {
+      picked = await _picker.pickImage(
+        source: source,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 85,
+      );
+    } catch (e) {
+      if (mounted) _snack('Ошибка выбора изображения: $e', error: true);
+      return;
+    }
+    if (picked == null || !mounted) return;
+
+    setState(() => _uploadingBiscuitPhoto = true);
+    final url = await _uploader.upload(File(picked.path));
+    if (!mounted) return;
+    setState(() => _uploadingBiscuitPhoto = false);
+    if (url == null) {
+      _snack('Rasm yuklanmadi. Qayta urinib ko\'ring.', error: true);
+      return;
+    }
+    setState(() => c.biscuitPhotoUrl = url);
+  }
+
+  // Matnsiz: foto yo'q — bitta «Rasm qo'shish» tugmasi; bor — foto va
+  // «Almashtirish» / «O'chirish».
+  Widget _biscuitPhotoSection() {
+    final url = _fullImageUrl(c.biscuitPhotoUrl);
+    final busy = _uploadingBiscuitPhoto;
+    final spinner = const SizedBox(
+      width: 18,
+      height: 18,
+      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+    );
+    if (url.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: ElevatedButton.icon(
+          onPressed: busy ? null : _pickBiscuitPhoto,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFC5A97B),
+            foregroundColor: Colors.white,
+            minimumSize: const Size.fromHeight(46),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          icon: busy ? spinner : const Icon(Icons.add_a_photo_outlined),
+          label: const Text('Rasm qo\'shish'),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          GestureDetector(
+            onTap: () => openFullScreenImage(context, url),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: AspectRatio(
+                aspectRatio: 16 / 10,
+                child: AppNetworkImage(
+                  imageUrl: url,
+                  fit: BoxFit.cover,
+                  errorWidget: (_) => const SizedBox.shrink(),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: busy ? null : _pickBiscuitPhoto,
+                  icon: busy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.autorenew, size: 18),
+                  label: const Text('Almashtirish'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: busy
+                      ? null
+                      : () => setState(() {
+                            c.biscuitPhotoUrl = '';
+                          }),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                    side: BorderSide(color: Colors.red.shade200),
+                  ),
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  label: const Text('O\'chirish'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   // --- Mahsulot rasmi (Excel'dagi eng tepadagi foto) ---
 
