@@ -68,21 +68,28 @@ Eng ko'p kerak bo'ladiganlar:
 flutter analyze --no-pub
 ```
 
-## Git — HAR BIR YANGILIKDAN KEYIN COMMIT
+## Git — HAR BIR YANGILIKDAN KEYIN COMMIT + PUSH
 
 Vazifa oxirini kutma: har bir tugallangan o'zgarishdan keyin (yangi funksiya,
-tuzatilgan xato, UI o'zgarishi) darhol commit qil. Bitta commit — bitta
-ma'noli o'zgarish; bir nechta aloqasiz ishni bitta commit'ga qo'shma.
+tuzatilgan xato, UI o'zgarishi) darhol commit qil va **GitHub'ga push qil**.
+Bitta commit — bitta ma'noli o'zgarish; bir nechta aloqasiz ishni bitta
+commit'ga qo'shma. Push'siz ish tugagan hisoblanmaydi.
 
 Commit'dan oldin `flutter analyze --no-pub` da yangi **error** bo'lmasin.
 
 ```bash
-git -C . add -A
+git -C . add <o'zgargan fayllar>
 git -C . commit -m "<o'zbekcha: nima qilindi>"
+git -C . push origin main
 ```
 Commit oxiriga sessiya bergan `Co-Authored-By:` qatorini qo'sh.
 
-`git push` — faqat foydalanuvchi so'raganda (commit avtomatik, push emas).
+**Backend'ga tegadigan vazifa** (`../mone_app_backend/`) — o'sha repoga ham
+commit + `git push origin main` (push → webhook avto-deploy, server o'zi
+yangilanadi). Deploy yetib kelganini tekshirish: `route_health.go` dagi
+`buildTag` ni oshir (masalan `rk7-11` → `rk7-12`) va
+`https://moneapp.monebakeryuz.uz/health` javobidagi `"build"` yangi qiymatni
+ko'rsatguncha kut. Backend qoidalari: `../mone_app_backend/CLAUDE.md`.
 
 ⚠️ Generated fayllar (`*/flutter/generated_plugin*`, `GeneratedPluginRegistrant*`)
 Windows'da faqat CRLF/LF farqi bilan «o'zgargan» ko'rinadi — mazmuni o'zgarmagan
