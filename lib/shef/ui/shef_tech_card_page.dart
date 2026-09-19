@@ -26,7 +26,6 @@ import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:uz_ai_dev/shef/ui/biskvit_page.dart';
-import 'package:uz_ai_dev/shef/ui/cake_constructor_page.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
 
 // Shef ekranlarining umumiy ranglari (shef_home_ui / pf_stock_page bilan bir xil).
@@ -304,7 +303,8 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
   String _searchQuery = '';
   // «П/Ф Бисквит»: 3D'da ko'rsatilayotgan biskvit (null — birinchisi).
   int? _selectedId;
-  final ScrollController _gridScroll = ScrollController();
+  // «П/Ф Бисквит»: qidiruv qatori faqat lupa bosilganda (AppBar'da) chiqadi.
+  bool _searchOpen = false;
 
   @override
   void initState() {
@@ -319,7 +319,6 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
   @override
   void dispose() {
     _searchController.dispose();
-    _gridScroll.dispose();
     super.dispose();
   }
 
@@ -410,10 +409,27 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
       appBar: AppBar(
         backgroundColor: _bgColor,
         elevation: 0,
-        title: Text(
-          widget.categoryName,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
+        title: widget.showCakeConstructor && _searchOpen
+            ? _compactSearch()
+            : Text(
+                widget.categoryName,
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+        actions: [
+          if (widget.showCakeConstructor)
+            IconButton(
+              tooltip: _searchOpen ? 'Yopish' : 'Qidirish',
+              icon: Icon(_searchOpen ? Icons.close : Icons.search),
+              onPressed: () => setState(() {
+                _searchOpen = !_searchOpen;
+                if (!_searchOpen) {
+                  _searchController.clear();
+                  _searchQuery = '';
+                }
+              }),
+            ),
+        ],
       ),
       body: Consumer<ProductProviderAdmin>(
         builder: (context, provider, child) {
@@ -438,7 +454,11 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
 
           return Column(
             children: [
-              if (all.isNotEmpty) _searchField(),
+              if (!widget.showCakeConstructor && all.isNotEmpty)
+                _searchField(),
+              // «П/Ф Бисквит»: 3D biskvit tepada QOTIB turadi — faqat grid
+              // suriladi.
+              if (widget.showCakeConstructor) _biscuitView(all),
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: _refresh,
@@ -446,7 +466,6 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                       ? ListView(
                           physics: const AlwaysScrollableScrollPhysics(),
                           children: [
-                            if (widget.showCakeConstructor) _cakeHeader(null),
                             SizedBox(
                                 height: widget.showCakeConstructor ? 40 : 140),
                             Center(
@@ -460,7 +479,7 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                           ],
                         )
                       : widget.showCakeConstructor
-                          ? _productGrid(rows)
+                          ? _productGrid(rows, _selectedOf(all)?.id)
                           : ListView.separated(
                               physics: const AlwaysScrollableScrollPhysics(),
                               // Pastki joy — FAB oxirgi qatorni yopmasin.
@@ -486,114 +505,79 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
     );
   }
 
-  // «П/Ф Бисквит»: tepada tanlangan biskvitning 3D'si (o'lchami тех
-  // картадан), ostida biskvitlar 2 ustunli grid (hammasi birga suriladi).
-  // Karta: bir marta bosish — 3D'da ko'rsatish, ikki marta — тех карта.
-  Widget _productGrid(List<ProductModelAdmin> rows) {
-    final selected = rows.firstWhere(
-      (p) => p.id == _selectedId,
-      orElse: () => rows.first,
-    );
-    return CustomScrollView(
-      controller: _gridScroll,
-      physics: const AlwaysScrollableScrollPhysics(),
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
-          sliver: SliverToBoxAdapter(child: _cakeHeader(selected)),
-        ),
-        SliverPadding(
-          // Pastki joy — FAB oxirgi qatorni yopmasin.
-          padding: EdgeInsets.fromLTRB(
-              12, 4, 12, widget.canAddProducts ? 88 : 24),
-          sliver: SliverGrid(
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              mainAxisExtent: widget.showBaking ? 262 : 228,
-            ),
-            delegate: SliverChildBuilderDelegate(
-              childCount: rows.length,
-              (context, index) {
-                final p = rows[index];
-                return _ProductGridCard(
-                  product: p,
-                  selected: p.id == selected.id,
-                  onTap: () => _showBiscuit(p),
-                  onDoubleTap: () => _openTechCard(p),
-                  onEditBaking:
-                      widget.showBaking ? () => _editBaking(p) : null,
-                );
-              },
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // Bir marta bosilgan biskvit — 3D'da; 3D ko'rinsin deb tepaga suriladi.
-  void _showBiscuit(ProductModelAdmin p) {
-    setState(() => _selectedId = p.id);
-    if (_gridScroll.hasClients && _gridScroll.offset > 0) {
-      _gridScroll.animateTo(
-        0,
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeOut,
-      );
+  // Tanlangan biskvit (qidiruvdan qat'i nazar; yo'q bo'lsa — birinchisi).
+  // Har build'da provider'dagi YANGI mahsulotdan olinadi — тех картага
+  // balandlik/o'lcham qo'shilsa 3D darhol o'zgaradi.
+  ProductModelAdmin? _selectedOf(List<ProductModelAdmin> all) {
+    if (all.isEmpty) return null;
+    for (final p in all) {
+      if (p.id == _selectedId) return p;
     }
+    return all.first;
   }
 
-  // «П/Ф Бисквит»: tanlangan biskvitning 3D'si (tortsiz — faqat biskvit,
-  // o'lchami тех картадан) + tort konstruktori
-  // (cake_constructor_page.dart — Shakl → … → Qo'shimchalar).
-  Widget _cakeHeader(ProductModelAdmin? biscuit) {
+  // «П/Ф Бисквит»: tanlangan biskvitning 3D'si (faqat biskvit, o'lchami
+  // тех картадан). Yozuvsiz; barmoq bilan burish / qarash burchagi.
+  Widget _biscuitView(List<ProductModelAdmin> all) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Biscuit3DView(
-            height: 220,
-            title: biscuit?.name ?? 'Biskvit',
-            dims: BiscuitDims.fromTechCard(biscuit?.techCard),
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      child: Biscuit3DView(
+        height: 210,
+        dims: BiscuitDims.fromTechCard(_selectedOf(all)?.techCard),
+      ),
+    );
+  }
+
+  // «П/Ф Бисквит»: biskvitlar 2 ustunli grid (3D ustida qotgan).
+  // Karta: bir marta bosish — 3D'da ko'rsatish, ikki marta — тех карта.
+  Widget _productGrid(List<ProductModelAdmin> rows, int? selectedId) {
+    return GridView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      // Pastki joy — FAB oxirgi qatorni yopmasin.
+      padding: EdgeInsets.fromLTRB(12, 4, 12, widget.canAddProducts ? 88 : 24),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        mainAxisExtent: widget.showBaking ? 262 : 228,
+      ),
+      itemCount: rows.length,
+      itemBuilder: (context, index) {
+        final p = rows[index];
+        return _ProductGridCard(
+          product: p,
+          selected: p.id == selectedId,
+          onTap: () => setState(() => _selectedId = p.id),
+          onDoubleTap: () => _openTechCard(p),
+          onEditBaking: widget.showBaking ? () => _editBaking(p) : null,
+        );
+      },
+    );
+  }
+
+  // AppBar'dagi ixcham qidiruv qatori (lupa bosilganda).
+  Widget _compactSearch() {
+    return SizedBox(
+      height: 38,
+      child: TextField(
+        controller: _searchController,
+        autofocus: true,
+        onChanged: (value) => setState(() => _searchQuery = value),
+        style: const TextStyle(fontSize: 14),
+        decoration: InputDecoration(
+          hintText: 'Qidirish...',
+          isDense: true,
+          filled: true,
+          fillColor: Colors.white,
+          prefixIcon: const Icon(Icons.search, size: 20, color: Colors.grey),
+          prefixIconConstraints:
+              const BoxConstraints(minWidth: 36, minHeight: 36),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(19),
+            borderSide: BorderSide.none,
           ),
-          if (biscuit != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(
-                'Bir marta bosing — 3D, ikki marta — тех карта',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-              ),
-            ),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 50,
-            child: ElevatedButton.icon(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const CakeConstructorPage(),
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E2A4F),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(25),
-                ),
-              ),
-              icon: const Icon(Icons.cake_outlined),
-              label: const Text(
-                'Tort konstruktori',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

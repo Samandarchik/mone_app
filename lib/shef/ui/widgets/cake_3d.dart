@@ -60,6 +60,10 @@ class Rotating3DView extends StatefulWidget {
   final double height;
   final BorderRadius borderRadius;
   final bool faceFront;
+  // true — qo'lda boshqarish: nuqtalar yo'q; barmoq yon tomonga — burish,
+  // tepaga/pastga — qarash burchagi (yondan ↔ tepadan). Birinchi tegishda
+  // o'zi aylanish to'xtaydi.
+  final bool manual;
 
   const Rotating3DView({
     super.key,
@@ -67,6 +71,7 @@ class Rotating3DView extends StatefulWidget {
     this.height = 260,
     this.borderRadius = const BorderRadius.all(Radius.circular(16)),
     this.faceFront = false,
+    this.manual = false,
   });
 
   @override
@@ -82,6 +87,9 @@ class _Rotating3DViewState extends State<Rotating3DView>
   int _page = 0;
   // Barmoq bilan surilgan qo'shimcha burilish (radian).
   double _drag = 0;
+  // Qo'lda rejimdagi qarash burchagi (manual).
+  double _tilt = _tilts.first;
+  bool _touched = false;
 
   @override
   void initState() {
@@ -92,7 +100,7 @@ class _Rotating3DViewState extends State<Rotating3DView>
   @override
   void didUpdateWidget(Rotating3DView old) {
     super.didUpdateWidget(old);
-    if (widget.faceFront) {
+    if (widget.faceFront || _touched) {
       _spin.stop();
     } else if (!_spin.isAnimating) {
       _spin.repeat();
@@ -107,6 +115,7 @@ class _Rotating3DViewState extends State<Rotating3DView>
 
   @override
   Widget build(BuildContext context) {
+    if (widget.manual) return _buildManual();
     final front = widget.faceFront;
     return Column(
       children: [
@@ -174,6 +183,45 @@ class _Rotating3DViewState extends State<Rotating3DView>
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildManual() {
+    return ClipRRect(
+      borderRadius: widget.borderRadius,
+      child: Container(
+        height: widget.height,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [_heroTop, _heroBottom],
+          ),
+        ),
+        child: GestureDetector(
+          onPanStart: (_) {
+            _touched = true;
+            _spin.stop();
+          },
+          onPanUpdate: (d) => setState(() {
+            _drag += d.delta.dx * 0.015;
+            // Pastga surish — tepadan ko'proq qarash.
+            _tilt = (_tilt + d.delta.dy * 0.004).clamp(0.06, 0.95);
+          }),
+          child: RepaintBoundary(
+            child: AnimatedBuilder(
+              animation: _spin,
+              builder: (context, _) => CustomPaint(
+                size: Size.infinite,
+                painter: widget.painter(
+                  _tilt,
+                  _spin.value * 2 * math.pi + _drag,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

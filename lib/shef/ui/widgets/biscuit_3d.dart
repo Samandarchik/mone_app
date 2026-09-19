@@ -3,10 +3,11 @@
 // sariq biskvit, pasti qizargan chiziq. O'lcham тех картадан (BiscuitDims):
 // round — diameter_cm, rect — width_cm × length_cm, balandlik — height_cm.
 // Proporsiya haqiqiy (sm → px bir xil masshtab); kichik biskvit patnisda
-// kichikroq ko'rinadi. Kiritilmagan o'lcham — taxminiy (20 sm / 5 sm) va
-// yorliqda «kiritilmagan» deb yoziladi.
-// Biscuit3DView — Rotating3DView (cake_3d.dart) qobig'ida: aylanadi, suriladi,
-// burchak nuqtalari; tepa chapda nom va o'lcham yorlig'i.
+// kichikroq ko'rinadi. Kiritilmagan o'lcham — taxminiy (20 sm / 5 sm).
+// Тех карта o'zgarsa (masalan balandlik qo'shilsa) — dims yangi kartadan
+// qayta olinadi va chizma darhol o'zgaradi.
+// Biscuit3DView — Rotating3DView (cake_3d.dart) qo'lda rejimida: barmoq yon
+// tomonga — burish, tepaga/pastga — qarash burchagi. Yozuv/nuqtalar yo'q.
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -22,15 +23,13 @@ const Color _spongeLight = Color(0xFFFBE3A8);
 const Color _pore = Color(0xFFC0913F);
 const Color _baked = Color(0xFFB9793A);
 
-// Biskvit o'lchami (sm). [known] — тех картада kiritilganmi.
+// Biskvit o'lchami (sm).
 class BiscuitDims {
   final bool rect;
   final int diameterCm;
   final int widthCm;
   final int lengthCm;
   final int heightCm;
-  final bool sizeKnown;
-  final bool heightKnown;
 
   const BiscuitDims({
     this.rect = false,
@@ -38,8 +37,6 @@ class BiscuitDims {
     this.widthCm = 30,
     this.lengthCm = 40,
     this.heightCm = 5,
-    this.sizeKnown = false,
-    this.heightKnown = false,
   });
 
   factory BiscuitDims.fromTechCard(TechCard? card) {
@@ -54,29 +51,12 @@ class BiscuitDims {
         widthCm: w ?? l ?? 30,
         lengthCm: l ?? w ?? 40,
         heightCm: h ?? 5,
-        sizeKnown: w != null || l != null,
-        heightKnown: h != null,
       );
     }
-    final d = pos(card.diameterCm);
     return BiscuitDims(
-      diameterCm: d ?? 20,
+      diameterCm: pos(card.diameterCm) ?? 20,
       heightCm: h ?? 5,
-      sizeKnown: d != null,
-      heightKnown: h != null,
     );
-  }
-
-  // «Ø 20 sm · h 5 sm» / «30×40 sm · h 5 sm».
-  String get label {
-    if (!sizeKnown && !heightKnown) return 'O\'lcham kiritilmagan';
-    final size = !sizeKnown
-        ? 'o\'lcham —'
-        : rect
-            ? '$widthCm×$lengthCm sm'
-            : 'Ø $diameterCm sm';
-    final h = heightKnown ? 'h $heightCm sm' : 'h —';
-    return '$size · $h';
   }
 
   @override
@@ -95,67 +75,21 @@ class BiscuitDims {
 
 class Biscuit3DView extends StatelessWidget {
   final BiscuitDims dims;
-  final String title;
   final double height;
 
   const Biscuit3DView({
     super.key,
     required this.dims,
-    required this.title,
     this.height = 240,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Rotating3DView(
-          height: height,
-          painter: (tilt, rotation) =>
-              BiscuitPainter(dims: dims, tilt: tilt, rotation: rotation),
-        ),
-        Positioned(
-          left: 10,
-          top: 10,
-          right: 10,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.85),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF2E2A4F),
-                    ),
-                  ),
-                  Text(
-                    dims.label,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      color: dims.sizeKnown
-                          ? const Color(0xFF8B6A2F)
-                          : Colors.grey.shade600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
+    return Rotating3DView(
+      height: height,
+      manual: true,
+      painter: (tilt, rotation) =>
+          BiscuitPainter(dims: dims, tilt: tilt, rotation: rotation),
     );
   }
 }
@@ -187,9 +121,7 @@ class BiscuitPainter extends CustomPainter {
     _cos = math.cos(rotation);
     _sin = math.sin(rotation);
 
-    // Tepa chapdagi yorliq (nom + o'lcham) biskvitni yopmasin.
-    const labelInset = 46.0;
-    final areaH = size.height - labelInset;
+    final areaH = size.height;
     final plateRx = math.min(size.width * 0.42, areaH * 0.62);
     final plateRy = plateRx * tilt;
     final plateThick = plateRx * 0.05;
@@ -207,7 +139,7 @@ class BiscuitPainter extends CustomPainter {
 
     final total = h + extent * tilt + plateRy + plateThick;
     final plateY =
-        labelInset + (areaH + total) / 2 - plateRy - plateThick;
+        (areaH + total) / 2 - plateRy - plateThick;
     final bottom = plateY;
     final top = bottom - h;
 
