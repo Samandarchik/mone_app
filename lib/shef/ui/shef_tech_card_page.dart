@@ -586,6 +586,9 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                     fruits: selected == null
                         ? const []
                         : BiscuitFruit.detect(selected.name),
+                    // Tex kartaga foto saqlangan bo'lsa — rang/mevalar fotodan
+                    // ham (saqlangach 3D o'zi yangilanadi).
+                    photoUrl: biscuitPhotoUrlOf(selected?.techCard),
                   ),
                 ),
               ),
@@ -848,6 +851,7 @@ class _ProductGridCard extends StatelessWidget {
       dims: BiscuitDims.fromTechCard(product.techCard),
       palette: BiscuitPalette.detect(product.name, product.techCard),
       fruits: BiscuitFruit.detect(product.name),
+      photoUrl: biscuitPhotoUrlOf(product.techCard),
     );
     return Material(
       color: Colors.white,

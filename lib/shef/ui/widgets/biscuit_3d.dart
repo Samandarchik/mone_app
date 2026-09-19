@@ -19,6 +19,8 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:uz_ai_dev/admin/model/tech_card.dart';
+import 'package:uz_ai_dev/core/constants/urls.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/biscuit_photo_look.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/cake_3d.dart';
 
 // Biskvit o'lchami (sm).
@@ -335,11 +337,21 @@ enum BiscuitFruit {
   }
 }
 
+// Tex kartadagi biskvit fotosining to'liq URL'i (yo'q bo'lsa null).
+String? biscuitPhotoUrlOf(TechCard? card) {
+  final raw = card?.biscuitPhotoUrl ?? '';
+  if (raw.isEmpty) return null;
+  return raw.startsWith('http') ? raw : '${AppUrls.baseUrl}$raw';
+}
+
 class Biscuit3DView extends StatelessWidget {
   final BiscuitDims dims;
   final BiscuitPalette palette;
-  // Yon tomondagi mevalar (тех картадан).
+  // Yon tomondagi mevalar (biskvit nomidan).
   final List<BiscuitFruit> fruits;
+  // Tex kartadagi foto: berilsa — biskvit rangi va mevalari fotodan ham
+  // olinadi (BiscuitPhotoLook). Foto saqlangach 3D o'zi yangilanadi.
+  final String? photoUrl;
   final double height;
 
   const Biscuit3DView({
@@ -347,37 +359,46 @@ class Biscuit3DView extends StatelessWidget {
     required this.dims,
     this.palette = BiscuitPalette.classic,
     this.fruits = const [],
+    this.photoUrl,
     this.height = 240,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Rotating3DView(
-      height: height,
-      manual: true,
-      painter: (tilt, rotation) => BiscuitPainter(
-        dims: dims,
-        palette: palette,
-        fruits: fruits,
-        tilt: tilt,
-        rotation: rotation,
-      ),
+    return BiscuitPhotoLookBuilder(
+      url: photoUrl,
+      builder: (context, look) {
+        final (p, f) = look?.mergeWith(palette, fruits) ?? (palette, fruits);
+        return Rotating3DView(
+          height: height,
+          manual: true,
+          painter: (tilt, rotation) => BiscuitPainter(
+            dims: dims,
+            palette: p,
+            fruits: f,
+            tilt: tilt,
+            rotation: rotation,
+          ),
+        );
+      },
     );
   }
 }
 
 // Kartadagi kichik statik rasm: shu biskvitning o'zi (o'lchami, turi,
-// mevalari тех картадан), yumshoq fon ustida.
+// mevalari; foto bo'lsa — fotodan ham), yumshoq fon ustida.
 class BiscuitThumb extends StatelessWidget {
   final BiscuitDims dims;
   final BiscuitPalette palette;
   final List<BiscuitFruit> fruits;
+  final String? photoUrl;
 
   const BiscuitThumb({
     super.key,
     required this.dims,
     required this.palette,
     this.fruits = const [],
+    this.photoUrl,
   });
 
   @override
@@ -390,17 +411,23 @@ class BiscuitThumb extends StatelessWidget {
           colors: [Color(0xFFFFFFFF), Color(0xFFEDE6F6)],
         ),
       ),
-      child: RepaintBoundary(
-        child: CustomPaint(
-          size: Size.infinite,
-          painter: BiscuitPainter(
-            dims: dims,
-            palette: palette,
-            fruits: fruits,
-            tilt: 0.36,
-            rotation: 0.5,
-          ),
-        ),
+      child: BiscuitPhotoLookBuilder(
+        url: photoUrl,
+        builder: (context, look) {
+          final (p, f) = look?.mergeWith(palette, fruits) ?? (palette, fruits);
+          return RepaintBoundary(
+            child: CustomPaint(
+              size: Size.infinite,
+              painter: BiscuitPainter(
+                dims: dims,
+                palette: p,
+                fruits: f,
+                tilt: 0.36,
+                rotation: 0.5,
+              ),
+            ),
+          );
+        },
       ),
     );
   }
