@@ -283,6 +283,14 @@ class TechCard {
   // (shef_tech_card_page.dart → isBiskvitCategory).
   final int bakeTimeMin;
   final int bakeTempC;
+  // Biskvit fotosi (kesilgan / yon tomoni ko'rinadigan) — «П/Ф Бисквит» 3D
+  // rasmida yon tomon shu fotodan chiziladi. "/static/..." yoki '' (yo'q).
+  // biscuitSideTop / biscuitSideH — fotoda biskvit YON TOMONI turgan
+  // gorizontal tasma: rasm balandligining ‰ ulushi (0..1000, BUTUN son —
+  // float yo'q). JSON: biscuit_photo_url / biscuit_side_top / biscuit_side_h.
+  final String biscuitPhotoUrl;
+  final int biscuitSideTop;
+  final int biscuitSideH;
 
   const TechCard({
     this.batchQty = 1,
@@ -305,6 +313,9 @@ class TechCard {
     this.salePrice = 0,
     this.bakeTimeMin = 0,
     this.bakeTempC = 0,
+    this.biscuitPhotoUrl = '',
+    this.biscuitSideTop = 0,
+    this.biscuitSideH = 0,
   });
 
   factory TechCard.fromJson(Map<String, dynamic> json) {
@@ -337,6 +348,9 @@ class TechCard {
       salePrice: _asInt(json['sale_price']),
       bakeTimeMin: _asInt(json['bake_time_min']),
       bakeTempC: _asInt(json['bake_temp_c']),
+      biscuitPhotoUrl: json['biscuit_photo_url']?.toString() ?? '',
+      biscuitSideTop: _asInt(json['biscuit_side_top']).clamp(0, 1000),
+      biscuitSideH: _asInt(json['biscuit_side_h']).clamp(0, 1000),
     );
   }
 
@@ -377,6 +391,9 @@ class TechCard {
         'sale_price': salePrice,
         'bake_time_min': bakeTimeMin,
         'bake_temp_c': bakeTempC,
+        'biscuit_photo_url': biscuitPhotoUrl,
+        'biscuit_side_top': biscuitSideTop,
+        'biscuit_side_h': biscuitSideH,
       };
 
   TechCard copyWith({
@@ -404,6 +421,9 @@ class TechCard {
     int? salePrice,
     int? bakeTimeMin,
     int? bakeTempC,
+    String? biscuitPhotoUrl,
+    int? biscuitSideTop,
+    int? biscuitSideH,
   }) {
     return TechCard(
       batchQty: batchQty ?? this.batchQty,
@@ -426,6 +446,9 @@ class TechCard {
       salePrice: salePrice ?? this.salePrice,
       bakeTimeMin: bakeTimeMin ?? this.bakeTimeMin,
       bakeTempC: bakeTempC ?? this.bakeTempC,
+      biscuitPhotoUrl: biscuitPhotoUrl ?? this.biscuitPhotoUrl,
+      biscuitSideTop: biscuitSideTop ?? this.biscuitSideTop,
+      biscuitSideH: biscuitSideH ?? this.biscuitSideH,
     );
   }
 

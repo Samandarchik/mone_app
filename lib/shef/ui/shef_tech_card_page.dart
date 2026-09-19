@@ -337,6 +337,8 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
         builder: (_) => TechCardEditorPage(
           product: product,
           canEditPrices: false,
+          // «П/Ф Бисквит»: tex kartada «Biskvit fotosi» bo'limi.
+          showBiscuitPhoto: widget.showCakeConstructor,
         ),
       ),
     );
@@ -579,6 +581,9 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                         ? BiscuitPalette.classic
                         : BiscuitPalette.detect(
                             selected.name, selected.techCard),
+                    // Tex kartaga biskvit fotosi qo'shilgan bo'lsa — yon
+                    // tomoni shu fotodan (ichidagi rezavor/mevalar bilan).
+                    photo: BiscuitPhoto.fromTechCard(selected?.techCard),
                   ),
                 ),
               ),
@@ -840,6 +845,7 @@ class _ProductGridCard extends StatelessWidget {
     final placeholder = BiscuitThumb(
       dims: BiscuitDims.fromTechCard(product.techCard),
       palette: BiscuitPalette.detect(product.name, product.techCard),
+      photo: BiscuitPhoto.fromTechCard(product.techCard),
     );
     return Material(
       color: Colors.white,
