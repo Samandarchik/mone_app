@@ -1,5 +1,5 @@
 // shef/ui/biskvit_page.dart — shef bosh menyusidagi «Biskvit» bo'limi
-// (BiskvitPage): tepada 3D tort (widgets/cake_3d.dart), ostida shef
+// (BiskvitPage): tepada biskvit rasmi (assets/biskvit.png), ostida shef
 // QO'SHGAN kategoriyalar kartalari — har birida kategoriyaning o'z rasmi,
 // nomi va mahsulot soni (masalan Бисквит, Начинка, Крем, Украшения).
 // AppBar'dagi «+» — «Тех карта»dagi kategoriyalardan birini tanlab qo'shish;
@@ -23,12 +23,12 @@ import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:uz_ai_dev/shef/model/production_model.dart';
 import 'package:uz_ai_dev/shef/provider/shef_provider.dart';
-import 'package:uz_ai_dev/shef/ui/cake_constructor_page.dart';
 import 'package:uz_ai_dev/shef/ui/shef_tech_card_page.dart';
-import 'package:uz_ai_dev/shef/ui/widgets/cake_3d.dart';
 
 const Color _bgColor = Color(0xFFFAF6F1);
 const Color _accentColor = Color(0xFFC5A97B);
+
+const String _biskvitImage = 'assets/biskvit.png';
 
 // Biskvit bo'limidagi kategoriyalar (id'lar, qo'shilgan tartibida).
 // Qurilmada saqlanadi; logout o'chirmaydi (session.dart faqat o'z
@@ -416,33 +416,18 @@ class _BiskvitPageState extends State<BiskvitPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         children: [
-          // Tepada 3D tort (konstruktor uslubida): o'zi aylanadi, yon tomonga
-          // surilsa buriladi, bosilsa burchagi o'zgaradi.
-          const Cake3DView(),
-          const SizedBox(height: 10),
-          // Tort konstruktori: shakl → ta'm → rang → topping → yozuv →
-          // qo'shimchalar (cake_constructor_page.dart).
-          SizedBox(
-            height: 52,
-            child: ElevatedButton.icon(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const CakeConstructorPage(),
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E2A4F),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(26),
-                ),
-              ),
-              icon: const Icon(Icons.cake_outlined),
-              label: const Text(
-                'Tort konstruktori',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          // Tepada guruh rasmi — qaysi bo'limda turganini ko'rsatib turadi.
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              height: 150,
+              color: Colors.white,
+              alignment: Alignment.center,
+              child: Image.asset(
+                _biskvitImage,
+                height: 130,
+                cacheHeight: 390,
+                fit: BoxFit.contain,
               ),
             ),
           ),
@@ -601,28 +586,13 @@ class _CategoryTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                // Rasmi yo'q bo'lsa — ikonka o'rniga kichik 3D tort.
-                child: _imageUrlOf(category).isEmpty
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: const DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [Color(0xFFFFFFFF), Color(0xFFEDE6F6)],
-                            ),
-                          ),
-                          child: SizedBox.expand(child: Cake3D()),
-                        ),
-                      )
-                    : LayoutBuilder(
-                        builder: (context, box) => CategoryThumb(
-                          category: category,
-                          size: box.maxHeight,
-                          width: box.maxWidth,
-                        ),
-                      ),
+                child: LayoutBuilder(
+                  builder: (context, box) => CategoryThumb(
+                    category: category,
+                    size: box.maxHeight,
+                    width: box.maxWidth,
+                  ),
+                ),
               ),
               const SizedBox(height: 8),
               Text(
