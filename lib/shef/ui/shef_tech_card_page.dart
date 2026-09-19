@@ -431,7 +431,6 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
           final rows = query.isEmpty
               ? all
               : all.where((p) => p.name.toLowerCase().contains(query)).toList();
-          final headerCount = widget.showCakeConstructor ? 1 : 0;
 
           return Column(
             children: [
@@ -456,34 +455,69 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                             ),
                           ],
                         )
-                      : ListView.separated(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          // Pastki joy — FAB oxirgi qatorni yopmasin.
-                          padding: EdgeInsets.fromLTRB(
-                              8, 4, 8, widget.canAddProducts ? 88 : 24),
-                          // 3D tort sarlavhasi ro'yxat bilan birga suriladi.
-                          itemCount: rows.length + headerCount,
-                          separatorBuilder: (_, i) => i < headerCount
-                              ? const SizedBox(height: 4)
-                              : const Divider(height: 1),
-                          itemBuilder: (context, index) {
-                            if (index < headerCount) return _cakeHeader();
-                            final p = rows[index - headerCount];
-                            return _ProductTile(
-                              product: p,
-                              onTap: () => _openTechCard(p),
-                              onEditBaking: widget.showBaking
-                                  ? () => _editBaking(p)
-                                  : null,
-                            );
-                          },
-                        ),
+                      : widget.showCakeConstructor
+                          ? _productGrid(rows)
+                          : ListView.separated(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              // Pastki joy — FAB oxirgi qatorni yopmasin.
+                              padding: EdgeInsets.fromLTRB(
+                                  8, 4, 8, widget.canAddProducts ? 88 : 24),
+                              itemCount: rows.length,
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (context, index) => _ProductTile(
+                                product: rows[index],
+                                onTap: () => _openTechCard(rows[index]),
+                                onEditBaking: widget.showBaking
+                                    ? () => _editBaking(rows[index])
+                                    : null,
+                              ),
+                            ),
                 ),
               ),
             ],
           );
         },
       ),
+    );
+  }
+
+  // «П/Ф Бисквит»: tepada 3D tort, ostida biskvitlar 2 ustunli grid
+  // (hammasi birga suriladi).
+  Widget _productGrid(List<ProductModelAdmin> rows) {
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+          sliver: SliverToBoxAdapter(child: _cakeHeader()),
+        ),
+        SliverPadding(
+          // Pastki joy — FAB oxirgi qatorni yopmasin.
+          padding: EdgeInsets.fromLTRB(
+              12, 4, 12, widget.canAddProducts ? 88 : 24),
+          sliver: SliverGrid(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              mainAxisExtent: widget.showBaking ? 262 : 228,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              childCount: rows.length,
+              (context, index) {
+                final p = rows[index];
+                return _ProductGridCard(
+                  product: p,
+                  onTap: () => _openTechCard(p),
+                  onEditBaking:
+                      widget.showBaking ? () => _editBaking(p) : null,
+                );
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -653,6 +687,122 @@ class _ProductTile extends StatelessWidget {
       trailing: hasCard
           ? const Icon(Icons.info_outline, color: _accentColor)
           : const Icon(Icons.chevron_right, color: Colors.black38),
+    );
+  }
+}
+
+// Grid kartasi («П/Ф Бисквит»): tepada rasm, ostida nom (+ ПФ belgisi),
+// тех карта holati va (berilsa) pishirish rejimi chipi.
+class _ProductGridCard extends StatelessWidget {
+  final ProductModelAdmin product;
+  final VoidCallback onTap;
+  final VoidCallback? onEditBaking;
+
+  const _ProductGridCard({
+    required this.product,
+    required this.onTap,
+    this.onEditBaking,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final url = product.imageUrl;
+    final hasCard = _hasTechCard(product);
+    final placeholder = Container(
+      color: Colors.grey.shade200,
+      alignment: Alignment.center,
+      child: Icon(Icons.cake_outlined, color: Colors.grey.shade500, size: 36),
+    );
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: LayoutBuilder(
+                    builder: (context, box) => (url != null && url.isNotEmpty)
+                        ? AppNetworkImage(
+                            imageUrl: '${AppUrls.baseUrl}$url',
+                            width: box.maxWidth,
+                            height: box.maxHeight,
+                            fit: BoxFit.cover,
+                            placeholder: (_) => placeholder,
+                            errorWidget: (_) => placeholder,
+                          )
+                        : SizedBox.expand(child: placeholder),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      product.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
+                  if (product.isSemiFinished)
+                    Container(
+                      margin: const EdgeInsets.only(left: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: Colors.purple.shade50,
+                        border: Border.all(color: Colors.purple.shade300),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'ПФ',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.purple.shade700,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                hasCard ? 'Тех карта bor' : 'Тех карта to\'ldirilmagan',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: hasCard ? Colors.green.shade700 : Colors.grey.shade600,
+                ),
+              ),
+              if (onEditBaking != null) ...[
+                const SizedBox(height: 6),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: _BakingChip(card: product.techCard, onTap: onEditBaking!),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
