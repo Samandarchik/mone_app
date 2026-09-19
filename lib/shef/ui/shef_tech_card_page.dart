@@ -7,14 +7,18 @@
 // «Сумма» / tannarx / sotuv narxini KO'RADI, lekin narx/foyda/nakladnoyni
 // o'zgartira olmaydi.
 // Mahsulot o'chirish/tartiblash/PDF bu yerda YO'Q; qo'shish — faqat Biskvit
-// bo'limidan ochilganda (canAddProducts).
+// bo'limidan ochilganda (canAddProducts). Biskvit bo'limidagi «Бисквит»
+// kategoriyasida (showBaking) har retsept ostida pishirish vaqti/harorati
+// chipi — bosilsa tahrirlanadi (tech_card.bake_time_min / bake_temp_c).
 // «Biskvit» bo'limiga bog'langan kategoriyalar (BiskvitLinks) bu ro'yxatda
 // ko'rinmaydi — ular bosh menyudagi «Biskvit» bo'limida (biskvit_page.dart).
 // Shef bosh ekraniga «+» bilan qo'shilganlar (ShefHomeLinks) ham shunday.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/admin/model/category_model.dart';
 import 'package:uz_ai_dev/admin/model/product_model.dart';
+import 'package:uz_ai_dev/admin/model/tech_card.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/admin_add_product_ui.dart';
@@ -272,12 +276,16 @@ class ShefTechCardProductsPage extends StatefulWidget {
   // true — pastda «Qo'shish» (kategoriya tanlangan, «пф» yoqilgan forma).
   // Faqat Biskvit bo'limidan ochilganda (biskvit_page.dart).
   final bool canAddProducts;
+  // true — har retsept yonida pishirish vaqti/harorati (bosilsa tahrir).
+  // Faqat Biskvit bo'limidagi «Бисквит» kategoriyasi (isBiskvitCategory).
+  final bool showBaking;
 
   const ShefTechCardProductsPage({
     super.key,
     required this.categoryId,
     required this.categoryName,
     this.canAddProducts = false,
+    this.showBaking = false,
   });
 
   @override
@@ -321,6 +329,43 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
           product: product,
           canEditPrices: false,
         ),
+      ),
+    );
+  }
+
+  // Pishirish vaqti/haroratini tahrirlash → tex kartada saqlash (shef
+  // so'rovidan backend faqat tech_card ni oladi — boshqa maydon tegilmaydi).
+  Future<void> _editBaking(ProductModelAdmin product) async {
+    final card = product.techCard ?? const TechCard();
+    final res = await showDialog<(int, int)>(
+      context: context,
+      builder: (_) => _BakingDialog(
+        title: product.name,
+        timeMin: card.bakeTimeMin,
+        tempC: card.bakeTempC,
+      ),
+    );
+    if (res == null || !mounted) return;
+    final (time, temp) = res;
+    if (time == card.bakeTimeMin && temp == card.bakeTempC) return;
+
+    final provider = context.read<ProductProviderAdmin>();
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await provider.updateProduct(
+      product.copyWith(
+        techCard: card.copyWith(bakeTimeMin: time, bakeTempC: temp),
+      ),
+    );
+    final raw = provider.error ?? '';
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? '${product.name}: pishirish rejimi saqlandi'
+              : (raw.isEmpty ? 'Saqlashda xatolik' : raw)
+                  .replaceFirst('Exception: ', ''),
+        ),
+        backgroundColor: ok ? null : Colors.red,
       ),
     );
   }
@@ -412,6 +457,9 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                           itemBuilder: (context, index) => _ProductTile(
                             product: rows[index],
                             onTap: () => _openTechCard(rows[index]),
+                            onEditBaking: widget.showBaking
+                                ? () => _editBaking(rows[index])
+                                : null,
                           ),
                         ),
                 ),
@@ -455,12 +503,26 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
   }
 }
 
+// «Бисквит» kategoriyasimi (nomi bo'yicha, katta-kichik harf farqsiz) —
+// pishirish vaqti/harorati faqat shu kategoriya retseptlarida chiqadi
+// (Начинка, Крем, Украшения kabi boshqa kategoriyalarda kerak emas).
+bool isBiskvitCategory(String name) {
+  final n = name.toLowerCase();
+  return n.contains('бисквит') || n.contains('biskvit');
+}
+
 // Mahsulot qatori: rasm + nom (+ ПФ belgisi) + тех карта bor/yo'q belgisi.
+// [onEditBaking] berilsa (faqat «Бисквит») ostida pishirish rejimi chipi.
 class _ProductTile extends StatelessWidget {
   final ProductModelAdmin product;
   final VoidCallback onTap;
+  final VoidCallback? onEditBaking;
 
-  const _ProductTile({required this.product, required this.onTap});
+  const _ProductTile({
+    required this.product,
+    required this.onTap,
+    this.onEditBaking,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -516,17 +578,183 @@ class _ProductTile extends StatelessWidget {
             ),
         ],
       ),
-      subtitle: Text(
-        hasCard ? 'Тех карта bor' : 'Тех карта to\'ldirilmagan',
-        style: TextStyle(
-          fontSize: 12,
-          color: hasCard ? Colors.green.shade700 : Colors.grey.shade600,
-        ),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            hasCard ? 'Тех карта bor' : 'Тех карта to\'ldirilmagan',
+            style: TextStyle(
+              fontSize: 12,
+              color: hasCard ? Colors.green.shade700 : Colors.grey.shade600,
+            ),
+          ),
+          if (onEditBaking != null) ...[
+            const SizedBox(height: 6),
+            _BakingChip(card: product.techCard, onTap: onEditBaking!),
+          ],
+        ],
       ),
       // «i» — tarkibi bor mahsulotda (admin ro'yxatidagi naqsh).
       trailing: hasCard
           ? const Icon(Icons.info_outline, color: _accentColor)
           : const Icon(Icons.chevron_right, color: Colors.black38),
+    );
+  }
+}
+
+// Pishirish rejimi chipi: «⏱ 25 daq · 🌡 180 °C». Kiritilmagan bo'lsa —
+// «Pishirish rejimini kiriting». Bosilsa tahrir dialogi.
+class _BakingChip extends StatelessWidget {
+  final TechCard? card;
+  final VoidCallback onTap;
+
+  const _BakingChip({required this.card, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final time = card?.bakeTimeMin ?? 0;
+    final temp = card?.bakeTempC ?? 0;
+    final empty = time <= 0 && temp <= 0;
+    final color = Colors.deepOrange.shade700;
+    final style = TextStyle(
+      fontSize: 12.5,
+      fontWeight: FontWeight.w600,
+      color: empty ? Colors.grey.shade600 : color,
+    );
+    return Material(
+      color: empty ? Colors.grey.shade100 : Colors.orange.shade50,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(
+          color: empty ? Colors.grey.shade300 : Colors.orange.shade200,
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: empty
+                ? [
+                    Icon(Icons.local_fire_department_outlined,
+                        size: 15, color: Colors.grey.shade600),
+                    const SizedBox(width: 4),
+                    Text('Pishirish rejimini kiriting', style: style),
+                  ]
+                : [
+                    Icon(Icons.timer_outlined, size: 15, color: color),
+                    const SizedBox(width: 3),
+                    Text(time > 0 ? '$time daq' : '—', style: style),
+                    const SizedBox(width: 10),
+                    Icon(Icons.thermostat, size: 15, color: color),
+                    const SizedBox(width: 2),
+                    Text(temp > 0 ? '$temp °C' : '—', style: style),
+                    const SizedBox(width: 6),
+                    Icon(Icons.edit, size: 13, color: color),
+                  ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Pishirish vaqti (daqiqa) va harorati (°C) — BUTUN son. Natija:
+// (vaqt, harorat) yoki null (bekor). Bo'sh maydon = 0 (kiritilmagan).
+class _BakingDialog extends StatefulWidget {
+  final String title;
+  final int timeMin;
+  final int tempC;
+
+  const _BakingDialog({
+    required this.title,
+    required this.timeMin,
+    required this.tempC,
+  });
+
+  @override
+  State<_BakingDialog> createState() => _BakingDialogState();
+}
+
+class _BakingDialogState extends State<_BakingDialog> {
+  late final TextEditingController _timeCtrl = TextEditingController(
+    text: widget.timeMin > 0 ? '${widget.timeMin}' : '',
+  );
+  late final TextEditingController _tempCtrl = TextEditingController(
+    text: widget.tempC > 0 ? '${widget.tempC}' : '',
+  );
+
+  @override
+  void dispose() {
+    _timeCtrl.dispose();
+    _tempCtrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() => Navigator.pop(
+        context,
+        (
+          int.tryParse(_timeCtrl.text.trim()) ?? 0,
+          int.tryParse(_tempCtrl.text.trim()) ?? 0,
+        ),
+      );
+
+  InputDecoration _decoration(String label, String suffix, IconData icon) =>
+      InputDecoration(
+        labelText: label,
+        suffixText: suffix,
+        prefixIcon: Icon(icon),
+        border: const OutlineInputBorder(),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title, style: const TextStyle(fontSize: 16)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _timeCtrl,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(4),
+            ],
+            textInputAction: TextInputAction.next,
+            decoration: _decoration(
+                'Pishirish vaqti', 'daq', Icons.timer_outlined),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _tempCtrl,
+            keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(3),
+            ],
+            decoration: _decoration('Harorat', '°C', Icons.thermostat),
+            onSubmitted: (_) => _submit(),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Bekor'),
+        ),
+        ElevatedButton(
+          onPressed: _submit,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _accentColor,
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('Saqlash'),
+        ),
+      ],
     );
   }
 }

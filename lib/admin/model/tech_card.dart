@@ -278,6 +278,12 @@ class TechCard {
   // FAQAT admin «Almashtirish» bosganda o'zgaradi — avto yangilanmaydi.
   final int salePrice;
 
+  // Pishirish vaqti (daqiqa) va harorati (°C); 0 — kiritilmagan. Faqat
+  // Biskvit bo'limidagi «Бисквит» kategoriyasi retseptlarida ko'rsatiladi
+  // (shef_tech_card_page.dart → isBiskvitCategory).
+  final int bakeTimeMin;
+  final int bakeTempC;
+
   const TechCard({
     this.batchQty = 1,
     this.batchUnit = '',
@@ -297,6 +303,8 @@ class TechCard {
     this.overheadMode = '',
     this.overheadValue = 0,
     this.salePrice = 0,
+    this.bakeTimeMin = 0,
+    this.bakeTempC = 0,
   });
 
   factory TechCard.fromJson(Map<String, dynamic> json) {
@@ -327,6 +335,8 @@ class TechCard {
           : '',
       overheadValue: _asDouble(json['overhead_value']),
       salePrice: _asInt(json['sale_price']),
+      bakeTimeMin: _asInt(json['bake_time_min']),
+      bakeTempC: _asInt(json['bake_temp_c']),
     );
   }
 
@@ -365,6 +375,8 @@ class TechCard {
         'overhead_mode': overheadMode,
         'overhead_value': overheadValue,
         'sale_price': salePrice,
+        'bake_time_min': bakeTimeMin,
+        'bake_temp_c': bakeTempC,
       };
 
   TechCard copyWith({
@@ -390,6 +402,8 @@ class TechCard {
     String? overheadMode,
     double? overheadValue,
     int? salePrice,
+    int? bakeTimeMin,
+    int? bakeTempC,
   }) {
     return TechCard(
       batchQty: batchQty ?? this.batchQty,
@@ -410,6 +424,8 @@ class TechCard {
       overheadMode: overheadMode ?? this.overheadMode,
       overheadValue: overheadValue ?? this.overheadValue,
       salePrice: salePrice ?? this.salePrice,
+      bakeTimeMin: bakeTimeMin ?? this.bakeTimeMin,
+      bakeTempC: bakeTempC ?? this.bakeTempC,
     );
   }
 

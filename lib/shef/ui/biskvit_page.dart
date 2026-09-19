@@ -335,6 +335,8 @@ class _BiskvitPageState extends State<BiskvitPage> {
           categoryId: category.id,
           categoryName: category.name,
           canAddProducts: true,
+          // Pishirish vaqti/harorati — faqat «Бисквит» kategoriyasida.
+          showBaking: isBiskvitCategory(category.name),
         ),
       ),
     );
