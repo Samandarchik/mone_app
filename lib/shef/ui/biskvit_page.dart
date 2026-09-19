@@ -1,5 +1,5 @@
 // shef/ui/biskvit_page.dart — shef bosh menyusidagi «Biskvit» bo'limi
-// (BiskvitPage): tepada biskvit rasmi (assets/biskvit.png), ostida shef
+// (BiskvitPage): tepada 3D tort (widgets/cake_3d.dart), ostida shef
 // QO'SHGAN kategoriyalar kartalari — har birida kategoriyaning o'z rasmi,
 // nomi va mahsulot soni (masalan Бисквит, Начинка, Крем, Украшения).
 // AppBar'dagi «+» — «Тех карта»dagi kategoriyalardan birini tanlab qo'shish;
@@ -24,11 +24,10 @@ import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:uz_ai_dev/shef/model/production_model.dart';
 import 'package:uz_ai_dev/shef/provider/shef_provider.dart';
 import 'package:uz_ai_dev/shef/ui/shef_tech_card_page.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/cake_3d.dart';
 
 const Color _bgColor = Color(0xFFFAF6F1);
 const Color _accentColor = Color(0xFFC5A97B);
-
-const String _biskvitImage = 'assets/biskvit.png';
 
 // Biskvit bo'limidagi kategoriyalar (id'lar, qo'shilgan tartibida).
 // Qurilmada saqlanadi; logout o'chirmaydi (session.dart faqat o'z
@@ -416,21 +415,9 @@ class _BiskvitPageState extends State<BiskvitPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         children: [
-          // Tepada guruh rasmi — qaysi bo'limda turganini ko'rsatib turadi.
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              height: 150,
-              color: Colors.white,
-              alignment: Alignment.center,
-              child: Image.asset(
-                _biskvitImage,
-                height: 130,
-                cacheHeight: 390,
-                fit: BoxFit.contain,
-              ),
-            ),
-          ),
+          // Tepada 3D tort (konstruktor uslubida): o'zi aylanadi, yon tomonga
+          // surilsa buriladi, bosilsa burchagi o'zgaradi.
+          const Cake3DHero(),
           const SizedBox(height: 12),
           // Kartalar soni kichik — ikkala provider'ni kuzatish arzon.
           Consumer2<CategoryProviderAdmin, ProductProviderAdmin>(
@@ -586,13 +573,28 @@ class _CategoryTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: LayoutBuilder(
-                  builder: (context, box) => CategoryThumb(
-                    category: category,
-                    size: box.maxHeight,
-                    width: box.maxWidth,
-                  ),
-                ),
+                // Rasmi yo'q bo'lsa — ikonka o'rniga kichik 3D tort.
+                child: _imageUrlOf(category).isEmpty
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: const DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [Color(0xFFFFFFFF), Color(0xFFEDE6F6)],
+                            ),
+                          ),
+                          child: SizedBox.expand(child: Cake3D()),
+                        ),
+                      )
+                    : LayoutBuilder(
+                        builder: (context, box) => CategoryThumb(
+                          category: category,
+                          size: box.maxHeight,
+                          width: box.maxWidth,
+                        ),
+                      ),
               ),
               const SizedBox(height: 8),
               Text(
