@@ -41,10 +41,8 @@ class TechCardController {
   int bakeTimeMin;
   int bakeTempC;
 
-  // Biskvit fotosi va undagi yon tomon tasmasi (‰) — «П/Ф Бисквит» 3D uchun.
+  // Tayyor biskvit fotosi ("/static/..." yoki '') — tex kartada saqlanadi.
   String biscuitPhotoUrl;
-  int biscuitSideTop;
-  int biscuitSideH;
 
   TechCardController([TechCard? initial])
       : batchQty = (initial?.batchQty ?? 1) < 1 ? 1 : (initial?.batchQty ?? 1),
@@ -65,9 +63,7 @@ class TechCardController {
         salePrice = initial?.salePrice ?? 0,
         bakeTimeMin = initial?.bakeTimeMin ?? 0,
         bakeTempC = initial?.bakeTempC ?? 0,
-        biscuitPhotoUrl = initial?.biscuitPhotoUrl ?? '',
-        biscuitSideTop = initial?.biscuitSideTop ?? 0,
-        biscuitSideH = initial?.biscuitSideH ?? 0;
+        biscuitPhotoUrl = initial?.biscuitPhotoUrl ?? '';
 
   // Partiya JAMI donasi = bitta list donasi (batchQty) × list soni (listQty).
   // Barcha «1 dona» / «за N штук» hisob-ko'rsatishlar shu songa tayanadi.
@@ -95,8 +91,6 @@ class TechCardController {
         bakeTimeMin: bakeTimeMin,
         bakeTempC: bakeTempC,
         biscuitPhotoUrl: biscuitPhotoUrl,
-        biscuitSideTop: biscuitSideTop,
-        biscuitSideH: biscuitSideH,
       );
 
   // «Состав» uchun showInSostav=true bo'lgan nomlar.

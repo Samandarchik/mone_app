@@ -581,9 +581,12 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                         ? BiscuitPalette.classic
                         : BiscuitPalette.detect(
                             selected.name, selected.techCard),
-                    // Tex kartaga biskvit fotosi qo'shilgan bo'lsa — yon
-                    // tomoni shu fotodan (ichidagi rezavor/mevalar bilan).
-                    photo: BiscuitPhoto.fromTechCard(selected?.techCard),
+                    // Mevalar (вишня, клубника ...) тех карта tarkibidan —
+                    // faqat yon tomonda chiziladi, tepada bezak yo'q.
+                    fruits: selected == null
+                        ? const []
+                        : BiscuitFruit.detect(
+                            selected.name, selected.techCard),
                   ),
                 ),
               ),
@@ -845,7 +848,7 @@ class _ProductGridCard extends StatelessWidget {
     final placeholder = BiscuitThumb(
       dims: BiscuitDims.fromTechCard(product.techCard),
       palette: BiscuitPalette.detect(product.name, product.techCard),
-      photo: BiscuitPhoto.fromTechCard(product.techCard),
+      fruits: BiscuitFruit.detect(product.name, product.techCard),
     );
     return Material(
       color: Colors.white,

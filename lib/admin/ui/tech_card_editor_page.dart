@@ -44,8 +44,6 @@ import 'package:uz_ai_dev/production/models/latest_price_model.dart';
 import 'package:uz_ai_dev/production/services/production_service.dart';
 import 'package:uz_ai_dev/production/ui/widgets/cost_sheet.dart';
 import 'package:uz_ai_dev/production/ui/widgets/price_history_sheet.dart';
-import 'package:uz_ai_dev/shef/ui/biscuit_side_picker_page.dart';
-import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
 
 // Mahsulot tex kartasini (тех карта) Excel «тех карта» varag'iga 1:1 o'xshash
 // ko'rinishda tahrirlash sahifasi. Ro'yxatda double-tap orqali ochiladi.
@@ -175,10 +173,9 @@ class TechCardEditorPage extends StatefulWidget {
   /// narxi sheet'i ochilmaydi. Retseptning qolgan qismi to'liq ishlaydi.
   final bool canEditPrices;
 
-  /// true — «Biskvit fotosi» bo'limi: tayyor biskvit fotosini qo'shish va
-  /// undagi YON TOMON tasmasini tanlash (tech_card.biscuit_photo_url /
-  /// biscuit_side_top / biscuit_side_h). «П/Ф Бисквит» 3D rasmi yon tomonni
-  /// shu fotodan chizadi. Faqat shef «П/Ф Бисквит» oynasidan ochganda.
+  /// true — «Biskvit fotosi» bo'limi: tayyor biskvit fotosini qo'shish,
+  /// almashtirish, o'chirish (tech_card.biscuit_photo_url). Faqat shef
+  /// «П/Ф Бисквит» oynasidan ochganda.
   final bool showBiscuitPhoto;
 
   const TechCardEditorPage({
@@ -1819,11 +1816,11 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
         ),
       );
 
-  // --- Biskvit fotosi («П/Ф Бисквит» 3D yon tomoni uchun) ---
+  // --- Biskvit fotosi (tex kartada saqlanadi) ---
 
   bool _uploadingBiscuitPhoto = false;
 
-  // Foto tanlash → yuklash → yon tomon tasmasini tanlash. Tex karta
+  // Foto tanlash (galereya / kamera) → yuklash. Tex karta
   // «Сохранить» bosilganda saqlanadi (boshqa maydonlar kabi).
   Future<void> _pickBiscuitPhoto() async {
     final source = await showModalBottomSheet<ImageSource>(
@@ -1873,48 +1870,20 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
       _snack('Rasm yuklanmadi. Qayta urinib ko\'ring.', error: true);
       return;
     }
-    setState(() {
-      c.biscuitPhotoUrl = url;
-      // Yangi foto — tasma qaytadan tanlanadi.
-      c.biscuitSideTop = 0;
-      c.biscuitSideH = 0;
-    });
-    await _pickBiscuitSide();
-  }
-
-  Future<void> _pickBiscuitSide() async {
-    if (c.biscuitPhotoUrl.isEmpty) return;
-    final card = c.build();
-    final res = await Navigator.push<(int, int)>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => BiscuitSidePickerPage(
-          photoUrl: _fullImageUrl(c.biscuitPhotoUrl),
-          topPm: c.biscuitSideTop,
-          hPm: c.biscuitSideH,
-          dims: BiscuitDims.fromTechCard(card),
-          palette: BiscuitPalette.detect(widget.product.name, card),
-        ),
-      ),
-    );
-    if (res == null || !mounted) return;
-    setState(() {
-      c.biscuitSideTop = res.$1;
-      c.biscuitSideH = res.$2;
-    });
+    setState(() => c.biscuitPhotoUrl = url);
   }
 
   // Matnsiz: foto yo'q — bitta «Rasm qo'shish» tugmasi; bor — foto va
   // «Almashtirish» / «O'chirish».
   Widget _biscuitPhotoSection() {
-    final photo = BiscuitPhoto.fromTechCard(c.build());
+    final url = _fullImageUrl(c.biscuitPhotoUrl);
     final busy = _uploadingBiscuitPhoto;
     final spinner = const SizedBox(
       width: 18,
       height: 18,
       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
     );
-    if (photo == null) {
+    if (url.isEmpty) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: ElevatedButton.icon(
@@ -1938,13 +1907,13 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           GestureDetector(
-            onTap: () => openFullScreenImage(context, photo.url),
+            onTap: () => openFullScreenImage(context, url),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: AspectRatio(
                 aspectRatio: 16 / 10,
                 child: AppNetworkImage(
-                  imageUrl: photo.url,
+                  imageUrl: url,
                   fit: BoxFit.cover,
                   errorWidget: (_) => const SizedBox.shrink(),
                 ),
@@ -1974,8 +1943,6 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
                       ? null
                       : () => setState(() {
                             c.biscuitPhotoUrl = '';
-                            c.biscuitSideTop = 0;
-                            c.biscuitSideH = 0;
                           }),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.red,

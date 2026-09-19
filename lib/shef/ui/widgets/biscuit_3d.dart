@@ -11,14 +11,14 @@
 // красный бархат → qizil, морковь → sabzi sepkili, мак → qora sepkil ...).
 // Biscuit3DView — Rotating3DView (cake_3d.dart) qo'lda rejimida: barmoq yon
 // tomonga — burish, tepaga/pastga — qarash burchagi. Yozuv/nuqtalar yo'q.
+// Mevalar (BiscuitFruit.detect — вишня, клубника, малина, банан, киви ...)
+// тех картадан; FAQAT yon tomonda (kesimda) chiziladi, tepada bezak yo'q.
 // BiscuitThumb — grid kartasi uchun kichik statik rasm.
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:uz_ai_dev/admin/model/tech_card.dart';
-import 'package:uz_ai_dev/core/constants/urls.dart';
-import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/cake_3d.dart';
 
 // Biskvit o'lchami (sm).
@@ -185,19 +185,6 @@ class BiscuitPalette {
     rim: Color(0xFF6E5C2A),
   );
 
-  static const berry = BiscuitPalette(
-    sponge: Color(0xFFF0A3B2),
-    spongeShade: Color(0xFFD9808F),
-    spongeLight: Color(0xFFF9C5CF),
-    crustLight: Color(0xFFDDA070),
-    crust: Color(0xFFC4824F),
-    crustDark: Color(0xFFA6683C),
-    pore: Color(0xFFCC6F82),
-    baked: Color(0xFFB0664A),
-    rim: Color(0xFF94553A),
-    speck: Color(0xFFB0203E),
-  );
-
   static const coffee = BiscuitPalette(
     sponge: Color(0xFFB08058),
     spongeShade: Color(0xFF8E6240),
@@ -256,7 +243,6 @@ class BiscuitPalette {
     (['морков', 'carrot', 'sabzi'], carrot),
     (['мед', 'мёд', 'honey', 'asal'], honey),
     (['фисташ', 'pista', 'матча', 'matcha'], pistachio),
-    (['клубни', 'малин', 'вишн', 'ягод', 'qulupnay', 'malina', 'olcha'], berry),
     (['кофе', 'coffee', 'qahva', 'kofe'], coffee),
     (['карамел', 'caramel', 'karamel'], caramel),
     (['лимон', 'lemon', 'limon'], lemon),
@@ -300,201 +286,103 @@ class BiscuitPalette {
   }
 }
 
-// Тех картадаги biskvit fotosi: URL va fotoda biskvit YON TOMONI turgan
-// gorizontal tasma (‰, 0..1000). Tasma kiritilmagan bo'lsa — o'rtadagi 30%.
-class BiscuitPhoto {
-  final String url; // to'liq URL
-  final int topPm;
-  final int hPm;
+// Biskvit ichidagi mevalar / rezavorlar — 3D rasmda FAQAT yon tomonda
+// (kesimda) chiziladi, tepaga hech narsa qo'yilmaydi.
+enum BiscuitFruit {
+  cherry,
+  strawberry,
+  raspberry,
+  blueberry,
+  currant,
+  banana,
+  kiwi,
+  orange,
+  peach,
+  pineapple;
 
-  const BiscuitPhoto({required this.url, this.topPm = 0, this.hPm = 0});
+  // Kalit so'zlar (ru / uz / en).
+  static const Map<BiscuitFruit, List<String>> _words = {
+    cherry: ['вишн', 'черешн', 'cherry', 'olcha', 'gilos'],
+    strawberry: ['клубни', 'землян', 'strawberr', 'qulupnay'],
+    raspberry: ['малин', 'raspberr', 'malina'],
+    blueberry: ['черник', 'голубик', 'blueberr'],
+    currant: ['смородин', 'клюкв', 'брусник', 'currant', 'cranberr'],
+    banana: ['банан', 'banan'],
+    kiwi: ['киви', 'kiwi'],
+    orange: ['апельсин', 'мандарин', 'orange', 'apelsin', 'mandarin'],
+    peach: ['персик', 'абрикос', 'манго', 'peach', 'apricot', 'mango',
+        'shaftoli', 'o\'rik'],
+    pineapple: ['ананас', 'pineapple', 'ananas'],
+  };
 
-  static BiscuitPhoto? fromTechCard(TechCard? card) {
-    final raw = card?.biscuitPhotoUrl ?? '';
-    if (raw.isEmpty) return null;
-    return BiscuitPhoto(
-      url: raw.startsWith('http') ? raw : '${AppUrls.baseUrl}$raw',
-      topPm: card!.biscuitSideTop,
-      hPm: card.biscuitSideH,
-    );
-  }
-
-  // Rasm piksellarida tasma to'rtburchagi.
-  Rect bandIn(ui.Image img) {
-    final h = hPm > 0 ? hPm : 300;
-    final top = hPm > 0 ? topPm : 350;
-    final t = img.height * top / 1000;
-    final b = math.min(img.height.toDouble(), t + img.height * h / 1000);
-    return Rect.fromLTRB(0, t, img.width.toDouble(), math.max(b, t + 1));
-  }
-
-  @override
-  bool operator ==(Object other) =>
-      other is BiscuitPhoto &&
-      other.url == url &&
-      other.topPm == topPm &&
-      other.hPm == hPm;
-
-  @override
-  int get hashCode => Object.hash(url, topPm, hPm);
-}
-
-// Chizish uchun tayyor yon tomon teksturasi: rasm + undagi tasma.
-class BiscuitSide {
-  final ui.Image image;
-  final Rect band;
-
-  const BiscuitSide(this.image, this.band);
-}
-
-// [photo] ni yuklab (AppNetworkImage keshi orqali, kichraytirilgan)
-// BiscuitSide qilib builder'ga beradi; yuklanguncha / foto yo'q bo'lsa null.
-class BiscuitSideLoader extends StatefulWidget {
-  final BiscuitPhoto? photo;
-  final double displayWidth;
-  final Widget Function(BuildContext context, BiscuitSide? side) builder;
-
-  const BiscuitSideLoader({
-    super.key,
-    required this.photo,
-    required this.builder,
-    this.displayWidth = 420,
-  });
-
-  @override
-  State<BiscuitSideLoader> createState() => _BiscuitSideLoaderState();
-}
-
-class _BiscuitSideLoaderState extends State<BiscuitSideLoader> {
-  ImageStream? _stream;
-  ImageStreamListener? _listener;
-  ui.Image? _image;
-  String? _url;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _resolve();
-  }
-
-  @override
-  void didUpdateWidget(BiscuitSideLoader old) {
-    super.didUpdateWidget(old);
-    if (old.photo?.url != widget.photo?.url) _resolve();
-  }
-
-  void _resolve() {
-    final url = widget.photo?.url;
-    if (url == _url) return;
-    _url = url;
-    _unlisten();
-    _setImage(null);
-    if (url == null) return;
-    final provider = appNetworkImageProvider(
-      context,
-      url,
-      displayWidth: widget.displayWidth,
-    );
-    final stream = provider.resolve(createLocalImageConfiguration(context));
-    final listener = ImageStreamListener(
-      (info, _) {
-        // Kesh rasmni chiqarib yuborsa ham bizniki yashashi uchun nusxa.
-        if (mounted && _url == url) {
-          _setImage(info.image.clone());
-        }
-        info.dispose();
-      },
-      onError: (_, __) {},
-    );
-    stream.addListener(listener);
-    _stream = stream;
-    _listener = listener;
-  }
-
-  void _setImage(ui.Image? img) {
-    final old = _image;
-    if (mounted) {
-      setState(() => _image = img);
-    } else {
-      _image = img;
+  // Тех картадан mevalar: nom + blok nomlari + masalliqlar (tartib bilan,
+  // ko'pi bilan 3 xil). Hech biri topilmasa — bo'sh (mevasiz biskvit).
+  static List<BiscuitFruit> detect(String name, TechCard? card) {
+    final text = [
+      name,
+      if (card != null)
+        for (final b in card.bases) ...[
+          b.name,
+          for (final i in b.ingredients) i.name,
+        ],
+    ].join(' ').toLowerCase();
+    final found = <(int, BiscuitFruit)>[];
+    for (final e in _words.entries) {
+      var at = -1;
+      for (final w in e.value) {
+        final i = text.indexOf(w);
+        if (i >= 0 && (at < 0 || i < at)) at = i;
+      }
+      if (at >= 0) found.add((at, e.key));
     }
-    old?.dispose();
-  }
-
-  void _unlisten() {
-    if (_stream != null && _listener != null) {
-      _stream!.removeListener(_listener!);
-    }
-    _stream = null;
-    _listener = null;
-  }
-
-  @override
-  void dispose() {
-    _unlisten();
-    _image?.dispose();
-    _image = null;
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final img = _image;
-    final photo = widget.photo;
-    final side = (img != null && photo != null)
-        ? BiscuitSide(img, photo.bandIn(img))
-        : null;
-    return widget.builder(context, side);
+    found.sort((a, b) => a.$1.compareTo(b.$1));
+    return [for (final (_, f) in found.take(3)) f];
   }
 }
 
 class Biscuit3DView extends StatelessWidget {
   final BiscuitDims dims;
   final BiscuitPalette palette;
-  // Berilsa — yon tomon shu fotodan (masalan ichidagi rezavorlar ko'rinadi).
-  final BiscuitPhoto? photo;
+  // Yon tomondagi mevalar (тех картадан).
+  final List<BiscuitFruit> fruits;
   final double height;
 
   const Biscuit3DView({
     super.key,
     required this.dims,
     this.palette = BiscuitPalette.classic,
-    this.photo,
+    this.fruits = const [],
     this.height = 240,
   });
 
   @override
   Widget build(BuildContext context) {
-    return BiscuitSideLoader(
-      photo: photo,
-      displayWidth: 600,
-      builder: (context, side) => Rotating3DView(
-        height: height,
-        manual: true,
-        painter: (tilt, rotation) => BiscuitPainter(
-          dims: dims,
-          palette: palette,
-          side: side,
-          tilt: tilt,
-          rotation: rotation,
-        ),
+    return Rotating3DView(
+      height: height,
+      manual: true,
+      painter: (tilt, rotation) => BiscuitPainter(
+        dims: dims,
+        palette: palette,
+        fruits: fruits,
+        tilt: tilt,
+        rotation: rotation,
       ),
     );
   }
 }
 
-// Kartadagi kichik statik rasm: shu biskvitning o'zi (o'lchami, turi va
-// fotosi bo'lsa — yon tomoni тех картадан), yumshoq fon ustida.
+// Kartadagi kichik statik rasm: shu biskvitning o'zi (o'lchami, turi,
+// mevalari тех картадан), yumshoq fon ustida.
 class BiscuitThumb extends StatelessWidget {
   final BiscuitDims dims;
   final BiscuitPalette palette;
-  final BiscuitPhoto? photo;
+  final List<BiscuitFruit> fruits;
 
   const BiscuitThumb({
     super.key,
     required this.dims,
     required this.palette,
-    this.photo,
+    this.fruits = const [],
   });
 
   @override
@@ -507,19 +395,15 @@ class BiscuitThumb extends StatelessWidget {
           colors: [Color(0xFFFFFFFF), Color(0xFFEDE6F6)],
         ),
       ),
-      child: BiscuitSideLoader(
-        photo: photo,
-        displayWidth: 240,
-        builder: (context, side) => RepaintBoundary(
-          child: CustomPaint(
-            size: Size.infinite,
-            painter: BiscuitPainter(
-              dims: dims,
-              palette: palette,
-              side: side,
-              tilt: 0.36,
-              rotation: 0.5,
-            ),
+      child: RepaintBoundary(
+        child: CustomPaint(
+          size: Size.infinite,
+          painter: BiscuitPainter(
+            dims: dims,
+            palette: palette,
+            fruits: fruits,
+            tilt: 0.36,
+            rotation: 0.5,
           ),
         ),
       ),
@@ -530,15 +414,15 @@ class BiscuitThumb extends StatelessWidget {
 class BiscuitPainter extends CustomPainter {
   final BiscuitDims dims;
   final BiscuitPalette palette;
-  // Yon tomon teksturasi (fotodan); null — rang + g'ovaklar bilan chiziladi.
-  final BiscuitSide? side;
+  // Yon tomondagi mevalar (bo'sh — mevasiz).
+  final List<BiscuitFruit> fruits;
   final double tilt;
   final double rotation;
 
   BiscuitPainter({
     required this.dims,
     this.palette = BiscuitPalette.classic,
-    this.side,
+    this.fruits = const [],
     required this.tilt,
     required this.rotation,
   });
@@ -625,27 +509,6 @@ class BiscuitPainter extends CustomPainter {
 
     canvas.save();
     canvas.clipPath(side);
-    if (this.side != null) {
-      _textureRound(canvas, r, top, bottom);
-      // Hajm soyasi: chetlari qoramtir, o'rtasi yorug'roq.
-      canvas.drawRect(
-        Rect.fromLTRB(_cx - r, top - r * tilt, _cx + r, bottom + r * tilt),
-        Paint()
-          ..shader = LinearGradient(
-            colors: [
-              Colors.black.withValues(alpha: 0.38),
-              Colors.black.withValues(alpha: 0),
-              Colors.white.withValues(alpha: 0.12),
-              Colors.black.withValues(alpha: 0),
-              Colors.black.withValues(alpha: 0.38),
-            ],
-            stops: const [0, 0.3, 0.42, 0.62, 1],
-          ).createShader(bottomOval),
-      );
-      canvas.restore();
-      _paintRoundTop(canvas, r, bottomOval, h);
-      return;
-    }
     // Pastki qizargan chiziq.
     canvas.drawArc(
       bottomOval,
@@ -675,79 +538,183 @@ class BiscuitPainter extends CustomPainter {
         palette.speck != null && i % 3 == 0 ? speck : pore,
       );
     }
+    _fruitsRound(canvas, r, top, h, pxPerCm);
     canvas.restore();
     _paintRoundTop(canvas, r, bottomOval, h);
   }
 
-  // Yumaloq biskvit yon tomoniga fotodagi tasmani «o'rash»: old yarim
-  // aylana ingichka vertikal bo'laklarga bo'linadi, har biriga tasmaning mos
-  // qismi chiziladi. Tasma yarim aylanaga teng; ikkinchi yarmida ko'zgu
-  // (chok ko'rinmasin). Biskvit burilganda tekstura ham buriladi.
-  void _textureRound(Canvas canvas, double r, double top, double bottom) {
-    final img = side!.image;
-    final band = side!.band;
-    final paint = Paint()..filterQuality = FilterQuality.medium;
-    double u(double t) {
-      var a = (t - rotation) % (2 * math.pi);
-      if (a < 0) a += 2 * math.pi;
-      return a < math.pi ? a / math.pi : 2 - a / math.pi;
-    }
+  // Meva o'lchami (radius, sm) — haqiqiy kattalikka yaqin.
+  static double _fruitRadiusCm(BiscuitFruit f) => switch (f) {
+        BiscuitFruit.cherry => 0.9,
+        BiscuitFruit.strawberry => 1.1,
+        BiscuitFruit.raspberry => 0.8,
+        BiscuitFruit.blueberry => 0.55,
+        BiscuitFruit.currant => 0.45,
+        BiscuitFruit.banana => 1.2,
+        BiscuitFruit.kiwi => 1.2,
+        BiscuitFruit.orange => 1.3,
+        BiscuitFruit.peach => 0.9,
+        BiscuitFruit.pineapple => 0.9,
+      };
 
-    const n = 72;
-    for (var j = 0; j < n; j++) {
-      final t0 = -math.pi / 2 + math.pi * j / n;
-      final t1 = -math.pi / 2 + math.pi * (j + 1) / n;
-      final yOff = r * tilt * math.cos((t0 + t1) / 2);
-      final ua = u(t0);
-      final ub = u(t1);
-      final lo = math.min(ua, ub);
-      final hi = math.max(math.max(ua, ub), lo + 0.002);
-      final src = Rect.fromLTRB(band.left + lo * band.width, band.top,
-          band.left + math.min(hi, 1) * band.width, band.bottom);
-      final dst = Rect.fromLTRB(_cx + r * math.sin(t0) - 0.4, top + yOff,
-          _cx + r * math.sin(t1) + 0.4, bottom + yOff);
-      if (ua <= ub) {
-        canvas.drawImageRect(img, src, dst, paint);
-      } else {
-        // Ko'zgu qismi — bo'lak ichidagi rasm ham teskari chiziladi,
-        // aks holda rezavorlar «maydalanib» ko'rinadi.
-        canvas.save();
-        canvas.translate(dst.center.dx, 0);
-        canvas.scale(-1, 1);
-        canvas.translate(-dst.center.dx, 0);
-        canvas.drawImageRect(img, src, dst, paint);
-        canvas.restore();
-      }
+  // Yumaloq biskvit YON tomonidagi mevalar (kesimda ko'rinadigan bo'laklar).
+  // Joylari tasodifiy, lekin har doim bir xil (seed) — biskvit bilan birga
+  // aylanadi; faqat old tomondagilari chiziladi. Tepaga hech narsa yo'q.
+  void _fruitsRound(
+      Canvas canvas, double r, double top, double h, double pxPerCm) {
+    if (fruits.isEmpty) return;
+    final rnd = math.Random(17);
+    // Aylana uzunligiga qarab soni (≈ har 3 sm ga bitta).
+    final n = (2 * math.pi * r / pxPerCm / 3).round().clamp(10, 36);
+    for (var i = 0; i < n; i++) {
+      final fruit = fruits[i % fruits.length];
+      final a = (i + rnd.nextDouble() * 0.6) * 2 * math.pi / n;
+      final v = 0.3 + rnd.nextDouble() * 0.4;
+      final t = a + rotation;
+      final c = math.cos(t);
+      if (c < 0.12) continue;
+      final rad = math.min(_fruitRadiusCm(fruit) * pxPerCm, h * 0.3);
+      final center = Offset(_cx + r * math.sin(t), top + r * tilt * c + v * h);
+      _paintFruit(canvas, fruit, center, rad * (0.35 + 0.65 * c), rad,
+          i + (rnd.nextDouble() * 100).toInt());
     }
   }
 
-  // To'rtburchak biskvitning bitta yon yuziga tasma (yuz bo'ylab to'liq,
-  // ekranda chapdan o'ngga — rasm teskari chiqmaydi).
-  void _textureFace(Canvas canvas, Offset a, Offset b, double h) {
-    if (a.dx > b.dx) {
-      final t = a;
-      a = b;
-      b = t;
-    }
-    final img = side!.image;
-    final band = side!.band;
-    final paint = Paint()..filterQuality = FilterQuality.medium;
-    const n = 32;
-    for (var j = 0; j < n; j++) {
-      final p0 = Offset.lerp(a, b, j / n)!;
-      final p1 = Offset.lerp(a, b, (j + 1) / n)!;
-      final y = (p0.dy + p1.dy) / 2;
-      canvas.drawImageRect(
-        img,
-        Rect.fromLTRB(band.left + band.width * j / n, band.top,
-            band.left + band.width * (j + 1) / n, band.bottom),
-        Rect.fromLTRB(p0.dx - 0.4, y - 1, p1.dx + 0.4, y + h),
-        paint,
-      );
+  // To'rtburchak biskvitning bitta yon yuzidagi mevalar.
+  void _fruitsFace(Canvas canvas, Offset a, Offset b, double h,
+      double pxPerCm, double facing, int seed) {
+    if (fruits.isEmpty) return;
+    final rnd = math.Random(31 + seed);
+    final lenCm = (b - a).distance / pxPerCm / math.max(facing, 0.2);
+    final n = (lenCm / 3).round().clamp(3, 16);
+    for (var i = 0; i < n; i++) {
+      final fruit = fruits[(i + seed) % fruits.length];
+      final u = (i + 0.2 + rnd.nextDouble() * 0.6) / n;
+      final v = 0.3 + rnd.nextDouble() * 0.4;
+      final rad = math.min(_fruitRadiusCm(fruit) * pxPerCm, h * 0.3);
+      final center = Offset.lerp(a, b, u)!.translate(0, v * h);
+      _paintFruit(canvas, fruit, center, rad * (0.35 + 0.65 * facing), rad,
+          i + seed * 7);
     }
   }
 
-  // Tepa — pishgan qobiq (foto faqat yon tomonga ta'sir qiladi).
+  // Bitta meva bo'lagi (kesim ko'rinishi). [rx] — kenglik (burilishga qarab
+  // qisqaradi), [ry] — balandlik.
+  void _paintFruit(Canvas canvas, BiscuitFruit fruit, Offset c, double rx,
+      double ry, int seed) {
+    Rect box([double k = 1]) =>
+        Rect.fromCenter(center: c, width: rx * 2 * k, height: ry * 2 * k);
+    Paint grad(List<Color> colors, [Alignment center = const Alignment(-0.3, -0.35)]) =>
+        Paint()
+          ..shader = RadialGradient(center: center, colors: colors)
+              .createShader(box());
+    void gloss() => canvas.drawOval(
+          Rect.fromCenter(
+            center: c.translate(-rx * 0.35, -ry * 0.4),
+            width: rx * 0.55,
+            height: ry * 0.35,
+          ),
+          Paint()..color = Colors.white.withValues(alpha: 0.45),
+        );
+
+    switch (fruit) {
+      case BiscuitFruit.cherry:
+        canvas.drawOval(box(), grad(const [
+          Color(0xFFD7324A),
+          Color(0xFF9A0F28),
+          Color(0xFF5A0616),
+        ]));
+        // Sharbat izi atrofida.
+        canvas.drawOval(
+          box(1.18),
+          Paint()
+            ..color = const Color(0xFF8E0E24).withValues(alpha: 0.18),
+        );
+        gloss();
+      case BiscuitFruit.strawberry:
+        canvas.drawOval(box(), Paint()..color = const Color(0xFFD9283C));
+        canvas.drawOval(box(0.72), Paint()..color = const Color(0xFFF26C7A));
+        canvas.drawOval(box(0.38), Paint()..color = const Color(0xFFFFD3D6));
+        final seedPaint = Paint()..color = const Color(0xFFF7D774);
+        for (var k = 0; k < 7; k++) {
+          final ang = k * 2 * math.pi / 7 + seed;
+          canvas.drawCircle(
+            c.translate(math.cos(ang) * rx * 0.86, math.sin(ang) * ry * 0.86),
+            math.max(0.6, ry * 0.07),
+            seedPaint,
+          );
+        }
+      case BiscuitFruit.raspberry:
+        final p = Paint()..color = const Color(0xFFC2185B);
+        final hi = Paint()..color = const Color(0xFFE35D8A);
+        for (var k = 0; k < 6; k++) {
+          final ang = k * 2 * math.pi / 6;
+          final o = c.translate(math.cos(ang) * rx * 0.5, math.sin(ang) * ry * 0.5);
+          canvas.drawOval(
+              Rect.fromCenter(center: o, width: rx * 0.9, height: ry * 0.9), p);
+          canvas.drawCircle(o.translate(-rx * 0.12, -ry * 0.12),
+              math.max(0.6, ry * 0.12), hi);
+        }
+        canvas.drawOval(box(0.45), p);
+      case BiscuitFruit.blueberry:
+      case BiscuitFruit.currant:
+        canvas.drawOval(box(), grad(fruit == BiscuitFruit.blueberry
+            ? const [Color(0xFF6D78C4), Color(0xFF34397A), Color(0xFF1E2152)]
+            : const [Color(0xFF5A4A6E), Color(0xFF2A1E36), Color(0xFF140C1C)]));
+        gloss();
+      case BiscuitFruit.banana:
+        canvas.drawOval(box(), Paint()..color = const Color(0xFFF1E2A2));
+        canvas.drawOval(box(0.8), Paint()..color = const Color(0xFFFBF1C8));
+        final d = Paint()..color = const Color(0xFF8A6A3A);
+        for (var k = 0; k < 3; k++) {
+          final ang = k * 2 * math.pi / 3 + 0.5;
+          canvas.drawCircle(
+            c.translate(math.cos(ang) * rx * 0.22, math.sin(ang) * ry * 0.22),
+            math.max(0.5, ry * 0.06),
+            d,
+          );
+        }
+      case BiscuitFruit.kiwi:
+        canvas.drawOval(box(), Paint()..color = const Color(0xFF6E4B2A));
+        canvas.drawOval(box(0.9), Paint()..color = const Color(0xFF7DBA3A));
+        canvas.drawOval(box(0.36), Paint()..color = const Color(0xFFE9F2C8));
+        final s = Paint()..color = const Color(0xFF1B1B1B);
+        for (var k = 0; k < 10; k++) {
+          final ang = k * 2 * math.pi / 10;
+          canvas.drawCircle(
+            c.translate(math.cos(ang) * rx * 0.5, math.sin(ang) * ry * 0.5),
+            math.max(0.5, ry * 0.05),
+            s,
+          );
+        }
+      case BiscuitFruit.orange:
+        canvas.drawOval(box(), Paint()..color = const Color(0xFFF08A1C));
+        canvas.drawOval(box(0.86), Paint()..color = const Color(0xFFFFB347));
+        final line = Paint()
+          ..color = const Color(0xFFFFE0A8)
+          ..strokeWidth = math.max(0.6, ry * 0.06);
+        for (var k = 0; k < 8; k++) {
+          final ang = k * 2 * math.pi / 8;
+          canvas.drawLine(
+            c,
+            c.translate(math.cos(ang) * rx * 0.84, math.sin(ang) * ry * 0.84),
+            line,
+          );
+        }
+      case BiscuitFruit.peach:
+      case BiscuitFruit.pineapple:
+        final colors = fruit == BiscuitFruit.peach
+            ? const [Color(0xFFFFC870), Color(0xFFF59E3A), Color(0xFFD9772A)]
+            : const [Color(0xFFFFF09A), Color(0xFFF2D34A), Color(0xFFD8AE2A)];
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(box(), Radius.circular(ry * 0.35)),
+          grad(colors),
+        );
+        gloss();
+    }
+  }
+
+  // Tepa — pishgan qobiq (mevalar faqat yon tomonda).
   void _paintRoundTop(Canvas canvas, double r, Rect bottomOval, double h) {
     final topOval = bottomOval.shift(Offset(0, -h));
     canvas.drawOval(
@@ -805,16 +772,6 @@ class BiscuitPainter extends CustomPainter {
 
       canvas.save();
       canvas.clipPath(face);
-      if (side != null) {
-        _textureFace(canvas, tops[k], tops[k1], h);
-        // Yuzning yorug'lik soyasi (yondagi yuz qoramtirroq).
-        canvas.drawPath(
-          face,
-          Paint()..color = Colors.black.withValues(alpha: (1 - f) * 0.4),
-        );
-        canvas.restore();
-        continue;
-      }
       canvas.drawLine(
         bottoms[k],
         bottoms[k1],
@@ -835,6 +792,12 @@ class BiscuitPainter extends CustomPainter {
           palette.speck != null && i % 3 == 0 ? speck : pore,
         );
       }
+      _fruitsFace(canvas, tops[k], tops[k1], h, pxPerCm, npz, k);
+      // Yon yuzning yorug'lik soyasi (mevalar ham soyada qoladi).
+      canvas.drawPath(
+        face,
+        Paint()..color = Colors.black.withValues(alpha: (1 - f) * 0.18),
+      );
       canvas.restore();
       canvas.drawPath(
         face,
@@ -871,7 +834,7 @@ class BiscuitPainter extends CustomPainter {
   bool shouldRepaint(BiscuitPainter old) =>
       old.dims != dims ||
       old.palette != palette ||
-      old.side != side ||
+      !listEquals(old.fruits, fruits) ||
       old.tilt != tilt ||
       old.rotation != rotation;
 }
