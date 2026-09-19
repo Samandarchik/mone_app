@@ -16,6 +16,7 @@ import 'package:uz_ai_dev/admin/provider/upload_image_provider.dart';
 import 'package:uz_ai_dev/admin/ui/widgets/product_type_radio.dart';
 import 'package:uz_ai_dev/admin/ui/widgets/tech_card_section.dart';
 import 'package:uz_ai_dev/core/data/sklad_registry.dart';
+import 'package:uz_ai_dev/core/utils/product_sources.dart';
 
 class AddProductPage extends StatefulWidget {
   // Ixtiyoriy oldindan to'ldirish: kategoriya ichidan ochilganda (masalan
@@ -57,7 +58,9 @@ class _AddProductPageState extends State<AddProductPage> {
   // Ombor → yuk keltiruvchi oqimi uchun yangi maydonlar
   bool _moneApp = true;
   bool _bozor = false;
-  String _source = 'samarqand';
+  // Yuk qayerdan keladi — bir nechta manba tanlanishi mumkin
+  // (Samarqand + Toshkent). Yangi mahsulotda standart: Samarqand.
+  final Set<String> _selectedSources = {kDefaultProductSource};
   final List<int> _selectedSklads = [];
 
   // Полуфабрикат (masalan «Классик бисквит») — ishlab chiqariladi,
@@ -71,12 +74,6 @@ class _AddProductPageState extends State<AddProductPage> {
   // eski erkin matn _savedComment ga saqlanadi.
   bool _compositionAsIngredients = false;
   String _savedComment = '';
-
-  static const Map<String, String> _sourceOptions = {
-    'samarqand': 'Samarqand',
-    'toshkent': 'Toshkent',
-    'zagranitsa': 'Zagranitsa',
-  };
 
   // Skladlar — SkladRegistry (superadmin serverda tahrirlaydi).
   Map<int, String> get _skladOptions => SkladRegistry.names;
@@ -577,7 +574,8 @@ class _AddProductPageState extends State<AddProductPage> {
                 });
               },
             ),
-            // Bozor yoqilganda: bozor grammi, yuk manbai (radio) va sklad tanlovi (checkbox)
+            // Bozor yoqilganda: bozor grammi, yuk manbalari (checkbox — bir
+            // nechtasi mumkin) va sklad tanlovi (checkbox)
             if (_bozor) ...[
               const SizedBox(height: 16),
               TextFormField(
@@ -605,23 +603,22 @@ class _AddProductPageState extends State<AddProductPage> {
                 'Yuk qayerdan keladi',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
-              RadioGroup<String>(
-                groupValue: _source,
-                onChanged: (value) {
-                  setState(() {
-                    _source = value ?? 'samarqand';
-                  });
-                },
-                child: Column(
-                  children: _sourceOptions.entries.map((entry) {
-                    return RadioListTile<String>(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(entry.value),
-                      value: entry.key,
-                    );
-                  }).toList(),
-                ),
-              ),
+              ...kProductSources.map((code) {
+                return CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(productSourceLabel(code)),
+                  value: _selectedSources.contains(code),
+                  onChanged: (bool? value) {
+                    setState(() {
+                      if (value == true) {
+                        _selectedSources.add(code);
+                      } else {
+                        _selectedSources.remove(code);
+                      }
+                    });
+                  },
+                );
+              }),
               const SizedBox(height: 8),
               const Text(
                 'Qaysi skladdan buyurtma bera oladi',
@@ -674,6 +671,14 @@ class _AddProductPageState extends State<AddProductPage> {
                               );
                               return;
                             }
+                            if (_bozor && _selectedSources.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content:
+                                        Text('Kamida bitta manba tanlang')),
+                              );
+                              return;
+                            }
                             if (_bozor && _selectedSklads.isEmpty) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
@@ -722,7 +727,11 @@ class _AddProductPageState extends State<AddProductPage> {
                               imageUrl: imageUrl ?? '',
                               moneApp: _moneApp,
                               bozor: _bozor,
-                              source: _source,
+                              // Kanonik tartibda; source = sources.first
+                              // (model o'zi hisoblaydi). Bo'sh bo'lsa
+                              // (bozor o'chiq) — standart Samarqand.
+                              sources:
+                                  canonicalProductSources(_selectedSources),
                               sklads: _selectedSklads,
                               techCard: _techController.build(),
                               comment: _compositionAsIngredients

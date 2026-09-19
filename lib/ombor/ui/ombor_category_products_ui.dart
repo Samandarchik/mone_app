@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
+import 'package:uz_ai_dev/core/utils/product_sources.dart';
 import 'package:uz_ai_dev/core/utils/qty_units.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:uz_ai_dev/ombor/models/ombor_product_model.dart';
@@ -208,6 +209,12 @@ class OmborCartBar extends StatelessWidget {
 // - kartochka bosilsa: bir qadam qo'shiladi
 // - uzoq bosilsa: miqdorni qo'lda kiritish oynasi
 // - rasm bosilsa: rasm katta ochiladi
+// Ko'p manbali mahsulot (Samarqand + Toshkent): pastda har manba uchun
+// alohida qator («Samarqand [- 5 кг +]») — har manbaning miqdori alohida
+// savat qatori bo'lib, backend'da o'z bozorchisiga alohida buyurtma bo'ladi.
+// Bunday kartochkaga oddiy bosish savatga QO'SHMAYDI (qaysi manbaga ekani
+// noma'lum) — qo'shish qatordagi [+] orqali; uzoq bosish hamma manba
+// miqdorini bitta oynada so'raydi.
 // isGrid=true -> grid katakchasi (rasm cho'ziluvchan), false -> gorizontal
 // ro'yxat kartasi (eni 180, rasm balandligi 160).
 // skladId berilsa qoldiq aynan shu sklad bo'yicha; berilmasa ombor
@@ -224,6 +231,9 @@ class OmborProductCard extends StatelessWidget {
   });
 
   static const Color _accentColor = Color(0xFFC5A97B);
+  // Ko'p manbali kartochkada hali tanlanmagan manba qatori matni.
+  static const Color _idleSourceColor = Color(0xFF7A5C2E);
+  static const double _sourceRowHeight = 32;
 
   // Bir qadam = kartochkada ko'rsatilgan pachka miqdori * 1000 (milli-birlik,
   // butun son). Subtitle bilan BIR XIL fallback: bozor gramm -> mone gramm ->
@@ -293,83 +303,28 @@ class OmborProductCard extends StatelessWidget {
     );
   }
 
-  // Uzoq bosilganda miqdorni qo'lda kiritish oynasi: xohlagancha buyurtma
-  // berish mumkin. "." yoki "," bilan kasr kiritilsa kasr saqlanadi (0.5 -> 0.5).
-  Future<void> _showQtyInputDialog(BuildContext context) async {
+  // Uzoq bosilganda miqdorni qo'lda kiritish oynasi (_OmborQtyDialog):
+  // xohlagancha buyurtma berish mumkin. sources — qaysi manba(lar) miqdori
+  // kiritiladi: bitta -> bitta «Miqdor» maydoni (ilgarigidek); bir nechta ->
+  // har manbaga o'z nomi bilan alohida maydon.
+  Future<void> _showQtyInputDialog(
+      BuildContext context, List<String> sources) async {
     final provider = context.read<OmborProvider>();
-    final controller = TextEditingController();
-    final current = provider.countMilli(product.id);
-
-    void confirm(BuildContext dialogContext) {
-      // Vergul ham nuqta kabi qabul qilinadi: "2,5" -> "2.5".
-      final raw = controller.text.trim().replaceAll(',', '.');
-      if (raw.isEmpty) return;
-      final value = double.tryParse(raw);
-      if (value == null) return;
-      // GRAMM-YOZISH HIMOYASI: кг/л mahsulotda 1000+ kiritilsa omborchi
-      // grammda yozgan deb olinadi ("20 kg" o'rniga "20000" yozish odati) —
-      // milli panjarada gramm == milli, ko'paytirilmaydi. Aks holda kasr
-      // saqlanib ×1000: 0.5 -> 500 milli, 2.5 -> 2500 milli.
-      if (qtyUnitFactor(product.type) != 1 && value >= 1000) {
-        Navigator.pop(dialogContext, value.round());
-        return;
-      }
-      Navigator.pop(dialogContext, (value * 1000).round());
-    }
-
-    final milli = await showDialog<int>(
+    final values = await showDialog<Map<String, int>>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: Text(
-          product.name,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: [
-            FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-          ],
-          decoration: InputDecoration(
-            labelText: 'Miqdor',
-            hintText: current > 0
-                ? 'Hozir: ${formatMilli(current)}'
-                : 'Miqdorni kiriting',
-            border: const OutlineInputBorder(),
-          ),
-          onSubmitted: (_) => confirm(dialogContext),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text(
-              'Bekor',
-              style: TextStyle(color: Colors.black54),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () => confirm(dialogContext),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _accentColor,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Saqlash'),
-          ),
-        ],
+      builder: (_) => _OmborQtyDialog(
+        title: product.name,
+        type: product.type,
+        sources: sources,
+        current: {
+          for (final s in sources) s: provider.countMilli(product.id, s),
+        },
       ),
     );
 
-    // Dialog yopilgach controller'ni bo'shatamiz — aks holda har uzoq
-    // bosishda bittadan TextEditingController osilib qolardi.
-    controller.dispose();
-
-    if (milli != null) {
-      provider.setCountMilli(product.id, milli);
-    }
+    values?.forEach((source, milli) {
+      provider.setCountMilli(product.id, source, milli);
+    });
   }
 
   // Rasm bosilsa katta (to'liq) ko'rinishda ochiladi.
@@ -427,13 +382,15 @@ class OmborProductCard extends StatelessWidget {
   }
 
   // Pastki tugma: tanlanmagan -> "Qo'shish"; tanlangan -> [-  miqdor  +].
+  // Faqat BITTA manbali mahsulot uchun — savat qatori o'sha yagona manba bilan.
   Widget _buildButton(BuildContext context, OmborProvider provider) {
-    final milli = provider.countMilli(product.id);
+    final source = product.primarySource;
+    final milli = provider.countMilli(product.id, source);
     final isSelected = milli > 0;
 
     if (!isSelected) {
       return ElevatedButton(
-        onPressed: () => provider.addToCart(product.id, _stepMilli),
+        onPressed: () => provider.addToCart(product.id, source, _stepMilli),
         style: ElevatedButton.styleFrom(
           backgroundColor: _accentColor,
           foregroundColor: Colors.white,
@@ -470,7 +427,8 @@ class OmborProductCard extends StatelessWidget {
               Expanded(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () => provider.decrement(product.id, _stepMilli),
+                  onTap: () =>
+                      provider.decrement(product.id, source, _stepMilli),
                   child: Container(
                     alignment: Alignment.centerLeft,
                     padding: const EdgeInsets.only(left: 12),
@@ -482,7 +440,8 @@ class OmborProductCard extends StatelessWidget {
               Expanded(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () => provider.addToCart(product.id, _stepMilli),
+                  onTap: () =>
+                      provider.addToCart(product.id, source, _stepMilli),
                   child: Container(
                     alignment: Alignment.centerRight,
                     padding: const EdgeInsets.only(right: 12),
@@ -509,10 +468,154 @@ class OmborProductCard extends StatelessWidget {
     );
   }
 
+  // Ko'p manbali mahsulot: har manba uchun alohida qator —
+  //   Samarqand   [ -  5 кг  + ]
+  //   Toshkent    [ -  3 кг  + ]
+  // Stepper yagona manbali tugma kabi: chap yarmi «-», o'ng yarmi «+».
+  // Miqdori yo'q manba — och rangli «Qo'shish» (bosilsa bir qadam).
+  // Qatorni uzoq bosish — faqat SHU manba miqdorini qo'lda kiritish.
+  Widget _buildSourceRows(BuildContext context, OmborProvider provider) {
+    final sources = product.sources;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < sources.length; i++) ...[
+          if (i > 0) const SizedBox(height: 4),
+          _buildSourceRow(context, provider, sources[i]),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSourceRow(
+      BuildContext context, OmborProvider provider, String source) {
+    final milli = provider.countMilli(product.id, source);
+    final isSelected = milli > 0;
+
+    final Widget control;
+    if (!isSelected) {
+      control = GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => provider.addToCart(product.id, source, _stepMilli),
+        child: Container(
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _accentColor.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Text(
+            'Qo\'shish',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: _idleSourceColor,
+            ),
+          ),
+        ),
+      );
+    } else {
+      final type = product.type;
+      final qtyText = (type != null && type.isNotEmpty)
+          ? '${formatMilli(milli)} $type'
+          : formatMilli(milli);
+      control = Container(
+        decoration: BoxDecoration(
+          color: _accentColor,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Stack(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () =>
+                        provider.decrement(product.id, source, _stepMilli),
+                    child: Container(
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.only(left: 6),
+                      child: const Icon(Icons.remove,
+                          color: Colors.white, size: 16),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () =>
+                        provider.addToCart(product.id, source, _stepMilli),
+                    child: Container(
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.only(right: 6),
+                      child:
+                          const Icon(Icons.add, color: Colors.white, size: 16),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            // Uzun miqdor (masalan «125.5 кг») ikonkalar ustiga chiqmasin.
+            IgnorePointer(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      qtyText,
+                      maxLines: 1,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onLongPress: () => _showQtyInputDialog(context, [source]),
+      child: SizedBox(
+        height: _sourceRowHeight,
+        child: Row(
+          children: [
+            Expanded(
+              flex: 4,
+              child: Text(
+                productSourceLabel(source),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: isSelected ? Colors.black87 : Colors.grey.shade600,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Expanded(flex: 6, child: control),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Sklad qoldig'i (bo'lmasa null — qator umuman ko'rsatilmaydi).
     final stockRow = omborStockRow(context, product.id, skladId: skladId);
+    final multi = product.isMultiSource;
+    // Ko'p manbali kartochkada pastdagi qatorlar balandroq — gorizontal
+    // ro'yxatdagi (balandligi qat'iy 296) kartochkada ham rasm grid'dagi
+    // kabi qolgan joyni egallaydi, aks holda Column toshib ketardi.
+    final flexImage = isGrid || multi;
 
     return Consumer<OmborProvider>(
       builder: (context, provider, child) {
@@ -521,7 +624,7 @@ class OmborProductCard extends StatelessWidget {
           child: ClipRRect(
             borderRadius:
                 const BorderRadius.vertical(top: Radius.circular(12)),
-            child: isGrid
+            child: flexImage
                 ? SizedBox(width: double.infinity, child: _buildImage())
                 : SizedBox(
                     width: double.infinity, height: 150, child: _buildImage()),
@@ -529,8 +632,13 @@ class OmborProductCard extends StatelessWidget {
         );
 
         return GestureDetector(
-          onTap: () => provider.addToCart(product.id, _stepMilli),
-          onLongPress: () => _showQtyInputDialog(context),
+          // Ko'p manbali mahsulotda qaysi manbaga qo'shish noma'lum —
+          // kartochka bosilganda hech narsa qilinmaydi (qatordagi [+] bor).
+          onTap: multi
+              ? null
+              : () => provider.addToCart(
+                  product.id, product.primarySource, _stepMilli),
+          onLongPress: () => _showQtyInputDialog(context, product.sources),
           child: Container(
             width: isGrid ? null : 180,
             margin: isGrid
@@ -543,7 +651,7 @@ class OmborProductCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                isGrid ? Expanded(child: image) : image,
+                flexImage ? Expanded(child: image) : image,
                 Padding(
                   padding: const EdgeInsets.fromLTRB(8, 6, 8, 2),
                   child: Text(
@@ -573,20 +681,161 @@ class OmborProductCard extends StatelessWidget {
                 if (stockRow != null) _buildQoldiq(stockRow),
                 // Berilgan, lekin hali kelmagan buyurtma (0 bo'lsa ko'rinmaydi).
                 OmborBuyurtmaLabel(productId: product.id, type: product.type),
-                if (!isGrid) const Spacer(),
+                if (!flexImage) const Spacer(),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 44,
-                    child: _buildButton(context, provider),
-                  ),
+                  child: multi
+                      ? _buildSourceRows(context, provider)
+                      : SizedBox(
+                          width: double.infinity,
+                          height: 44,
+                          child: _buildButton(context, provider),
+                        ),
                 ),
               ],
             ),
           ),
         );
       },
+    );
+  }
+}
+
+// Miqdorni qo'lda kiritish oynasi. "." yoki "," bilan kasr kiritilsa kasr
+// saqlanadi (0.5 -> 0.5). Natija: manba -> milli-birlik (BUTUN son); bo'sh
+// qoldirilgan maydon natijaga kirmaydi (o'sha manba miqdoriga tegilmaydi).
+//
+// Controller'lar SHU vidjet holatida: route to'liq yopilgach (yopilish
+// animatsiyasidan keyin) dispose bo'ladi. showDialog qaytishi bilan dispose
+// qilinsa, yopilish animatsiyasida TextField qayta qurilib «TextEditingController
+// was used after being disposed» xatosi chiqadi.
+class _OmborQtyDialog extends StatefulWidget {
+  final String title;
+  final String? type;
+  final List<String> sources;
+  // Manba -> hozirgi savatdagi miqdor (milli) — maydon ichidagi «Hozir: X».
+  final Map<String, int> current;
+
+  const _OmborQtyDialog({
+    required this.title,
+    required this.type,
+    required this.sources,
+    required this.current,
+  });
+
+  @override
+  State<_OmborQtyDialog> createState() => _OmborQtyDialogState();
+}
+
+class _OmborQtyDialogState extends State<_OmborQtyDialog> {
+  late final List<TextEditingController> _controllers = [
+    for (final _ in widget.sources) TextEditingController(),
+  ];
+
+  bool get _multi => widget.sources.length > 1;
+
+  @override
+  void dispose() {
+    for (final c in _controllers) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  // Kiritilgan matn -> milli-birlik (BUTUN son); noto'g'ri bo'lsa null.
+  int? _parseMilli(String text) {
+    // Vergul ham nuqta kabi qabul qilinadi: "2,5" -> "2.5".
+    final raw = text.trim().replaceAll(',', '.');
+    final value = double.tryParse(raw);
+    if (value == null) return null;
+    // GRAMM-YOZISH HIMOYASI: кг/л mahsulotda 1000+ kiritilsa omborchi
+    // grammda yozgan deb olinadi ("20 kg" o'rniga "20000" yozish odati) —
+    // milli panjarada gramm == milli, ko'paytirilmaydi. Aks holda kasr
+    // saqlanib ×1000: 0.5 -> 500 milli, 2.5 -> 2500 milli.
+    if (qtyUnitFactor(widget.type) != 1 && value >= 1000) {
+      return value.round();
+    }
+    return (value * 1000).round();
+  }
+
+  void _confirm() {
+    final result = <String, int>{};
+    for (var i = 0; i < widget.sources.length; i++) {
+      final text = _controllers[i].text.trim();
+      if (text.isEmpty) continue;
+      final milli = _parseMilli(text);
+      if (milli == null) return;
+      result[widget.sources[i]] = milli;
+    }
+    // Hech narsa kiritilmagan — oyna ochiq qoladi (ilgarigidek).
+    if (result.isEmpty) return;
+    Navigator.pop(context, result);
+  }
+
+  Widget _field(int i) {
+    final source = widget.sources[i];
+    final current = widget.current[source] ?? 0;
+    final isLast = i == widget.sources.length - 1;
+    return TextField(
+      controller: _controllers[i],
+      autofocus: i == 0,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      textInputAction: _multi && !isLast ? TextInputAction.next : null,
+      inputFormatters: [
+        FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+      ],
+      decoration: InputDecoration(
+        labelText: _multi ? productSourceLabel(source) : 'Miqdor',
+        hintText: current > 0
+            ? 'Hozir: ${formatMilli(current)}'
+            : 'Miqdorni kiriting',
+        border: const OutlineInputBorder(),
+      ),
+      onSubmitted: isLast ? (_) => _confirm() : null,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      title: Text(
+        widget.title,
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+      ),
+      content: _multi
+          ? SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < widget.sources.length; i++)
+                    Padding(
+                      padding: EdgeInsets.only(top: i == 0 ? 0 : 12),
+                      child: _field(i),
+                    ),
+                ],
+              ),
+            )
+          : _field(0),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text(
+            'Bekor',
+            style: TextStyle(color: Colors.black54),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: _confirm,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: OmborProductCard._accentColor,
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('Saqlash'),
+        ),
+      ],
     );
   }
 }

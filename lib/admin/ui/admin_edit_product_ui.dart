@@ -18,6 +18,7 @@ import 'package:uz_ai_dev/admin/ui/widgets/product_type_radio.dart';
 import 'package:uz_ai_dev/admin/ui/widgets/tech_card_section.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/data/sklad_registry.dart';
+import 'package:uz_ai_dev/core/utils/product_sources.dart';
 
 class EditProductPage extends StatefulWidget {
   final ProductModelAdmin product;
@@ -54,7 +55,9 @@ class _EditProductPageState extends State<EditProductPage> {
   // Ombor → yuk keltiruvchi oqimi uchun yangi maydonlar
   late bool _moneApp;
   late bool _bozor;
-  late String _source;
+  // Yuk qayerdan keladi — bir nechta manba tanlanishi mumkin
+  // (Samarqand + Toshkent).
+  late Set<String> _selectedSources;
   late List<int> _selectedSklads;
 
   // Полуфабрикат — ishlab chiqariladi, sotilmaydi; tex kartalarda ingredient.
@@ -67,12 +70,6 @@ class _EditProductPageState extends State<EditProductPage> {
   // eski erkin matn _savedComment ga saqlanadi.
   late bool _compositionAsIngredients;
   late String _savedComment;
-
-  static const Map<String, String> _sourceOptions = {
-    'samarqand': 'Samarqand',
-    'toshkent': 'Toshkent',
-    'zagranitsa': 'Zagranitsa',
-  };
 
   // Skladlar — SkladRegistry (superadmin serverda tahrirlaydi).
   Map<int, String> get _skladOptions => SkladRegistry.names;
@@ -114,9 +111,14 @@ class _EditProductPageState extends State<EditProductPage> {
 
     _moneApp = widget.product.moneApp;
     _bozor = widget.product.bozor;
-    _source = _sourceOptions.containsKey(widget.product.source)
-        ? widget.product.source
-        : 'samarqand';
+    // Faqat ma'lum manbalar (checkbox'da ko'rinadiganlar); hech biri
+    // qolmasa — ilgarigidek standart Samarqand.
+    _selectedSources = widget.product.sources
+        .where(kProductSourceLabels.containsKey)
+        .toSet();
+    if (_selectedSources.isEmpty) {
+      _selectedSources.add(kDefaultProductSource);
+    }
     _selectedSklads = List.from(widget.product.sklads);
     _isSemiFinished = widget.product.isSemiFinished;
 
@@ -678,7 +680,8 @@ class _EditProductPageState extends State<EditProductPage> {
                 });
               },
             ),
-            // Bozor yoqilganda: bozor grammi, yuk manbai (radio) va sklad tanlovi (checkbox)
+            // Bozor yoqilganda: bozor grammi, yuk manbalari (checkbox — bir
+            // nechtasi mumkin) va sklad tanlovi (checkbox)
             if (_bozor) ...[
               const SizedBox(height: 16),
               TextFormField(
@@ -706,23 +709,22 @@ class _EditProductPageState extends State<EditProductPage> {
                 'Yuk qayerdan keladi',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
-              RadioGroup<String>(
-                groupValue: _source,
-                onChanged: (value) {
-                  setState(() {
-                    _source = value ?? 'samarqand';
-                  });
-                },
-                child: Column(
-                  children: _sourceOptions.entries.map((entry) {
-                    return RadioListTile<String>(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(entry.value),
-                      value: entry.key,
-                    );
-                  }).toList(),
-                ),
-              ),
+              ...kProductSources.map((code) {
+                return CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(productSourceLabel(code)),
+                  value: _selectedSources.contains(code),
+                  onChanged: (bool? value) {
+                    setState(() {
+                      if (value == true) {
+                        _selectedSources.add(code);
+                      } else {
+                        _selectedSources.remove(code);
+                      }
+                    });
+                  },
+                );
+              }),
               const SizedBox(height: 8),
               const Text(
                 'Qaysi skladdan buyurtma bera oladi',
@@ -774,6 +776,14 @@ class _EditProductPageState extends State<EditProductPage> {
                                 const SnackBar(
                                     content:
                                         Text('Выберите хотя бы одну ветку')),
+                              );
+                              return;
+                            }
+                            if (_bozor && _selectedSources.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content:
+                                        Text('Kamida bitta manba tanlang')),
                               );
                               return;
                             }
@@ -833,7 +843,12 @@ class _EditProductPageState extends State<EditProductPage> {
                               imageUrl: imageUrl,
                               moneApp: _moneApp,
                               bozor: _bozor,
-                              source: _source,
+                              // Kanonik tartibda; source = sources.first
+                              // (model o'zi hisoblaydi). Bo'sh bo'lsa
+                              // (bozor o'chiq) — eski manbalar qoladi.
+                              sources: _selectedSources.isEmpty
+                                  ? widget.product.sources
+                                  : canonicalProductSources(_selectedSources),
                               sklads: _selectedSklads,
                               techCard: _techController.build(),
                               comment: _compositionAsIngredients

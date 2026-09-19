@@ -1,6 +1,7 @@
 // Bozor (ombor) mahsuloti modeli.
 // Backend javobi seller /products1 bilan bir xil guruhlangan shaklda keladi:
 // { "success": true, "message": "...", "data": { "Kategoriya": [ {...}, ... ] } }
+import 'package:uz_ai_dev/core/utils/product_sources.dart';
 
 class OmborProduct {
   final int id;
@@ -12,7 +13,13 @@ class OmborProduct {
   final String? ingredients;
   final String? companyName;
   final String? imageUrl;
+  // Asosiy manba (= sources.first) — eski maydon.
   final String? source;
+  // Yuk qayerdan keladi — bir nechta bo'lishi mumkin (Samarqand + Toshkent).
+  // Kanonik tartib, hech qachon bo'sh emas. Omborchi har manba uchun ALOHIDA
+  // miqdor kiritadi; backend har manbani o'z bozorchisiga alohida buyurtma
+  // qilib yuboradi.
+  final List<String> sources;
 
   OmborProduct({
     required this.id,
@@ -24,7 +31,8 @@ class OmborProduct {
     this.companyName,
     this.imageUrl,
     this.source,
-  });
+    List<String>? sources,
+  }) : sources = parseProductSources(sources, source);
 
   factory OmborProduct.fromJson(Map<String, dynamic> json) {
     return OmborProduct(
@@ -36,23 +44,21 @@ class OmborProduct {
       ingredients: json['ingredients'],
       companyName: json['company_name'],
       imageUrl: json['image_url'],
-      source: json['source'],
+      source: json['source']?.toString(),
+      // sources yo'q/bo'sh (eski backend) -> [source] -> ['samarqand'].
+      sources: parseProductSources(json['sources'], json['source']),
     );
   }
 
-  // Manba kodini foydalanuvchiga ko'rsatiladigan matnga aylantirish.
-  String get sourceLabel {
-    switch (source) {
-      case 'samarqand':
-        return 'Samarqand';
-      case 'toshkent':
-        return 'Toshkent';
-      case 'zagranitsa':
-        return 'Zagranitsa';
-      default:
-        return source ?? '';
-    }
-  }
+  // Asosiy manba — bitta manbali mahsulotda savat qatori shu manba bilan.
+  String get primarySource => sources.first;
+
+  // Bir nechta manbadan keladimi — kartochkada har manbaga alohida qator.
+  bool get isMultiSource => sources.length > 1;
+
+  // Manbalar foydalanuvchiga ko'rsatiladigan matnda: «Samarqand, Toshkent».
+  // Bitta manba nomi uchun — productSourceLabel (core/utils/product_sources.dart).
+  String get sourceLabel => sources.map(productSourceLabel).join(', ');
 }
 
 // Kategoriya (GET /api/categories) — admin paneldagi kabi ro'yxat uchun:
