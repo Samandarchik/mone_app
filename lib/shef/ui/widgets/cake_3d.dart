@@ -7,6 +7,7 @@
 // buriladi; bosish / nuqtalar — 3 ta burchak (yondan, tepadan, past).
 // [faceFront] — yozuv o'qilishi uchun aylanish to'xtab, tepadan ko'rinadi.
 // Cake3D — kichik statik variant (kartalar uchun).
+// Rotating3DView — umumiy qobiq (biskvit ham shuni ishlatadi: biscuit_3d.dart).
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -22,7 +23,7 @@ const Color _chocolate = Color(0xFF4A2A1A);
 const List<double> _tilts = [0.26, 0.46, 0.14];
 const double _frontTilt = 0.55;
 
-class Cake3DView extends StatefulWidget {
+class Cake3DView extends StatelessWidget {
   final CakeLook look;
   final double height;
   final BorderRadius borderRadius;
@@ -37,10 +38,42 @@ class Cake3DView extends StatefulWidget {
   });
 
   @override
-  State<Cake3DView> createState() => _Cake3DViewState();
+  Widget build(BuildContext context) {
+    return Rotating3DView(
+      height: height,
+      borderRadius: borderRadius,
+      faceFront: faceFront,
+      painter: (tilt, rotation) =>
+          CakePainter(look: look, tilt: tilt, rotation: rotation),
+    );
+  }
 }
 
-class _Cake3DViewState extends State<Cake3DView>
+// 3D chizma uchun painter: ko'rinish burchagi (tilt) va burilish (radian).
+typedef Painter3DBuilder = CustomPainter Function(
+    double tilt, double rotation);
+
+// Aylanadigan 3D ko'rinish qobig'i: fon, o'zi aylanish, surib burish,
+// burchak nuqtalari. Nima chizilishini [painter] beradi (tort / biskvit).
+class Rotating3DView extends StatefulWidget {
+  final Painter3DBuilder painter;
+  final double height;
+  final BorderRadius borderRadius;
+  final bool faceFront;
+
+  const Rotating3DView({
+    super.key,
+    required this.painter,
+    this.height = 260,
+    this.borderRadius = const BorderRadius.all(Radius.circular(16)),
+    this.faceFront = false,
+  });
+
+  @override
+  State<Rotating3DView> createState() => _Rotating3DViewState();
+}
+
+class _Rotating3DViewState extends State<Rotating3DView>
     with SingleTickerProviderStateMixin {
   late final AnimationController _spin = AnimationController(
     vsync: this,
@@ -57,7 +90,7 @@ class _Cake3DViewState extends State<Cake3DView>
   }
 
   @override
-  void didUpdateWidget(Cake3DView old) {
+  void didUpdateWidget(Rotating3DView old) {
     super.didUpdateWidget(old);
     if (widget.faceFront) {
       _spin.stop();
@@ -106,11 +139,9 @@ class _Cake3DViewState extends State<Cake3DView>
                     animation: _spin,
                     builder: (context, _) => CustomPaint(
                       size: Size.infinite,
-                      painter: CakePainter(
-                        look: widget.look,
-                        tilt: tilt,
-                        rotation:
-                            front ? 0 : _spin.value * 2 * math.pi + _drag,
+                      painter: widget.painter(
+                        tilt,
+                        front ? 0 : _spin.value * 2 * math.pi + _drag,
                       ),
                     ),
                   ),
@@ -161,6 +192,41 @@ class Cake3D extends StatelessWidget {
       painter: CakePainter(look: look, tilt: tilt, rotation: 0.6),
     );
   }
+}
+
+// Kumush chetli oq patnis (ostida soya). [c] — ustki yuza markazi.
+// Tort va biskvit (biscuit_3d.dart) ikkalasi ham shuni ishlatadi.
+void paintPlate3D(Canvas canvas, Offset c, double rx, double ry, double thick) {
+  canvas.drawOval(
+    Rect.fromCenter(
+      center: c.translate(0, thick + ry * 0.35),
+      width: rx * 2.1,
+      height: ry * 2.2 + 6,
+    ),
+    Paint()
+      ..color = Colors.black.withValues(alpha: 0.10)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+  );
+  final plateTop = Rect.fromCenter(center: c, width: rx * 2, height: ry * 2);
+  final edge = Path()
+    ..addOval(plateTop.shift(Offset(0, thick)))
+    ..addRect(Rect.fromLTRB(plateTop.left, c.dy, plateTop.right, c.dy + thick));
+  canvas.drawPath(
+    edge,
+    Paint()
+      ..shader = const LinearGradient(
+        colors: [Color(0xFF9E97A8), Color(0xFFE9E6EE), Color(0xFFA8A1B2)],
+      ).createShader(plateTop),
+  );
+  canvas.drawOval(
+    plateTop,
+    Paint()
+      ..shader = const RadialGradient(
+        center: Alignment(-0.2, -0.4),
+        radius: 0.9,
+        colors: [Color(0xFFFFFFFF), Color(0xFFE4E1EA)],
+      ).createShader(plateTop),
+  );
 }
 
 class _Tier {
@@ -333,39 +399,8 @@ class CakePainter extends CustomPainter {
     }
   }
 
-  void _drawPlate(Canvas canvas, double rx, double ry, double thick, double y) {
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(_cx, y + thick + ry * 0.35),
-        width: rx * 2.1,
-        height: ry * 2.2 + 6,
-      ),
-      Paint()
-        ..color = Colors.black.withValues(alpha: 0.10)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
-    );
-    final plateTop =
-        Rect.fromCenter(center: Offset(_cx, y), width: rx * 2, height: ry * 2);
-    final edge = Path()
-      ..addOval(plateTop.shift(Offset(0, thick)))
-      ..addRect(Rect.fromLTRB(plateTop.left, y, plateTop.right, y + thick));
-    canvas.drawPath(
-      edge,
-      Paint()
-        ..shader = const LinearGradient(
-          colors: [Color(0xFF9E97A8), Color(0xFFE9E6EE), Color(0xFFA8A1B2)],
-        ).createShader(plateTop),
-    );
-    canvas.drawOval(
-      plateTop,
-      Paint()
-        ..shader = const RadialGradient(
-          center: Alignment(-0.2, -0.4),
-          radius: 0.9,
-          colors: [Color(0xFFFFFFFF), Color(0xFFE4E1EA)],
-        ).createShader(plateTop),
-    );
-  }
+  void _drawPlate(Canvas canvas, double rx, double ry, double thick, double y) =>
+      paintPlate3D(canvas, Offset(_cx, y), rx, ry, thick);
 
   void _drawRoundSide(Canvas canvas, double r, double top, double bottom,
       Color base, Color shade, Color light) {

@@ -27,7 +27,7 @@ import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:uz_ai_dev/shef/ui/biskvit_page.dart';
 import 'package:uz_ai_dev/shef/ui/cake_constructor_page.dart';
-import 'package:uz_ai_dev/shef/ui/widgets/cake_3d.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
 
 // Shef ekranlarining umumiy ranglari (shef_home_ui / pf_stock_page bilan bir xil).
 const Color _bgColor = Color(0xFFFAF6F1);
@@ -302,6 +302,9 @@ class ShefTechCardProductsPage extends StatefulWidget {
 class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  // «П/Ф Бисквит»: 3D'da ko'rsatilayotgan biskvit (null — birinchisi).
+  int? _selectedId;
+  final ScrollController _gridScroll = ScrollController();
 
   @override
   void initState() {
@@ -316,6 +319,7 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
   @override
   void dispose() {
     _searchController.dispose();
+    _gridScroll.dispose();
     super.dispose();
   }
 
@@ -442,7 +446,7 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                       ? ListView(
                           physics: const AlwaysScrollableScrollPhysics(),
                           children: [
-                            if (widget.showCakeConstructor) _cakeHeader(),
+                            if (widget.showCakeConstructor) _cakeHeader(null),
                             SizedBox(
                                 height: widget.showCakeConstructor ? 40 : 140),
                             Center(
@@ -482,15 +486,21 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
     );
   }
 
-  // «П/Ф Бисквит»: tepada 3D tort, ostida biskvitlar 2 ustunli grid
-  // (hammasi birga suriladi).
+  // «П/Ф Бисквит»: tepada tanlangan biskvitning 3D'si (o'lchami тех
+  // картадан), ostida biskvitlar 2 ustunli grid (hammasi birga suriladi).
+  // Karta: bir marta bosish — 3D'da ko'rsatish, ikki marta — тех карта.
   Widget _productGrid(List<ProductModelAdmin> rows) {
+    final selected = rows.firstWhere(
+      (p) => p.id == _selectedId,
+      orElse: () => rows.first,
+    );
     return CustomScrollView(
+      controller: _gridScroll,
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
-          sliver: SliverToBoxAdapter(child: _cakeHeader()),
+          sliver: SliverToBoxAdapter(child: _cakeHeader(selected)),
         ),
         SliverPadding(
           // Pastki joy — FAB oxirgi qatorni yopmasin.
@@ -509,7 +519,9 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                 final p = rows[index];
                 return _ProductGridCard(
                   product: p,
-                  onTap: () => _openTechCard(p),
+                  selected: p.id == selected.id,
+                  onTap: () => _showBiscuit(p),
+                  onDoubleTap: () => _openTechCard(p),
                   onEditBaking:
                       widget.showBaking ? () => _editBaking(p) : null,
                 );
@@ -521,15 +533,41 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
     );
   }
 
-  // «П/Ф Бисквит»: 3D tort (aylanadi, suriladi) + tort konstruktori
+  // Bir marta bosilgan biskvit — 3D'da; 3D ko'rinsin deb tepaga suriladi.
+  void _showBiscuit(ProductModelAdmin p) {
+    setState(() => _selectedId = p.id);
+    if (_gridScroll.hasClients && _gridScroll.offset > 0) {
+      _gridScroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  // «П/Ф Бисквит»: tanlangan biskvitning 3D'si (tortsiz — faqat biskvit,
+  // o'lchami тех картадан) + tort konstruktori
   // (cake_constructor_page.dart — Shakl → … → Qo'shimchalar).
-  Widget _cakeHeader() {
+  Widget _cakeHeader(ProductModelAdmin? biscuit) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Cake3DView(height: 220),
+          Biscuit3DView(
+            height: 220,
+            title: biscuit?.name ?? 'Biskvit',
+            dims: BiscuitDims.fromTechCard(biscuit?.techCard),
+          ),
+          if (biscuit != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                'Bir marta bosing — 3D, ikki marta — тех карта',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+            ),
           const SizedBox(height: 8),
           SizedBox(
             height: 50,
@@ -692,15 +730,20 @@ class _ProductTile extends StatelessWidget {
 }
 
 // Grid kartasi («П/Ф Бисквит»): tepada rasm, ostida nom (+ ПФ belgisi),
-// тех карта holati va (berilsa) pishirish rejimi chipi.
+// тех карта holati va (berilsa) pishirish rejimi chipi. [selected] — hozir
+// 3D'da ko'rsatilayotgani (ramka ajralib turadi).
 class _ProductGridCard extends StatelessWidget {
   final ProductModelAdmin product;
+  final bool selected;
   final VoidCallback onTap;
+  final VoidCallback onDoubleTap;
   final VoidCallback? onEditBaking;
 
   const _ProductGridCard({
     required this.product,
+    required this.selected,
     required this.onTap,
+    required this.onDoubleTap,
     this.onEditBaking,
   });
 
@@ -719,11 +762,14 @@ class _ProductGridCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: onTap,
+        onDoubleTap: onDoubleTap,
         child: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade300),
+            border: selected
+                ? Border.all(color: _accentColor, width: 2)
+                : Border.all(color: Colors.grey.shade300),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
