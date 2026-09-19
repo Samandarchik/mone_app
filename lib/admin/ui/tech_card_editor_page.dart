@@ -1826,21 +1826,24 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
   // Foto tanlash → yuklash → yon tomon tasmasini tanlash. Tex karta
   // «Сохранить» bosilganda saqlanadi (boshqa maydonlar kabi).
   Future<void> _pickBiscuitPhoto() async {
-    final source = await showDialog<ImageSource>(
+    final source = await showModalBottomSheet<ImageSource>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Biskvit fotosi'),
-        content: Column(
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.photo_library),
-              title: const Text('Из галереи'),
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Galereyadan tanlash'),
               onTap: () => Navigator.pop(ctx, ImageSource.gallery),
             ),
             ListTile(
-              leading: const Icon(Icons.camera_alt),
-              title: const Text('Из камеры'),
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Suratga olish'),
               onTap: () => Navigator.pop(ctx, ImageSource.camera),
             ),
           ],
@@ -1901,123 +1904,89 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
     });
   }
 
+  // Matnsiz: foto yo'q — bitta «Rasm qo'shish» tugmasi; bor — foto va
+  // «Almashtirish» / «O'chirish».
   Widget _biscuitPhotoSection() {
-    final card = c.build();
-    final photo = BiscuitPhoto.fromTechCard(card);
-    final title = Row(
-      children: [
-        const Icon(Icons.cake_outlined, size: 18, color: Color(0xFF8B6A2F)),
-        const SizedBox(width: 6),
-        const Expanded(
-          child: Text(
-            'Biskvit fotosi',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-          ),
-        ),
-        if (_uploadingBiscuitPhoto)
-          const SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-      ],
+    final photo = BiscuitPhoto.fromTechCard(c.build());
+    final busy = _uploadingBiscuitPhoto;
+    final spinner = const SizedBox(
+      width: 18,
+      height: 18,
+      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
     );
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFAF6F1),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE8DCC8)),
-      ),
+    if (photo == null) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: ElevatedButton.icon(
+          onPressed: busy ? null : _pickBiscuitPhoto,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFC5A97B),
+            foregroundColor: Colors.white,
+            minimumSize: const Size.fromHeight(46),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          icon: busy ? spinner : const Icon(Icons.add_a_photo_outlined),
+          label: const Text('Rasm qo\'shish'),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          title,
-          const SizedBox(height: 4),
-          Text(
-            photo == null
-                ? 'Tayyor biskvit fotosini qo\'shing (kesilgan yoki yon '
-                    'tomoni ko\'rinadigan) — 3D rasmda yon tomoni shu '
-                    'fotodan chiziladi (rezavor, meva, qatlamlar).'
-                : 'Chapda — foto, o\'ngda — 3D rasmda qanday ko\'rinishi.',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-          ),
-          const SizedBox(height: 10),
-          if (photo != null) ...[
-            SizedBox(
-              height: 130,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => openFullScreenImage(context, photo.url),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: AppNetworkImage(
-                          imageUrl: photo.url,
-                          fit: BoxFit.cover,
-                          errorWidget: (_) => const SizedBox.shrink(),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: BiscuitThumb(
-                        dims: BiscuitDims.fromTechCard(card),
-                        palette:
-                            BiscuitPalette.detect(widget.product.name, card),
-                        photo: photo,
-                      ),
-                    ),
-                  ),
-                ],
+          GestureDetector(
+            onTap: () => openFullScreenImage(context, photo.url),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: AspectRatio(
+                aspectRatio: 16 / 10,
+                child: AppNetworkImage(
+                  imageUrl: photo.url,
+                  fit: BoxFit.cover,
+                  errorWidget: (_) => const SizedBox.shrink(),
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: _pickBiscuitSide,
-                  icon: const Icon(Icons.crop, size: 18),
-                  label: const Text('Yon tomonni tanlash'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _uploadingBiscuitPhoto ? null : _pickBiscuitPhoto,
-                  icon: const Icon(Icons.photo_camera_outlined, size: 18),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: busy ? null : _pickBiscuitPhoto,
+                  icon: busy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.autorenew, size: 18),
                   label: const Text('Almashtirish'),
                 ),
-                TextButton.icon(
-                  onPressed: () => setState(() {
-                    c.biscuitPhotoUrl = '';
-                    c.biscuitSideTop = 0;
-                    c.biscuitSideH = 0;
-                  }),
-                  style: TextButton.styleFrom(foregroundColor: Colors.red),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: busy
+                      ? null
+                      : () => setState(() {
+                            c.biscuitPhotoUrl = '';
+                            c.biscuitSideTop = 0;
+                            c.biscuitSideH = 0;
+                          }),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                    side: BorderSide(color: Colors.red.shade200),
+                  ),
                   icon: const Icon(Icons.delete_outline, size: 18),
                   label: const Text('O\'chirish'),
                 ),
-              ],
-            ),
-          ] else
-            ElevatedButton.icon(
-              onPressed: _uploadingBiscuitPhoto ? null : _pickBiscuitPhoto,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFC5A97B),
-                foregroundColor: Colors.white,
-                minimumSize: const Size.fromHeight(46),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
               ),
-              icon: const Icon(Icons.add_a_photo_outlined),
-              label: const Text('Biskvit fotosini qo\'shish'),
-            ),
+            ],
+          ),
         ],
       ),
     );
