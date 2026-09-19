@@ -172,6 +172,38 @@ function Get-ProjectVersion([string]$Path) {
 # Endi jarayon daraxti o'ldiriladi va $false qaytadi (build eski kod bilan
 # davom etadi yoki versiya bir xil bo'lsa bekor qilinadi).
 function Invoke-GitPull([string]$Path) {
+    $script:LastPullOut = ''
+    $ok = Invoke-GitPullOnce $Path
+    if ($ok) { return $true }
+
+    # --- Avto-tuzatish: "local changes would be overwritten by merge" ---
+    # Flutter generated fayllarni (GeneratedPluginRegistrant.swift va h.k.) LF
+    # bilan qayta yozadi; autocrlf=true da git ularni "o'zgargan" deb ko'radi,
+    # mazmun esa HEAD bilan bir xil. Bunday fayl pull'ni butunlay to'sib qo'yardi.
+    # FAQAT mazmuni HEAD bilan bir xil (git diff --quiet = 0) fayllar tiklanadi -
+    # haqiqiy lokal o'zgarishga TEGILMAYDI (u holda pull XATO bo'lib qoladi).
+    $m = [regex]::Match($script:LastPullOut, '(?s)would be overwritten by merge:\s*\r?\n(.*?)\r?\nPlease commit')
+    if (-not $m.Success) { return $false }
+    $files = @($m.Groups[1].Value -split "\r?\n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    if ($files.Count -eq 0) { return $false }
+    # MUHIM: git cmd orqali chaqiriladi va stderr cmd'ning o'zida yutiladi.
+    # PS 5.1 da ErrorActionPreference='Stop' + "2>$null" bo'lsa git'ning oddiy
+    # "LF will be replaced by CRLF" ogohlantirishi ham istisnoga aylanadi.
+    foreach ($f in $files) {
+        & $env:ComSpec /c "git -C `"$Path`" diff --quiet -- `"$f`" >nul 2>nul"
+        if ($LASTEXITCODE -ne 0) {
+            Write-Log "    git pull: '$f' da HAQIQIY lokal o'zgarish bor - avto-tuzatilmaydi." 'DarkYellow'
+            return $false
+        }
+    }
+    foreach ($f in $files) {
+        & $env:ComSpec /c "git -C `"$Path`" checkout -- `"$f`" >nul 2>nul"
+        Write-Log "    git pull: '$f' faqat qator-oxiri farqi edi - tiklandi (kod $LASTEXITCODE)." 'DarkGray'
+    }
+    return (Invoke-GitPullOnce $Path)
+}
+
+function Invoke-GitPullOnce([string]$Path) {
     $outLog = Join-Path $env:TEMP 'uzbot_gitpull.out.log'
     $errLog = Join-Path $env:TEMP 'uzbot_gitpull.err.log'
     try {
@@ -194,6 +226,7 @@ function Invoke-GitPull([string]$Path) {
         foreach ($f in @($outLog, $errLog)) {
             try { if (Test-Path $f) { $out += (Get-Content $f -Raw -Encoding UTF8) } } catch { }
         }
+        $script:LastPullOut = $out
         Write-Log "    git pull (kod $code): $($out.Trim())" 'DarkGray'
         return ($code -eq 0)
     } catch {
