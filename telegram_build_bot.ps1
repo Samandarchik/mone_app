@@ -1,4 +1,4 @@
-# =====================================================================
+﻿# =====================================================================
 #  telegram_build_bot.ps1  (ko'p loyihali)
 #  Bu mashinada doim ishlab turadigan Telegram bot (long polling).
 #  Botga "build" deb yozsangiz -> loyihalar ro'yxati (tugmalar) chiqadi.
@@ -13,10 +13,21 @@
 #  tugmasi bilan majburlash mumkin). Yangi build chiqsa - GitHub Releases
 #  havolasi xabarga qo'shiladi.
 #
+#  AUTO UPDATE (GitHub polling): bot har $PollSec soniyada GitHub API'dan
+#  har bir loyihaning default branch'idagi oxirgi commit sha'sini so'raydi.
+#  Sha o'zgargan bo'lsa (= kimdir push qildi) -> Invoke-Build -Auto:
+#  git pull -> versiya tekshiruvi -> versiya yangi bo'lsa build + release.
+#  Nega webhook emas: bu kompyuter NAT ortida (192.168.x.x), GitHub
+#  webhook'i unga yetib kela olmaydi. Polling uchun public IP/port shart emas.
+#  Token: %USERPROFILE%\.github_release_token (publish_release.ps1 bilan bir xil).
+#  github_webhook_listener.ps1 navbati (.webhook_queue) ham ishlayveradi.
+#
 #  Sozlash: yonidagi  .telegram_bot.config.txt :
 #     1-qator: bot token
-#     2-qator: ruxsat berilgan chat ID
-#  Loyihalarni pastdagi $Projects ro'yxatiga qo'shing/olib tashlang.
+#     2-qator: ruxsat berilgan chat ID (vergul bilan; birinchisi = admin,
+#              auto update xabarlari unga boradi)
+#  Loyihalarni pastdagi $Projects va $Repos ro'yxatiga qo'shing/olib tashlang.
+#  Log: yonidagi .telegram_bot.log
 # =====================================================================
 
 $ErrorActionPreference = 'Stop'
@@ -36,6 +47,31 @@ $Projects = [ordered]@{
     'taxi'               = (Join-Path $Desktop 'mone-taxi-mobile')
     # Flutter loyihasi repo ichidagi papkada: web_end_bot_app_hr\hr_mobile_app
     'hr_mobile_app'      = (Join-Path $Desktop 'web_end_bot_app_hr\hr_mobile_app')
+}
+
+# --- Loyiha -> GitHub repo (owner/name). Auto update shu ro'yxatni kuzatadi. ---
+$Repos = [ordered]@{
+    'uz_ai_dev'          = 'Samandarchik/mone_app'
+    'workly_app'         = 'Samandarchik/workly_app'
+    'timekivi_app'       = 'Samandarchik/timekivi_app'
+    'qilinadigan_ishlar' = 'Samandarchik/qilinadigan_ishlar'
+    'pos_flutter'        = 'Samandarchik/pos_flutter'
+    'taxi'               = 'Samandarchik/mone-taxi-mobile'
+    'hr_mobile_app'      = 'Samandarchik/web_end_bot_app_hr'
+}
+$PollSec       = 60                                   # GitHub'ni tekshirish oralig'i (soniya)
+$PollStatePath = Join-Path $Dir '.github_poll_state.json'
+$GhTokenFile   = Join-Path $env:USERPROFILE '.github_release_token'
+
+# --- Log fayl (konsol yopiq bo'lsa ham nima bo'lganini ko'rish uchun) ---
+$LogPath = Join-Path $Dir '.telegram_bot.log'
+function Write-Log([string]$Text, [string]$Color = 'Gray') {
+    $line = "{0}  {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Text
+    Write-Host $line -ForegroundColor $Color
+    try {
+        if ((Test-Path $LogPath) -and (Get-Item $LogPath).Length -gt 5MB) { Move-Item $LogPath "$LogPath.old" -Force }
+        Add-Content -Path $LogPath -Value $line -Encoding UTF8
+    } catch { }
 }
 
 # --- Config (token + chat id) ---
@@ -61,7 +97,7 @@ function Send-Msg([string]$ChatId, [string]$Text, $Markup=$null) {
     $b = @{ chat_id = $ChatId; text = $Text; disable_web_page_preview = 'true' }
     if ($Markup) { $b.reply_markup = $Markup }
     try { return Invoke-RestMethod -Uri "$Api/sendMessage" -Method Post -TimeoutSec 30 -Body $b }
-    catch { Write-Host "[ogoh] send: $($_.Exception.Message)" -ForegroundColor DarkYellow; return $null }
+    catch { Write-Log "[ogoh] send: $($_.Exception.Message)" 'DarkYellow'; return $null }
 }
 function Edit-Msg([string]$ChatId, [string]$MsgId, [string]$Text) {
     try { Invoke-RestMethod -Uri "$Api/editMessageText" -Method Post -TimeoutSec 30 -Body @{
@@ -109,7 +145,7 @@ function Set-LastBuild([string]$Name, [string]$Version, [string]$Url) {
         at      = (Get-Date -Format 'yyyy-MM-dd HH:mm')
     }
     try { ($s | ConvertTo-Json -Depth 5) | Set-Content $StatePath -Encoding UTF8 }
-    catch { Write-Host "[ogoh] state saqlanmadi: $($_.Exception.Message)" -ForegroundColor DarkYellow }
+    catch { Write-Log "[ogoh] state saqlanmadi: $($_.Exception.Message)" 'DarkYellow' }
 }
 
 # pubspec.yaml -> "0.5.7+57" (build raqami bilan). pubspec yo'q bo'lsa -> git commit.
@@ -143,19 +179,25 @@ function Invoke-GitPull([string]$Path) {
             -ArgumentList '-C', "`"$Path`"", 'pull' `
             -WindowStyle Hidden -PassThru `
             -RedirectStandardOutput $outLog -RedirectStandardError $errLog
+        # PS 5.1 tuzog'i: Handle o'qilmasa va WaitForExit(ms) dan keyin
+        # WaitForExit() chaqirilmasa $p.ExitCode $null bo'lib qoladi -
+        # "Already up to date" bo'lsa ham pull XATO deb hisoblanardi.
+        $null = $p.Handle
         if (-not $p.WaitForExit(180000)) {
             & taskkill /T /F /PID $p.Id 2>$null | Out-Null
-            Write-Host "[ogoh] git pull 3 daqiqada tugamadi - to'xtatildi (tarmoq qotgan?)" -ForegroundColor DarkYellow
+            Write-Log "[ogoh] git pull 3 daqiqada tugamadi - to'xtatildi (tarmoq qotgan?)" 'DarkYellow'
             return $false
         }
+        $p.WaitForExit()
+        $code = $p.ExitCode
         $out = ''
         foreach ($f in @($outLog, $errLog)) {
             try { if (Test-Path $f) { $out += (Get-Content $f -Raw -Encoding UTF8) } } catch { }
         }
-        Write-Host "    git pull: $($out.Trim())" -ForegroundColor DarkGray
-        return ($p.ExitCode -eq 0)
+        Write-Log "    git pull (kod $code): $($out.Trim())" 'DarkGray'
+        return ($code -eq 0)
     } catch {
-        Write-Host "[ogoh] git pull: $($_.Exception.Message)" -ForegroundColor DarkYellow
+        Write-Log "[ogoh] git pull: $($_.Exception.Message)" 'DarkYellow'
         return $false
     }
 }
@@ -174,7 +216,7 @@ function Show-Menu([string]$ChatId) {
     foreach ($k in $Projects.Keys) {
         $btns += , (@(@{ text = $k; callback_data = "b:$k" }))
     }
-    # SH5 qoldiqlarini qo'lda yangilash (rk7_bridge sh5-remains) — test rejimi,
+    # SH5 qoldiqlarini qo'lda yangilash (rk7_bridge sh5-remains) - test rejimi,
     # daemon yo'q: faqat tugma bosilganda yangilanadi.
     $btns += , (@(@{ text = "Ostatka yangilash (SH5)"; callback_data = "sh5:refresh" }))
     $markup = (@{ inline_keyboard = $btns } | ConvertTo-Json -Depth 6 -Compress)
@@ -182,8 +224,8 @@ function Show-Menu([string]$ChatId) {
 }
 
 # --- SH5 qoldiqlarini yangilash (rk7_bridge sh5-remains) ---
-# SH5 (StoreHouse) dan qoldiqlarni o'qib Mone'ga push qiladi — ilovadagi
-# «Ostatka (SH5)» ekrani yangi raqamlarni ko'radi. Bridge config'i o'z
+# SH5 (StoreHouse) dan qoldiqlarni o'qib Mone'ga push qiladi - ilovadagi
+# "Ostatka (SH5)" ekrani yangi raqamlarni ko'radi. Bridge config'i o'z
 # papkasidan o'qiladi, shuning uchun Push-Location shart.
 $Sh5BridgeDir = 'C:\112233\rk7_bridge'
 
@@ -209,25 +251,28 @@ function Invoke-Sh5Refresh([string]$ChatId) {
     # Oxirgi qatorlar yetarli (masalan "omborlar=40 tovar satrlari=3269").
     $tail = (($out -split "`n") | Select-Object -Last 4) -join "`n"
     if ($code -eq 0) {
-        $txt = "Ostatka yangilandi (SH5 -> Mone).`n$tail`nIlovada «Ostatka (SH5)» ni oching."
+        $txt = "Ostatka yangilandi (SH5 -> Mone).`n$tail`nIlovada `"Ostatka (SH5)`" ni oching."
     } else {
         $txt = "Ostatka yangilash XATO (kod $code):`n$tail"
     }
     if ($mid) { Edit-Msg $ChatId $mid $txt } else { Send-Msg $ChatId $txt | Out-Null }
-    Write-Host ">>> ostatka yangilash: kod=$code" -ForegroundColor Cyan
+    Write-Log ">>> ostatka yangilash: kod=$code" 'Cyan'
 }
 
 # --- Bitta loyihani build qilish + progress ---
 $Stages = @(
-    @{ re = '\[0/4\] git pull';  msg = 'git pull - oxirgi kod olinmoqda...' },
-    @{ re = '\[1/4\]';           msg = 'Loyiha nusxalanmoqda...' },
-    @{ re = '\[2/4\]';           msg = 'flutter pub get...' },
-    @{ re = '\[3/4\]';           msg = 'BUILD qilinmoqda (biroz kuting)...' },
-    @{ re = '\[4/4\]';           msg = 'Zip yaratilmoqda...' },
+    @{ re = '\[0/[45]\] git pull'; msg = 'git pull - oxirgi kod olinmoqda...' },
+    @{ re = '\[1/[45]\]';          msg = 'Loyiha nusxalanmoqda...' },
+    @{ re = '\[2/[45]\]';          msg = 'flutter pub get...' },
+    @{ re = '\[3/[45]\]';          msg = 'BUILD qilinmoqda (biroz kuting)...' },
+    @{ re = '\[4/[45]\]';          msg = 'Zip yaratilmoqda...' },
     @{ re = '\[5/5\]';           msg = "GitHub Releases'ga yuborilmoqda..." }
 )
 
-function Invoke-Build([string]$ChatId, [string]$Name, [bool]$Force = $false) {
+# $Auto = auto update (GitHub'da yangi push topildi, hech kim tugma bosmagan):
+# versiya bir xil bo'lsa faqat git pull qilinadi va Telegram'ga HECH NARSA
+# yozilmaydi; versiya yangi bo'lsa odatdagi build + progress xabari ketadi.
+function Invoke-Build([string]$ChatId, [string]$Name, [bool]$Force = $false, [bool]$Auto = $false) {
     $path = $Projects[$Name]
     $bat  = Join-Path $path 'build_windows.bat'
     if (-not (Test-Path $bat)) {
@@ -235,14 +280,31 @@ function Invoke-Build([string]$ChatId, [string]$Name, [bool]$Force = $false) {
         return
     }
 
-    $r = Send-Msg $ChatId "[$Name]`nQabul qilindi. git pull - versiya tekshirilmoqda..."
     $mid = $null
-    if ($r -and $r.result) { $mid = [string]$r.result.message_id }
+    if (-not $Auto) {
+        $r = Send-Msg $ChatId "[$Name]`nQabul qilindi. git pull - versiya tekshirilmoqda..."
+        if ($r -and $r.result) { $mid = [string]$r.result.message_id }
+    }
 
     # --- Avval kodni yangilaymiz, keyin versiyani solishtiramiz ---
     $pullOk = Invoke-GitPull $path
     $ver    = Get-ProjectVersion $path
     $prev   = Get-LastBuild $Name
+
+    if ($Auto) {
+        if (-not $pullOk) {
+            Write-Log ">>> [$Name] auto update: git pull XATO - build qilinmaydi." 'Yellow'
+            Send-Msg $ChatId "[$Name]`nGitHub'ga push keldi, lekin git pull XATO berdi (lokal o'zgarish/konflikt?). Build qilinmadi." | Out-Null
+            return
+        }
+        if ($ver -and $prev.version -and $prev.version -eq $ver) {
+            Write-Log ">>> [$Name] auto update: git pull ok, versiya bir xil ($ver) - build yo'q." 'Yellow'
+            return
+        }
+        Write-Log ">>> [$Name] auto update: yangi versiya $ver (oldingi: $($prev.version)) - build boshlanadi." 'Cyan'
+        $r = Send-Msg $ChatId "[$Name]`nGitHub push - yangi versiya: $ver (oldingi: $($prev.version))"
+        if ($r -and $r.result) { $mid = [string]$r.result.message_id }
+    }
 
     if (-not $Force -and $ver -and $prev.version -and $prev.version -eq $ver) {
         $txt = "[$Name]`nBUILD BEKOR QILINDI - versiya bir xil: $ver"
@@ -254,7 +316,7 @@ function Invoke-Build([string]$ChatId, [string]$Name, [bool]$Force = $false) {
 
         $markup = (@{ inline_keyboard = @(, (@(@{ text = "Baribir build qilish"; callback_data = "f:$Name" }))) } | ConvertTo-Json -Depth 6 -Compress)
         Send-Msg $ChatId "Yangi o'zgarish yo'q. Baribir build qilaymi?" $markup | Out-Null
-        Write-Host ">>> [$Name] versiya bir xil ($ver) - build bekor qilindi." -ForegroundColor Yellow
+        Write-Log ">>> [$Name] versiya bir xil ($ver) - build bekor qilindi." 'Yellow'
         return
     }
 
@@ -265,7 +327,7 @@ function Invoke-Build([string]$ChatId, [string]$Name, [bool]$Force = $false) {
     $log = Join-Path $env:TEMP ("uzbot_" + $Name + ".log")
     if (Test-Path $log) { Remove-Item $log -Force }
 
-    Write-Host ">>> [$Name] build boshlandi..." -ForegroundColor Cyan
+    Write-Log ">>> [$Name] build boshlandi (v$ver)..." 'Cyan'
     $proc = Start-Process -FilePath $env:ComSpec `
                           -ArgumentList '/c', "`"`"$bat`" > `"$log`" 2>&1`"" `
                           -WorkingDirectory $path -WindowStyle Hidden -PassThru
@@ -312,7 +374,151 @@ function Invoke-Build([string]$ChatId, [string]$Name, [bool]$Force = $false) {
         if ($mid) { Edit-Msg $ChatId $mid $fail } else { Send-Msg $ChatId $fail | Out-Null }
         if ($tail) { Send-Msg $ChatId "Loglar:`n$tail" | Out-Null }
     }
-    Write-Host ">>> [$Name] tugadi, kod=$($proc.ExitCode)" -ForegroundColor Cyan
+    Write-Log ">>> [$Name] tugadi, kod=$($proc.ExitCode) release=$relUrl" 'Cyan'
+}
+
+# =====================================================================
+#  AUTO UPDATE navbati (.webhook_queue\<loyiha>.trigger)
+#  Trigger faylni GitHub poller (pastda) yoki github_webhook_listener.ps1
+#  yozadi. Build'lar bot bilan bitta oqimda, ketma-ket ketadi. Fayl build'dan
+#  OLDIN o'chiriladi: build paytida kelgan yangi push qayta navbatga tushadi.
+# =====================================================================
+$QueueDir = Join-Path $Dir '.webhook_queue'
+
+function Add-Trigger([string]$Name, [string]$Sha) {
+    if (-not (Test-Path $QueueDir)) { New-Item -ItemType Directory -Path $QueueDir | Out-Null }
+    Set-Content -Path (Join-Path $QueueDir "$Name.trigger") -Value ("{0} {1}" -f (Get-Date -Format 's'), $Sha) -Encoding ASCII
+}
+
+function Invoke-WebhookQueue {
+    if (-not (Test-Path $QueueDir)) { return }
+    if ($Allowed.Count -eq 0) { return }
+    foreach ($f in @(Get-ChildItem $QueueDir -Filter '*.trigger' -File | Sort-Object LastWriteTime)) {
+        $name = $f.BaseName
+        try { Remove-Item $f.FullName -Force } catch { continue }
+        if (-not $Projects.Contains($name)) { continue }
+        Write-Log ">>> [$name] auto update - navbatdan olindi" 'Cyan'
+        try { Invoke-Build ([string]$Allowed[0]) $name $false $true }
+        catch { Write-Log "[ogoh] auto update build: $($_.Exception.Message)" 'DarkYellow' }
+    }
+}
+
+# =====================================================================
+#  GITHUB POLLER - auto update manbai
+#  Har $PollSec soniyada har bir repo'ning default branch'idagi oxirgi commit
+#  sha'si olinadi (GitHub API, token bilan - private repolar uchun ham).
+#  Oldingi sha (.github_poll_state.json) dan farq qilsa -> trigger yoziladi.
+#  Birinchi ko'rishda (state yo'q) faqat eslab qolinadi, build boshlanmaydi.
+#  Sha faylda saqlanadi: bot qayta ishga tushsa ham o'tkazib yubormaydi.
+# =====================================================================
+$script:PollNext     = [DateTime]::MinValue
+$script:PollLast     = $null
+$script:PollErr      = ''
+$script:PollDisabled = $false
+$script:DefaultBranch = @{}
+
+function Get-GhHeaders {
+    if (-not (Test-Path $GhTokenFile)) { return $null }
+    $t = (Get-Content $GhTokenFile -Raw -Encoding UTF8).Trim()
+    if (-not $t) { return $null }
+    return @{ Authorization = "token $t"; Accept = 'application/vnd.github+json'; 'User-Agent' = 'uz-ai-dev-build-bot' }
+}
+
+function Get-PollState {
+    $h = @{}
+    if (Test-Path $PollStatePath) {
+        try {
+            $o = Get-Content $PollStatePath -Raw -Encoding UTF8 | ConvertFrom-Json
+            foreach ($p in $o.PSObject.Properties) {
+                $h[$p.Name] = @{ sha = [string]$p.Value.sha; at = [string]$p.Value.at }
+            }
+        } catch { }
+    }
+    return $h
+}
+
+function Set-PollState($State) {
+    try { ($State | ConvertTo-Json -Depth 5) | Set-Content $PollStatePath -Encoding UTF8 }
+    catch { Write-Log "[ogoh] poll state saqlanmadi: $($_.Exception.Message)" 'DarkYellow' }
+}
+
+# Repo default branch'idagi oxirgi commit sha'si (40 belgi).
+function Get-RemoteSha([string]$Repo, $Headers) {
+    if (-not $script:DefaultBranch.ContainsKey($Repo)) {
+        $info = Invoke-RestMethod -Headers $Headers -Uri "https://api.github.com/repos/$Repo" -TimeoutSec 15
+        $br = [string]$info.default_branch
+        if (-not $br) { $br = 'main' }
+        $script:DefaultBranch[$Repo] = $br
+    }
+    $branch = [uri]::EscapeDataString($script:DefaultBranch[$Repo])
+    $c = Invoke-RestMethod -Headers $Headers -Uri "https://api.github.com/repos/$Repo/commits/$branch" -TimeoutSec 15
+    return [string]$c.sha
+}
+
+function Invoke-GitHubPoll {
+    if ($script:PollDisabled) { return }
+    if ((Get-Date) -lt $script:PollNext) { return }
+    $script:PollNext = (Get-Date).AddSeconds($PollSec)
+    if ($Allowed.Count -eq 0) { return }
+
+    $hdrs = Get-GhHeaders
+    if (-not $hdrs) {
+        $script:PollDisabled = $true
+        $script:PollErr = "GitHub token topilmadi: $GhTokenFile"
+        Write-Log "[poll] O'CHIRILDI - $($script:PollErr)" 'Red'
+        Send-Msg ([string]$Allowed[0]) "Auto update ISHLAMAYDI: GitHub token topilmadi:`n$GhTokenFile" | Out-Null
+        return
+    }
+
+    $st = Get-PollState
+    $changed = $false
+    $errs = @()
+    foreach ($name in $Repos.Keys) {
+        if (-not $Projects.Contains($name)) { continue }
+        $repo = $Repos[$name]
+        $sha = ''
+        try { $sha = Get-RemoteSha $repo $hdrs }
+        catch {
+            $errs += "$name : $($_.Exception.Message)"
+            Write-Log "[poll] $name ($repo) XATO: $($_.Exception.Message)" 'DarkYellow'
+            continue
+        }
+        if (-not $sha) { continue }
+
+        $prevSha = ''
+        if ($st.ContainsKey($name)) { $prevSha = [string]$st[$name].sha }
+        if ($prevSha -and $prevSha -ne $sha) {
+            Write-Log "[poll] $name : yangi push $($prevSha.Substring(0,7)) -> $($sha.Substring(0,7)) - navbatga qo'yildi" 'Green'
+            Add-Trigger $name $sha
+        } elseif (-not $prevSha) {
+            Write-Log "[poll] $name : boshlang'ich sha $($sha.Substring(0,7)) eslab qolindi"
+        }
+        if ($prevSha -ne $sha) {
+            $st[$name] = @{ sha = $sha; at = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') }
+            $changed = $true
+        }
+    }
+    $script:PollLast = Get-Date
+    $script:PollErr  = ($errs -join "`n")
+    if ($changed) { Set-PollState $st }
+}
+
+# --- "auto" buyrug'i: poller holati ---
+function Get-PollStatusText {
+    $lines = @()
+    if ($script:PollDisabled) { $lines += "Auto update O'CHIQ: $($script:PollErr)" }
+    elseif ($script:PollLast) { $lines += "Auto update ishlayapti (GitHub har $PollSec s tekshiriladi). Oxirgi tekshiruv: $($script:PollLast.ToString('HH:mm:ss'))" }
+    else { $lines += "Auto update: hali tekshirilmadi." }
+    $st = Get-PollState
+    foreach ($name in $Repos.Keys) {
+        if ($st.ContainsKey($name) -and $st[$name].sha) {
+            $lines += "$name : $($st[$name].sha.Substring(0,7))  ($($st[$name].at))"
+        } else {
+            $lines += "$name : hali ko'rilmagan"
+        }
+    }
+    if ($script:PollErr -and -not $script:PollDisabled) { $lines += "Oxirgi xatolar:`n$($script:PollErr)" }
+    return ($lines -join "`n")
 }
 
 # --- Ishga tushirish ---
@@ -324,7 +530,9 @@ if ($Allowed.Count -gt 0) {
 } else {
     Write-Host "  DIQQAT: chat ID sozlanmagan - botga yozing, ID sini aytadi." -ForegroundColor Yellow
 }
+Write-Host "  Auto update: GitHub polling har $PollSec s, admin = $(if ($Allowed.Count) { $Allowed[0] } else { '-' })" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
+Write-Log "bot ishga tushdi (auto update: GitHub polling har $PollSec s)" 'Green'
 
 # Backlog (bot o'chik turgandagi) xabarlarni tashlab yuboramiz
 $offset = 0
@@ -335,7 +543,10 @@ try {
 
 while ($true) {
     try {
-        $r = Invoke-RestMethod -Uri "$Api/getUpdates?timeout=30&offset=$offset" -TimeoutSec 45
+        Invoke-GitHubPoll
+        Invoke-WebhookQueue
+        # timeout=10: poller/navbat ko'pi bilan ~10 soniyada ko'riladi
+        $r = Invoke-RestMethod -Uri "$Api/getUpdates?timeout=10&offset=$offset" -TimeoutSec 25
         if (-not $r.ok) { Start-Sleep 2; continue }
 
         foreach ($u in $r.result) {
@@ -385,7 +596,8 @@ while ($true) {
             switch -Regex ($cmd) {
                 '^/?(build|menu|start|loyiha)$' { Show-Menu $chatId }
                 '^/?(ostatka|astatka)$'         { Invoke-Sh5Refresh $chatId }
-                '^/?(status|ping)$'             { Send-Msg $chatId "Bot tirik. Loyihalar: $($Projects.Keys -join ', '). 'build' — menyu, 'ostatka' — SH5 qoldiqni yangilash." | Out-Null }
+                '^/?(auto|poll|avto)$'          { Send-Msg $chatId (Get-PollStatusText) | Out-Null }
+                '^/?(status|ping)$'             { Send-Msg $chatId "Bot tirik. Loyihalar: $($Projects.Keys -join ', '). 'build' - menyu, 'ostatka' - SH5 qoldiqni yangilash, 'auto' - auto update holati, 'versiya' - oxirgi build'lar." | Out-Null }
                 '^/?(versiya|version)$'         {
                     $st    = Get-State
                     $lines = @("Oxirgi build qilingan versiyalar:")
@@ -399,12 +611,12 @@ while ($true) {
                     }
                     Send-Msg $chatId ($lines -join "`n") | Out-Null
                 }
-                default                         { Send-Msg $chatId "'build' - loyihalar ro'yxati. 'versiya' - oxirgi build versiyalari. 'ostatka' - SH5 qoldiqni yangilash." | Out-Null }
+                default                         { Send-Msg $chatId "'build' - loyihalar ro'yxati. 'versiya' - oxirgi build versiyalari. 'ostatka' - SH5 qoldiqni yangilash. 'auto' - auto update holati." | Out-Null }
             }
         }
     }
     catch {
-        Write-Host "[ogoh] loop: $($_.Exception.Message)" -ForegroundColor DarkYellow
+        Write-Log "[ogoh] loop: $($_.Exception.Message)" 'DarkYellow'
         Start-Sleep 3
     }
 }

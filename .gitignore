@@ -58,3 +58,14 @@ lib/Simulator Screenshot*.png
 Screenshot*.png
 /android/build/
 IMAGE *.jpg
+
+# GitHub webhook listener: secret, navbat, log - HECH QACHON commit qilinmasin
+.github_webhook.config.txt
+.webhook_queue/
+.github_webhook.log
+.github_webhook.log.old
+
+# Telegram build bot: auto update poll holati va log
+.github_poll_state.json
+.telegram_bot.log
+.telegram_bot.log.old
