@@ -12,7 +12,7 @@
 // Biscuit3DView — Rotating3DView (cake_3d.dart) qo'lda rejimida: barmoq yon
 // tomonga — burish, tepaga/pastga — qarash burchagi. Yozuv/nuqtalar yo'q.
 // Mevalar (BiscuitFruit.detect — вишня, клубника, малина, банан, киви ...)
-// тех картадан; FAQAT yon tomonda (kesimda) chiziladi, tepada bezak yo'q.
+// biskvit NOMIDAN; FAQAT yon tomonda (kesimda) chiziladi, tepada bezak yo'q.
 // BiscuitThumb — grid kartasi uchun kichik statik rasm.
 import 'dart:math' as math;
 
@@ -315,17 +315,12 @@ enum BiscuitFruit {
     pineapple: ['ананас', 'pineapple', 'ananas'],
   };
 
-  // Тех картадан mevalar: nom + blok nomlari + masalliqlar (tartib bilan,
-  // ko'pi bilan 3 xil). Hech biri topilmasa — bo'sh (mevasiz biskvit).
-  static List<BiscuitFruit> detect(String name, TechCard? card) {
-    final text = [
-      name,
-      if (card != null)
-        for (final b in card.bases) ...[
-          b.name,
-          for (final i in b.ingredients) i.name,
-        ],
-    ].join(' ').toLowerCase();
+  // Mevalar FAQAT biskvit NOMIDAN («...с вишней», «Клубничный» ...), ko'pi
+  // bilan 3 xil. Masalliqlar hisobga OLINMAYDI: ular xamirga aralashtiriladi
+  // (masalan «Баннофе»dagi banan pyuresi) — yon tomonda bo'lak bo'lib
+  // ko'rinmaydi. Nomida meva yo'q — mevasiz oddiy biskvit.
+  static List<BiscuitFruit> detect(String name) {
+    final text = name.toLowerCase();
     final found = <(int, BiscuitFruit)>[];
     for (final e in _words.entries) {
       var at = -1;
