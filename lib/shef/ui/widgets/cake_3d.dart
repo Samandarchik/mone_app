@@ -186,6 +186,11 @@ class _Rotating3DViewState extends State<Rotating3DView>
     );
   }
 
+  void _stopAuto() {
+    _touched = true;
+    _spin.stop();
+  }
+
   Widget _buildManual() {
     return ClipRRect(
       borderRadius: widget.borderRadius,
@@ -198,16 +203,18 @@ class _Rotating3DViewState extends State<Rotating3DView>
             colors: [_heroTop, _heroBottom],
           ),
         ),
+        // Gorizontal va vertikal alohida: ichki vertikal surish sahifa
+        // scroll'idan ustun turadi (ko'rinish scroll ichida bo'lsa ham
+        // burchakni o'zgartiradi).
         child: GestureDetector(
-          onPanStart: (_) {
-            _touched = true;
-            _spin.stop();
-          },
-          onPanUpdate: (d) => setState(() {
-            _drag += d.delta.dx * 0.015;
-            // Pastga surish — tepadan ko'proq qarash.
-            _tilt = (_tilt + d.delta.dy * 0.004).clamp(0.06, 0.95);
-          }),
+          onHorizontalDragStart: (_) => _stopAuto(),
+          onHorizontalDragUpdate: (d) =>
+              setState(() => _drag += d.delta.dx * 0.015),
+          onVerticalDragStart: (_) => _stopAuto(),
+          // Pastga surish — tepadan ko'proq qarash.
+          onVerticalDragUpdate: (d) => setState(
+            () => _tilt = (_tilt + d.delta.dy * 0.004).clamp(0.06, 0.95),
+          ),
           child: RepaintBoundary(
             child: AnimatedBuilder(
               animation: _spin,

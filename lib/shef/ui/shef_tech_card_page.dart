@@ -395,41 +395,37 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final fab = widget.canAddProducts
+        ? FloatingActionButton.extended(
+            onPressed: _addProduct,
+            backgroundColor: _accentColor,
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.add),
+            label: const Text('Qo\'shish'),
+          )
+        : null;
+    if (widget.showCakeConstructor) {
+      return Scaffold(
+        backgroundColor: _bgColor,
+        floatingActionButton: fab,
+        body: SafeArea(
+          bottom: false,
+          child: Consumer<ProductProviderAdmin>(
+            builder: (context, provider, _) => _biscuitPage(provider),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: _bgColor,
-      floatingActionButton: widget.canAddProducts
-          ? FloatingActionButton.extended(
-              onPressed: _addProduct,
-              backgroundColor: _accentColor,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.add),
-              label: const Text('Qo\'shish'),
-            )
-          : null,
+      floatingActionButton: fab,
       appBar: AppBar(
         backgroundColor: _bgColor,
         elevation: 0,
-        title: widget.showCakeConstructor && _searchOpen
-            ? _compactSearch()
-            : Text(
-                widget.categoryName,
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-        actions: [
-          if (widget.showCakeConstructor)
-            IconButton(
-              tooltip: _searchOpen ? 'Yopish' : 'Qidirish',
-              icon: Icon(_searchOpen ? Icons.close : Icons.search),
-              onPressed: () => setState(() {
-                _searchOpen = !_searchOpen;
-                if (!_searchOpen) {
-                  _searchController.clear();
-                  _searchQuery = '';
-                }
-              }),
-            ),
-        ],
+        title: Text(
+          widget.categoryName,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
       ),
       body: Consumer<ProductProviderAdmin>(
         builder: (context, provider, child) {
@@ -454,11 +450,7 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
 
           return Column(
             children: [
-              if (!widget.showCakeConstructor && all.isNotEmpty)
-                _searchField(),
-              // «П/Ф Бисквит»: 3D biskvit tepada QOTIB turadi — faqat grid
-              // suriladi.
-              if (widget.showCakeConstructor) _biscuitView(all),
+              if (all.isNotEmpty) _searchField(),
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: _refresh,
@@ -466,8 +458,7 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                       ? ListView(
                           physics: const AlwaysScrollableScrollPhysics(),
                           children: [
-                            SizedBox(
-                                height: widget.showCakeConstructor ? 40 : 140),
+                            const SizedBox(height: 140),
                             Center(
                               child: Text(
                                 all.isEmpty
@@ -478,24 +469,21 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                             ),
                           ],
                         )
-                      : widget.showCakeConstructor
-                          ? _productGrid(rows, _selectedOf(all)?.id)
-                          : ListView.separated(
-                              physics: const AlwaysScrollableScrollPhysics(),
-                              // Pastki joy — FAB oxirgi qatorni yopmasin.
-                              padding: EdgeInsets.fromLTRB(
-                                  8, 4, 8, widget.canAddProducts ? 88 : 24),
-                              itemCount: rows.length,
-                              separatorBuilder: (_, __) =>
-                                  const Divider(height: 1),
-                              itemBuilder: (context, index) => _ProductTile(
-                                product: rows[index],
-                                onTap: () => _openTechCard(rows[index]),
-                                onEditBaking: widget.showBaking
-                                    ? () => _editBaking(rows[index])
-                                    : null,
-                              ),
-                            ),
+                      : ListView.separated(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          // Pastki joy — FAB oxirgi qatorni yopmasin.
+                          padding: EdgeInsets.fromLTRB(
+                              8, 4, 8, widget.canAddProducts ? 88 : 24),
+                          itemCount: rows.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, index) => _ProductTile(
+                            product: rows[index],
+                            onTap: () => _openTechCard(rows[index]),
+                            onEditBaking: widget.showBaking
+                                ? () => _editBaking(rows[index])
+                                : null,
+                          ),
+                        ),
                 ),
               ),
             ],
@@ -516,42 +504,124 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
     return all.first;
   }
 
-  // «П/Ф Бисквит»: tanlangan biskvitning 3D'si (faqat biskvit, o'lchami
-  // тех картадан). Yozuvsiz; barmoq bilan burish / qarash burchagi.
-  Widget _biscuitView(List<ProductModelAdmin> all) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-      child: Biscuit3DView(
-        height: 210,
-        dims: BiscuitDims.fromTechCard(_selectedOf(all)?.techCard),
-      ),
-    );
-  }
-
-  // «П/Ф Бисквит»: biskvitlar 2 ustunli grid (3D ustida qotgan).
+  // «П/Ф Бисквит» sahifasi (sarlavhasiz): bitta CustomScrollView —
+  //  1) yuqori panel (orqaga + lupa) — sahifa bilan birga surilib ketadi;
+  //  2) 3D biskvit — PINNED: grid pastga surilganda ekranning eng tepasiga
+  //     chiqib qotadi, yana boshiga qaytilganda o'z joyiga tushadi;
+  //  3) biskvitlar 2 ustunli grid.
   // Karta: bir marta bosish — 3D'da ko'rsatish, ikki marta — тех карта.
-  Widget _productGrid(List<ProductModelAdmin> rows, int? selectedId) {
-    return GridView.builder(
-      physics: const AlwaysScrollableScrollPhysics(),
-      // Pastki joy — FAB oxirgi qatorni yopmasin.
-      padding: EdgeInsets.fromLTRB(12, 4, 12, widget.canAddProducts ? 88 : 24),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        mainAxisExtent: widget.showBaking ? 262 : 228,
+  Widget _biscuitPage(ProductProviderAdmin provider) {
+    final loading = provider.isLoading && provider.products.isEmpty;
+    final error = (provider.error != null && provider.products.isEmpty)
+        ? provider.error!.replaceFirst('Exception: ', '')
+        : null;
+    final all = provider.products
+        .where((p) => p.categoryId == widget.categoryId)
+        .toList();
+    final query = _searchQuery.trim().toLowerCase();
+    final rows = query.isEmpty
+        ? all
+        : all.where((p) => p.name.toLowerCase().contains(query)).toList();
+    final selected = _selectedOf(all);
+
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverAppBar(
+            primary: false,
+            backgroundColor: _bgColor,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            titleSpacing: 0,
+            title: _searchOpen ? _compactSearch() : null,
+            actions: [
+              IconButton(
+                tooltip: _searchOpen ? 'Yopish' : 'Qidirish',
+                icon: Icon(_searchOpen ? Icons.close : Icons.search),
+                onPressed: () => setState(() {
+                  _searchOpen = !_searchOpen;
+                  if (!_searchOpen) {
+                    _searchController.clear();
+                    _searchQuery = '';
+                  }
+                }),
+              ),
+            ],
+          ),
+          if (loading)
+            const SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(child: CircularProgressIndicator.adaptive()),
+            )
+          else if (error != null)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: _ErrorView(
+                message: error,
+                onRetry: () => provider.initializeProducts(forceRefresh: true),
+              ),
+            )
+          else ...[
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _PinnedBoxDelegate(
+                extent: _biscuitViewH + 12,
+                child: Container(
+                  color: _bgColor,
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                  child: Biscuit3DView(
+                    height: _biscuitViewH,
+                    dims: BiscuitDims.fromTechCard(selected?.techCard),
+                  ),
+                ),
+              ),
+            ),
+            if (rows.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 40),
+                  child: Text(
+                    all.isEmpty ? 'Bu kategoriyada mahsulot yo\'q' : 'Topilmadi',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.black54),
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                // Pastki joy — FAB oxirgi qatorni yopmasin.
+                padding: EdgeInsets.fromLTRB(
+                    12, 4, 12, widget.canAddProducts ? 88 : 24),
+                sliver: SliverGrid(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    mainAxisExtent: widget.showBaking ? 262 : 228,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    childCount: rows.length,
+                    (context, index) {
+                      final p = rows[index];
+                      return _ProductGridCard(
+                        product: p,
+                        selected: p.id == selected?.id,
+                        onTap: () => setState(() => _selectedId = p.id),
+                        onDoubleTap: () => _openTechCard(p),
+                        onEditBaking:
+                            widget.showBaking ? () => _editBaking(p) : null,
+                      );
+                    },
+                  ),
+                ),
+              ),
+          ],
+        ],
       ),
-      itemCount: rows.length,
-      itemBuilder: (context, index) {
-        final p = rows[index];
-        return _ProductGridCard(
-          product: p,
-          selected: p.id == selectedId,
-          onTap: () => setState(() => _selectedId = p.id),
-          onDoubleTap: () => _openTechCard(p),
-          onEditBaking: widget.showBaking ? () => _editBaking(p) : null,
-        );
-      },
     );
   }
 
@@ -711,6 +781,31 @@ class _ProductTile extends StatelessWidget {
           : const Icon(Icons.chevron_right, color: Colors.black38),
     );
   }
+}
+
+// «П/Ф Бисквит»dagi 3D biskvit balandligi.
+const double _biscuitViewH = 210;
+
+// Qat'iy balandlikdagi pinned sarlavha (SliverPersistentHeader uchun).
+class _PinnedBoxDelegate extends SliverPersistentHeaderDelegate {
+  final double extent;
+  final Widget child;
+
+  _PinnedBoxDelegate({required this.extent, required this.child});
+
+  @override
+  double get minExtent => extent;
+
+  @override
+  double get maxExtent => extent;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlaps) =>
+      child;
+
+  // Tanlangan biskvit / тех карта o'zgarsa qayta chizilsin.
+  @override
+  bool shouldRebuild(_PinnedBoxDelegate old) => true;
 }
 
 // Grid kartasi («П/Ф Бисквит»): tepada rasm, ostida nom (+ ПФ belgisi),
