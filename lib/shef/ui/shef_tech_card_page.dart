@@ -575,6 +575,10 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                   child: Biscuit3DView(
                     height: _biscuitViewH,
                     dims: BiscuitDims.fromTechCard(selected?.techCard),
+                    palette: selected == null
+                        ? BiscuitPalette.classic
+                        : BiscuitPalette.detect(
+                            selected.name, selected.techCard),
                   ),
                 ),
               ),
@@ -830,10 +834,12 @@ class _ProductGridCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final url = product.imageUrl;
     final hasCard = _hasTechCard(product);
-    final placeholder = Container(
-      color: Colors.grey.shade200,
-      alignment: Alignment.center,
-      child: Icon(Icons.cake_outlined, color: Colors.grey.shade500, size: 36),
+    // Rasm yuklanmagan (yoki yuklanmay qolgan) biskvit — kulrang o'rniga
+    // uning O'Z rasmi: o'lchami va turi (shokoladli, qizil baxmal, ...)
+    // тех картадан chiziladi.
+    final placeholder = BiscuitThumb(
+      dims: BiscuitDims.fromTechCard(product.techCard),
+      palette: BiscuitPalette.detect(product.name, product.techCard),
     );
     return Material(
       color: Colors.white,
