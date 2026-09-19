@@ -68,6 +68,8 @@ class _ShefHomeUiState extends State<ShefHomeUi> {
         categoryId: category.id,
         categoryName: category.name,
         canAddProducts: true,
+        // «П/Ф Бисквит» — tepada 3D tort va tort konstruktori.
+        showCakeConstructor: isBiskvitCategory(category.name),
       ),
     );
   }

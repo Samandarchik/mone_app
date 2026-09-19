@@ -26,6 +26,8 @@ import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:uz_ai_dev/shef/ui/biskvit_page.dart';
+import 'package:uz_ai_dev/shef/ui/cake_constructor_page.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/cake_3d.dart';
 
 // Shef ekranlarining umumiy ranglari (shef_home_ui / pf_stock_page bilan bir xil).
 const Color _bgColor = Color(0xFFFAF6F1);
@@ -279,6 +281,9 @@ class ShefTechCardProductsPage extends StatefulWidget {
   // true — har retsept yonida pishirish vaqti/harorati (bosilsa tahrir).
   // Faqat Biskvit bo'limidagi «Бисквит» kategoriyasi (isBiskvitCategory).
   final bool showBaking;
+  // true — ro'yxat tepasida 3D tort va «Tort konstruktori» tugmasi.
+  // Faqat shef bosh ekranidagi «П/Ф Бисквит» kartasidan (shef_home_ui.dart).
+  final bool showCakeConstructor;
 
   const ShefTechCardProductsPage({
     super.key,
@@ -286,6 +291,7 @@ class ShefTechCardProductsPage extends StatefulWidget {
     required this.categoryName,
     this.canAddProducts = false,
     this.showBaking = false,
+    this.showCakeConstructor = false,
   });
 
   @override
@@ -425,6 +431,7 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
           final rows = query.isEmpty
               ? all
               : all.where((p) => p.name.toLowerCase().contains(query)).toList();
+          final headerCount = widget.showCakeConstructor ? 1 : 0;
 
           return Column(
             children: [
@@ -436,7 +443,9 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                       ? ListView(
                           physics: const AlwaysScrollableScrollPhysics(),
                           children: [
-                            const SizedBox(height: 140),
+                            if (widget.showCakeConstructor) _cakeHeader(),
+                            SizedBox(
+                                height: widget.showCakeConstructor ? 40 : 140),
                             Center(
                               child: Text(
                                 all.isEmpty
@@ -452,21 +461,67 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                           // Pastki joy — FAB oxirgi qatorni yopmasin.
                           padding: EdgeInsets.fromLTRB(
                               8, 4, 8, widget.canAddProducts ? 88 : 24),
-                          itemCount: rows.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (context, index) => _ProductTile(
-                            product: rows[index],
-                            onTap: () => _openTechCard(rows[index]),
-                            onEditBaking: widget.showBaking
-                                ? () => _editBaking(rows[index])
-                                : null,
-                          ),
+                          // 3D tort sarlavhasi ro'yxat bilan birga suriladi.
+                          itemCount: rows.length + headerCount,
+                          separatorBuilder: (_, i) => i < headerCount
+                              ? const SizedBox(height: 4)
+                              : const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            if (index < headerCount) return _cakeHeader();
+                            final p = rows[index - headerCount];
+                            return _ProductTile(
+                              product: p,
+                              onTap: () => _openTechCard(p),
+                              onEditBaking: widget.showBaking
+                                  ? () => _editBaking(p)
+                                  : null,
+                            );
+                          },
                         ),
                 ),
               ),
             ],
           );
         },
+      ),
+    );
+  }
+
+  // «П/Ф Бисквит»: 3D tort (aylanadi, suriladi) + tort konstruktori
+  // (cake_constructor_page.dart — Shakl → … → Qo'shimchalar).
+  Widget _cakeHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Cake3DView(height: 220),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const CakeConstructorPage(),
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E2A4F),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(25),
+                ),
+              ),
+              icon: const Icon(Icons.cake_outlined),
+              label: const Text(
+                'Tort konstruktori',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
