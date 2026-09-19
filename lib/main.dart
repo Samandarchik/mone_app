@@ -15,7 +15,8 @@ import 'package:uz_ai_dev/core/services/windows_update_service.dart';
 import 'package:uz_ai_dev/core/utils/app_navigator.dart';
 import 'package:uz_ai_dev/core2/provider/core_dict_provider.dart';
 import 'package:uz_ai_dev/core2/provider/core_docs_provider.dart';
-import 'package:uz_ai_dev/core2/provider/core_session_provider.dart';
+import 'package:uz_ai_dev/
+core2/provider/core_session_provider.dart';
 import 'package:uz_ai_dev/core2/provider/core_stock_provider.dart';
 import 'package:uz_ai_dev/ombor/provider/ombor_provider.dart';
 import 'package:uz_ai_dev/production/provider/production_orders_provider.dart';
