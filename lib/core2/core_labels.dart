@@ -6,10 +6,13 @@
 // Bu yerda YAGONA manba: vazifa plitkalari (CoreTask — nom, rang, ikonka,
 // kerakli ruxsat), hujjat turi/holati nomlari, ruxsat kalitlarining o'zbekcha
 // nomi, HTTP/server `code` → matn (coreErrorUz), post javobidagi `warnings`
-// kodlari (negative_stock|no_batch|no_recipe|rounding) → guruh sarlavhasi.
+// kodlari (negative_stock|no_batch|no_recipe|recipe_cycle|rounding) → guruh
+// sarlavhasi.
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/core2/models/core_doc.dart';
 import 'package:uz_ai_dev/core2/models/core_user.dart';
+import 'package:uz_ai_dev/core2/provider/core_dict_provider.dart';
 import 'package:uz_ai_dev/core2/services/core_client.dart';
 
 // ───────────────────────────── Vazifalar ─────────────────────────────
@@ -220,12 +223,36 @@ String _clean(String msg) {
   return m;
 }
 
+/// Xatodagi `details.sklad_id` (403 «bu omborga ruxsat yo'q», 422 «ombor
+/// topilmadi») — ombor nomini ko'rsatish uchun.
+int? _skladIdOf(CoreApiException err) {
+  final v = err.details['sklad_id'];
+  if (v is num) return v.toInt();
+  return int.tryParse('${v ?? ''}');
+}
+
+/// «Retsept yo'q» xatosimi: yangi serverda `422 validation` («retsept yo'q:
+/// `good_id`»), eski serverda oddiy `500` (ACT_KONTRAKT §7).
+bool coreIsNoRecipeError(Object e) {
+  final err = CoreClient.wrap(e);
+  if (err.status == 500) return true;
+  if (err.status != 422) return false;
+  final m = err.message.toLowerCase();
+  return m.contains('retsept') || m.contains('recipe') || m.contains('рецепт');
+}
+
 /// HTTP kod + server `code` → oddiy o'zbekcha matn.
-/// 401/403 (ruxsat nomi bilan), 409, 422 `insufficient`/`validation`, 501,
-/// tarmoq uzilishi — har biri uchun «nima qilish kerak» maslahati bilan.
-CoreUiError coreErrorUz(Object e) {
+/// 401/403 (ruxsat nomi bilan, ombor cheklovi `details.sklad_id` bilan),
+/// 409, 422 `insufficient`/`validation` (shu jumladan `from_sklad` —
+/// xomashyo ombori), 501, tarmoq uzilishi — har biri uchun «nima qilish
+/// kerak» maslahati bilan.
+///
+/// [skladName] — ombor ID sini nomga aylantiruvchi (odatda
+/// `CoreDictProvider.skladName`); berilmasa «Ombor #id» yoziladi.
+CoreUiError coreErrorUz(Object e, {String Function(int)? skladName}) {
   final err = CoreClient.wrap(e);
   final details = _detailsUz(err);
+  String nameOf(int id) => skladName?.call(id) ?? 'Ombor #$id';
 
   if (err.network) {
     return const CoreUiError(
@@ -247,6 +274,17 @@ CoreUiError coreErrorUz(Object e) {
         hint: 'Ilovaga qaytadan kiring.',
       );
     case 403:
+      // Ombor cheklovi (users.sklads): aktda IKKALA ombor ham ruxsat
+      // etilgan bo'lishi shart — qaysi biri yopiq ekanini aytamiz.
+      final sklad = _skladIdOf(err);
+      if (sklad != null && sklad > 0) {
+        return CoreUiError(
+          'Bu omborga ruxsatingiz yo\'q: ${nameOf(sklad)}',
+          hint: 'Aktda xomashyo ombori ham, mahsulot ombori ham sizga '
+              'ochiq bo\'lishi kerak. Boshqa omborni tanlang yoki '
+              'rahbaringizdan ruxsat so\'rang.',
+        );
+      }
       final p = err.perm.isEmpty
           ? ''
           : 'Kerakli ruxsat: «${corePermUz(err.perm)}». ';
@@ -275,9 +313,38 @@ CoreUiError coreErrorUz(Object e) {
               'Miqdorni kamaytiring yoki avval kirim qiling.',
         );
       }
+      final msg422 = _clean(err.message);
+      final low = msg422.toLowerCase();
+      // Xomashyo ombori noto'g'ri (`from_sklad <= 0`).
+      if (low.contains('from_sklad')) {
+        return const CoreUiError(
+          'Xomashyo ombori noto\'g\'ri tanlangan',
+          hint: '«Xomashyo qayerdan?» ni qaytadan tanlang. Bo\'sh qoldirilsa '
+              'xomashyo mahsulot omboridan yechiladi.',
+        );
+      }
+      // «ombor topilmadi: <id>» — ID ni nomga aylantiramiz.
+      if (low.startsWith('ombor topilmadi')) {
+        final id = int.tryParse(msg422.split(':').last.trim());
+        return CoreUiError(
+          id == null
+              ? 'Ombor topilmadi'
+              : 'Ombor topilmadi: ${nameOf(id)}',
+          hint: 'Ombor o\'chirilgan bo\'lishi mumkin. Ro\'yxatni yangilab, '
+              'boshqa omborni tanlang.',
+        );
+      }
+      if (coreIsNoRecipeError(err)) {
+        return CoreUiError(
+          'Retsept topilmadi',
+          hint: '$msg422\nSarf qatorlarini qo\'lda kiriting yoki retsept '
+              'qo\'shing.',
+          warning: true,
+        );
+      }
       return CoreUiError(
         'Ma\'lumot to\'liq emas',
-        hint: details.isNotEmpty ? details : _clean(err.message),
+        hint: details.isNotEmpty ? details : msg422,
       );
   }
   final msg = _clean(err.message);
@@ -301,9 +368,17 @@ String _detailsUz(CoreApiException err) {
   return parts.join(' · ');
 }
 
-/// Xatoni oddiy tilda SnackBar'da ko'rsatish.
+/// Xatoni oddiy tilda SnackBar'da ko'rsatish. Ombor nomi lug'at keshidan
+/// olinadi (403 «bu omborga ruxsat yo'q» → ombor nomi bilan).
 void showErrorUz(BuildContext context, Object e) {
-  final ui = coreErrorUz(e);
+  String Function(int)? nameOf;
+  try {
+    final dict = context.read<CoreDictProvider>();
+    nameOf = (id) => dict.skladName(id);
+  } catch (_) {
+    // Provider yo'q (test/alohida ekran) — ID bilan ko'rsatiladi.
+  }
+  final ui = coreErrorUz(e, skladName: nameOf);
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
     content: Text(ui.text),
     duration: Duration(seconds: ui.hint.isEmpty ? 4 : 6),
@@ -329,6 +404,8 @@ String coreWarnTitleUz(String code) {
       return 'Partiya topilmadi (tannarxsiz yechildi)';
     case 'no_recipe':
       return 'Retsept topilmadi';
+    case 'recipe_cycle':
+      return 'Retseptda sikl (ichkariga yoyilmadi)';
     case 'rounding':
       return 'Yaxlitlash farqi';
     default:
@@ -348,6 +425,10 @@ String coreWarnHintUz(String code) {
     case 'no_recipe':
       return 'Taomning retsepti yo\'q — ingredientlar yechilmadi. '
           'Retsept qo\'shilsa keyingi hujjatlar to\'g\'ri hisoblanadi.';
+    case 'recipe_cycle':
+      return 'Yarim tayyorning retsepti o\'zini o\'zi chaqiradi yoki juda '
+          'chuqur. Uning ichi yoyilmadi — yarim tayyorning o\'zi ombordan '
+          'yechildi. Retseptni tekshiring.';
     case 'rounding':
       return 'Miqdor eng kichik birlikka yaxlitlandi — farq juda kichik.';
     default:
@@ -363,6 +444,8 @@ IconData coreWarnIconUz(String code) {
       return Icons.layers_clear_outlined;
     case 'no_recipe':
       return Icons.menu_book_outlined;
+    case 'recipe_cycle':
+      return Icons.loop;
     case 'rounding':
       return Icons.straighten;
     default:
@@ -373,7 +456,13 @@ IconData coreWarnIconUz(String code) {
 /// Ogohlantirishlarni kod bo'yicha guruhlash (tartib: eng muhimi birinchi).
 Map<String, List<CoreDocWarning>> coreGroupWarnings(
     List<CoreDocWarning> warnings) {
-  const order = ['negative_stock', 'no_batch', 'no_recipe', 'rounding'];
+  const order = [
+    'negative_stock',
+    'no_batch',
+    'no_recipe',
+    'recipe_cycle',
+    'rounding',
+  ];
   final byCode = <String, List<CoreDocWarning>>{};
   for (final w in warnings) {
     byCode.putIfAbsent(w.code, () => []).add(w);

@@ -1,7 +1,8 @@
 // core2/services/core_recipe_service.dart — mone_core retseptlari:
 // list (GET /recipes), get (GET /recipes/{id}), create (POST /recipes),
 // addVersion (POST /recipes/{id}/versions — yangi versiya valid_from bilan),
-// expand (GET /recipes/expand?good_id=&date=&qty=). Yozish — perm recipe.edit.
+// expand (GET /recipes/expand?good_id=&date=&qty= → CoreRecipeExpand:
+// ingredients + rule + cut). Yozish — perm recipe.edit.
 import 'package:uz_ai_dev/core2/models/core_recipe.dart';
 import 'package:uz_ai_dev/core2/services/core_client.dart';
 
@@ -64,13 +65,18 @@ class CoreRecipeService {
     }
   }
 
-  /// Ingredientlarga yoyish: `{"ingredients":[{good_id, good_name,
-  /// base_unit, qty}]}` (ledger stub bo'lsa 501).
-  Future<List<Map<String, dynamic>>> expand({
+  /// Ingredientlarga yoyish (ACT_KONTRAKT §7):
+  /// `{"good_id","date","qty","rule":"expand_sub","ingredients":[{good_id,
+  /// good_name, base_unit, qty}],"cut":[…]}`.
+  ///
+  /// `sklad_id` YUBORILMAYDI — u eskirgan (natijaga ta'sir qilmaydi).
+  /// Retsept yo'q bo'lsa: yangi server `422 validation` («retsept yo'q: id»),
+  /// eski server `500` — ikkalasini ham `coreIsNoRecipeError` aniqlaydi.
+  /// Ledger stub bo'lsa 501.
+  Future<CoreRecipeExpand> expand({
     required int goodId,
     required String date,
     required int qty,
-    int? skladId,
   }) async {
     try {
       final r = await CoreClient.dio.get(
@@ -79,11 +85,9 @@ class CoreRecipeService {
           'good_id': goodId,
           'date': date,
           'qty': qty,
-          if (skladId != null) 'sklad_id': skladId,
         },
       );
-      final m = CoreClient.mapOf(r.data);
-      return CoreClient.listOf(m['ingredients']);
+      return CoreRecipeExpand.fromJson(CoreClient.mapOf(r.data));
     } catch (e) {
       throw CoreClient.wrap(e);
     }

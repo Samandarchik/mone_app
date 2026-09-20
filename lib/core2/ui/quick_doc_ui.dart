@@ -15,6 +15,13 @@
 // «Qabul qiluvchi tasdiqlasin» (qoralama + izoh boshida `[yo'lda]`) va
 // «Qabul qildim» (draft → post), ishlab chiqarishda «Retsept bo'yicha
 // to'ldirish» (`GET /recipes/expand`), takror tovarda birlashtirish taklifi.
+//
+// AKT (`act`, «Ishlab chiqarish»): ikkita ombor — «Xomashyo qayerdan?»
+// (`from_sklad`, IXTIYORIY: sex ombori) va «Mahsulot qayerga?» (`to_sklad`).
+// Ikkalasi ham standart holda foydalanuvchining «Bugun» dagi ombori, ya'ni
+// oddiy holatda hech narsa bosilmaydi va bugungi kabi yuboriladi. Farq
+// qilsa — sarlavhada bir qatorli eslatma; oxirgi juftlik foydalanuvchi +
+// tur bo'yicha SharedPreferences'da eslab qolinadi (ACT_KONTRAKT §1, §11).
 import 'dart:async';
 import 'dart:convert';
 
@@ -141,6 +148,9 @@ class _QuickDocUiState extends State<QuickDocUi> {
   CoreGood? _padGood;
   int? _padEditIndex;
   QtyKeypadResult? _padInitial;
+  // Klaviaturadagi «joriy qoldiq» qaysi ombordan (sarf qatori — xomashyo
+  // ombori, mahsulot qatori — mahsulot ombori).
+  int? _padSklad;
 
   String get type => widget.type;
   bool get hasFrom => CoreDocType.hasFrom(type);
@@ -148,13 +158,27 @@ class _QuickDocUiState extends State<QuickDocUi> {
   bool get hasCorr => CoreDocType.hasCorr(type);
   bool get hasPrice => CoreDocType.hasPrice(type);
   bool get isProduction => type == CoreDocType.production;
+  bool get isAct => type == CoreDocType.act;
   bool get isTransfer => type == CoreDocType.transfer;
 
-  /// Qidiruv/qoldiq qaysi omborga tegishli (sarf «dan», kirim «ga»).
-  int? get _activeSklad {
-    if (isProduction) return _activeFlag == 1 ? _from : _to;
+  /// Ikki bo'limli forma (sarf flag=1 + mahsulot flag=0): qayta ishlash va
+  /// akt. Aktda sarf qatorlari IXTIYORIY — bo'sh qoldirilsa server retsept
+  /// bo'yicha o'zi yozadi (ACT_KONTRAKT §4).
+  bool get isMake => isProduction || isAct;
+
+  /// Aktda «qayerdan» ixtiyoriy: tanlanmasa mahsulot ombori olinadi.
+  bool get hasOptionalFrom => CoreDocType.hasOptionalFrom(type);
+
+  /// Shu bo'lim qatorlari qaysi ombor qoldig'ini ko'rsatadi/yechadi:
+  /// sarf (flag=1) — XOMASHYO ombori (`from`, aktda tanlanmasa `to`),
+  /// mahsulot (flag=0) — MAHSULOT ombori (`to`).
+  int? _skladForFlag(int flag) {
+    if (isMake) return flag == 1 ? (_from ?? _to) : _to;
     return hasFrom ? _from : _to;
   }
+
+  /// Qidiruv/qoldiq qaysi omborga tegishli (sarf «dan», kirim «ga»).
+  int? get _activeSklad => _skladForFlag(isMake ? _activeFlag : 0);
 
   @override
   void initState() {
@@ -172,6 +196,8 @@ class _QuickDocUiState extends State<QuickDocUi> {
     }
     _comment.text = comment;
     _showComment = comment.isNotEmpty;
+    // Qayta ishlashda avval sarf yoziladi; aktda esa avval TAOM (server
+    // sarfni retsept bo'yicha o'zi yozishi mumkin).
     if (!isProduction) _activeFlag = 0;
   }
 
@@ -190,6 +216,9 @@ class _QuickDocUiState extends State<QuickDocUi> {
     if (hasFrom) _from ??= mine;
     if (hasTo) _to ??= isTransfer ? null : mine;
     if (isProduction) _to ??= mine;
+    // Akt: IKKALA ombor ham standart holda «Bugun» dagi ombor — oddiy
+    // (bitta omborli) holat uchun qo'shimcha bosish kerak emas.
+    if (hasOptionalFrom) _from ??= mine;
 
     final draft = widget.draft;
     if (draft != null) {
@@ -251,10 +280,19 @@ class _QuickDocUiState extends State<QuickDocUi> {
     }
   }
 
+  /// Eslab qolinadigan sozlama kaliti: foydalanuvchi + hujjat turi bo'yicha
+  /// (bir qurilmada bir necha xodim ishlashi mumkin).
+  String _prefKey(String name) {
+    final uid = context.read<CoreSession>().user?.id ?? 0;
+    return 'core_quick_${name}_${type}_u$uid';
+  }
+
   Future<void> _restorePrefs() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
     final dict = context.read<CoreDictProvider>();
+    final fromKey = _prefKey('from');
+    final toKey = _prefKey('to');
     setState(() {
       if (hasCorr && _corr == null) {
         final saved = prefs.getInt('core_quick_corr_$type');
@@ -267,27 +305,63 @@ class _QuickDocUiState extends State<QuickDocUi> {
       if (isTransfer && _to == null) {
         _to = prefs.getInt('core_quick_to_$type');
       }
+      // Akt: oxirgi ishlatilgan «xomashyo → mahsulot» JUFTLIGI (masalan
+      // «Sex» → «Magazin»). Qoralama ochilganda hujjatdagi qiymat ustun.
+      // Eslangan ombor JIMGINA qo'llanmaydi — ikkala chip ham nomni
+      // ko'rsatadi, farq bo'lsa sarlavhada eslatma chiqadi.
+      if (hasOptionalFrom && widget.draft == null) {
+        final savedFrom = prefs.getInt(fromKey);
+        final savedTo = prefs.getInt(toKey);
+        if (savedFrom != null && savedTo != null) {
+          final ids = dict.activeSklads.map((s) => s.id).toSet();
+          // O'chirilgan/ruxsat olib qo'yilgan ombor tiklanmaydi.
+          if (ids.isEmpty || (ids.contains(savedFrom) && ids.contains(savedTo))) {
+            _from = savedFrom;
+            _to = savedTo;
+          }
+        }
+      }
       // Boshlang'ich holat «saqlangan» deb belgilanadi (qoralamani ochib,
       // hech narsa o'zgartirmay chiqishda ortiqcha savol bo'lmasin).
       _savedSig = _sig();
     });
+    _afterSkladChanged();
   }
 
   Future<void> _savePrefs() async {
+    final fromKey = hasOptionalFrom ? _prefKey('from') : '';
+    final toKey = hasOptionalFrom ? _prefKey('to') : '';
     final prefs = await SharedPreferences.getInstance();
     if (hasCorr && _corr != null) await prefs.setInt('core_quick_corr_$type', _corr!);
     if (isTransfer && _to != null) await prefs.setInt('core_quick_to_$type', _to!);
+    if (hasOptionalFrom && _from != null && _to != null) {
+      await prefs.setInt(fromKey, _from!);
+      await prefs.setInt(toKey, _to!);
+    }
   }
 
   /// Ombor almashgach: qoldiq keshi + «Tez-tez» chiplari yangilanadi.
+  /// Ikki omborli formada (akt/qayta ishlash) IKKALA ombor qoldig'i ham
+  /// keshga olinadi — sarf qatori xomashyo omborining qoldig'ini,
+  /// mahsulot qatori esa mahsulot omborinikini ko'rsatishi kerak.
   void _afterSkladChanged() {
     final sklad = _activeSklad;
-    if (sklad == null) return;
     final stock = context.read<CoreStockProvider>();
+    final ids = <int>{
+      if (sklad != null) sklad,
+      if (isMake) ...[
+        if (_from != null) _from!,
+        if (_to != null) _to!,
+      ],
+    };
+    if (ids.isEmpty) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) stock.ensure(sklad);
+      if (!mounted) return;
+      for (final id in ids) {
+        stock.ensure(id);
+      }
     });
-    _loadFreq(sklad);
+    if (sklad != null) _loadFreq(sklad);
   }
 
   Future<void> _loadFreq(int sklad) async {
@@ -359,18 +433,24 @@ class _QuickDocUiState extends State<QuickDocUi> {
             price: _lines[editIndex].price,
             amount: _lines[editIndex].amount,
           );
+    // Klaviaturadagi «Qoldiq» — shu QATOR ombori: tahrirda qatorning o'z
+    // bayrog'i, yangi qatorda esa faol bo'lim bayrog'i bo'yicha.
+    final sklad = _skladForFlag(editIndex != null
+        ? _lines[editIndex].flag
+        : (isMake ? _activeFlag : 0));
     if (wide) {
       setState(() {
         _padGood = good;
         _padEditIndex = editIndex;
         _padInitial = init;
+        _padSklad = sklad;
       });
       return;
     }
     final res = await showQtyKeypad(
       context,
       good: good,
-      skladId: _activeSklad,
+      skladId: sklad,
       withSum: hasPrice,
       initial: init,
       okText: editIndex == null ? 'Qo\'shish' : 'Saqlash',
@@ -392,7 +472,7 @@ class _QuickDocUiState extends State<QuickDocUi> {
       _clearSearch();
       return;
     }
-    final flag = isProduction ? _activeFlag : 0;
+    final flag = isMake ? _activeFlag : 0;
     final dup = _lines.indexWhere((l) => l.good.id == good.id && l.flag == flag);
     if (dup >= 0) {
       final merge = await _askMerge(good, _lines[dup]);
@@ -508,12 +588,20 @@ class _QuickDocUiState extends State<QuickDocUi> {
     }
   }
 
-  /// Ishlab chiqarish: mahsulot (flag 0) qatorlari bo'yicha sarfni
-  /// (flag 1) retsept asosida to'ldirish — `GET /recipes/expand`.
+  /// Ishlab chiqarish/akt: mahsulot (flag 0) qatorlari bo'yicha sarfni
+  /// (flag 1) retsept asosida to'ldirish — `GET /recipes/expand`
+  /// (ACT_KONTRAKT §7: `good_id` + `qty` + hujjat `date`; `sklad_id`
+  /// yuborilmaydi — u natijaga ta'sir qilmaydi).
+  ///
+  /// Retsepti yo'q taom: yangi serverda `422`, eskisida `500` — ikkalasi
+  /// ham «retsept yo'q» deb sanaladi, qolgan xatolar (tarmoq, ruxsat)
+  /// yuqoriga chiqadi. Javobdagi `cut` — sikl tufayli ichkariga yoyilmagan
+  /// yarim tayyorlar; ular haqida alohida aytiladi.
   Future<void> _expandRecipe() async {
     final products = _lines.where((l) => l.flag == 0).toList();
     if (products.isEmpty) {
-      showInfoUz(context, 'Avval «Mahsulot» bo\'limiga taom qo\'shing');
+      showInfoUz(context,
+          'Avval «${isAct ? 'Mahsulot (taomlar)' : 'Mahsulot'}» bo\'limiga taom qo\'shing');
       return;
     }
     if (_lines.any((l) => l.flag == 1)) {
@@ -529,17 +617,18 @@ class _QuickDocUiState extends State<QuickDocUi> {
       final need = <int, int>{};
       final names = <int, String>{};
       final units = <int, String>{};
+      final cut = <int>{}; // ichkariga yoyilmagan yarim tayyorlar
       var missing = 0;
       for (final p in products) {
         try {
-          final ing = await _recipes.expand(
+          final res = await _recipes.expand(
             goodId: p.good.id,
             date: _date,
             qty: p.baseQty,
-            skladId: _from,
           );
-          if (ing.isEmpty) missing++;
-          for (final m in ing) {
+          if (res.ingredients.isEmpty) missing++;
+          cut.addAll(res.cut);
+          for (final m in res.ingredients) {
             final id = (m['good_id'] as num?)?.toInt() ?? 0;
             if (id <= 0) continue;
             need[id] = (need[id] ?? 0) + ((m['qty'] as num?)?.toInt() ?? 0);
@@ -547,12 +636,19 @@ class _QuickDocUiState extends State<QuickDocUi> {
             units[id] = (m['base_unit'] ?? '').toString();
           }
         } catch (e) {
+          // Faqat «retsept yo'q» jimgina sanaladi; boshqasi — haqiqiy xato.
+          if (!coreIsNoRecipeError(e)) rethrow;
           missing++;
         }
       }
       if (!mounted) return;
       if (need.isEmpty) {
-        showInfoUz(context, 'Retsept topilmadi — sarfni qo\'lda kiriting');
+        showInfoUz(
+            context,
+            isAct
+                ? 'Retsept topilmadi — sarfni qo\'lda kiriting '
+                    '(yoki bo\'sh qoldiring: server o\'zi yozishga urinadi)'
+                : 'Retsept topilmadi — sarfni qo\'lda kiriting');
         return;
       }
       await dict.ensureGoods(need.keys);
@@ -577,7 +673,10 @@ class _QuickDocUiState extends State<QuickDocUi> {
       showInfoUz(
           context,
           'Retsept bo\'yicha ${need.length} ta sarf qatori yozildi'
-          '${missing > 0 ? ' ($missing ta taomda retsept yo\'q)' : ''}');
+          '${missing > 0 ? ' ($missing ta taomda retsept yo\'q)' : ''}'
+          '${cut.isEmpty ? '' : '. ${cut.length} ta yarim tayyorning ichi '
+              'yoyilmadi (retseptda sikl yoki juda chuqur) — ular sarf '
+              'qatori bo\'lib qoldi'}');
     } catch (e) {
       if (mounted) showErrorUz(context, e);
     } finally {
@@ -589,7 +688,9 @@ class _QuickDocUiState extends State<QuickDocUi> {
 
   String? _validate() {
     if (hasFrom && _from == null) return 'Qaysi ombordan — tanlang';
-    if (hasTo && _to == null) return 'Qaysi omborga — tanlang';
+    if (hasTo && _to == null) {
+      return isAct ? 'Mahsulot qaysi omborga — tanlang' : 'Qaysi omborga — tanlang';
+    }
     if (hasCorr && _corr == null) {
       return type == CoreDocType.receipt ? 'Kimdan olindi — tanlang' : 'Kontragentni tanlang';
     }
@@ -603,6 +704,11 @@ class _QuickDocUiState extends State<QuickDocUi> {
       if (!_lines.any((l) => l.flag == 1)) return 'Sarf qatorlari yo\'q';
       if (!_lines.any((l) => l.flag == 0)) return 'Mahsulot qatorlari yo\'q';
     }
+    // Aktda sarf qatorlari IXTIYORIY (server retsept bo'yicha o'zi yozadi),
+    // mahsulot (taom) esa bo'lishi shart.
+    if (isAct && !_lines.any((l) => l.flag == 0)) {
+      return 'Mahsulot (taom) qatorlari yo\'q';
+    }
     return null;
   }
 
@@ -615,7 +721,10 @@ class _QuickDocUiState extends State<QuickDocUi> {
       id: _draftId,
       type: type,
       docDate: _date,
-      fromSklad: hasFrom ? _from : null,
+      // Akt: `from_sklad` — XOMASHYO ombori. PUT to'liq almashtirish
+      // bo'lgani uchun tanlangan qiymat har safar yuboriladi; bir xil
+      // bo'lsa `to_sklad` bilan teng ketadi (ACT_KONTRAKT §3, §9).
+      fromSklad: (hasFrom || hasOptionalFrom) ? _from : null,
       toSklad: hasTo ? _to : null,
       corrId: hasCorr ? _corr : null,
       comment: comment,
@@ -869,7 +978,7 @@ class _QuickDocUiState extends State<QuickDocUi> {
         const SizedBox(height: 8),
         _searchField(),
         if (searching) ...[
-          if (isProduction) _flagSwitch(),
+          if (isMake) _flagSwitch(),
           const SizedBox(height: 6),
           _resultsCard(maxHeight: 320),
         ] else ...[
@@ -878,15 +987,7 @@ class _QuickDocUiState extends State<QuickDocUi> {
             _freqChips(),
           ],
           const SizedBox(height: 8),
-          if (isProduction) ...[
-            _sectionTitle('Sarf (xomashyo)', flag: 1),
-            ..._linesOf(1),
-            const SizedBox(height: 8),
-            _sectionTitle('Mahsulot (chiqish)', flag: 0),
-            ..._linesOf(0),
-          ] else ...[
-            ..._linesOf(0),
-          ],
+          ..._sections(),
           if (_lines.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
@@ -913,14 +1014,7 @@ class _QuickDocUiState extends State<QuickDocUi> {
             children: [
               _headerCard(),
               const SizedBox(height: 8),
-              if (isProduction) ...[
-                _sectionTitle('Sarf (xomashyo)', flag: 1),
-                ..._linesOf(1),
-                const SizedBox(height: 8),
-                _sectionTitle('Mahsulot (chiqish)', flag: 0),
-                ..._linesOf(0),
-              ] else
-                ..._linesOf(0),
+              ..._sections(),
               if (_lines.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 32),
@@ -944,7 +1038,7 @@ class _QuickDocUiState extends State<QuickDocUi> {
                     child: QtyKeypad(
                       key: ValueKey('pad-${_padGood!.id}-$_padEditIndex'),
                       good: _padGood!,
-                      skladId: _activeSklad,
+                      skladId: _padSklad ?? _activeSklad,
                       withSum: hasPrice,
                       initial: _padInitial,
                       okText:
@@ -966,7 +1060,7 @@ class _QuickDocUiState extends State<QuickDocUi> {
                         child: Column(
                           children: [
                             _searchField(),
-                            if (isProduction) _flagSwitch(),
+                            if (isMake) _flagSwitch(),
                           ],
                         ),
                       ),
@@ -997,6 +1091,7 @@ class _QuickDocUiState extends State<QuickDocUi> {
     final dict = context.watch<CoreDictProvider>();
     final session = context.watch<CoreSession>();
     final backdated = _date != coreToday();
+    final onePlace = _onePlaceOf(dict);
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -1028,14 +1123,32 @@ class _QuickDocUiState extends State<QuickDocUi> {
                   warn: _from == null,
                   onTap: widget.receiveMode ? null : () => _pickSklad(isFrom: true),
                 ),
-              if (hasFrom && hasTo)
+              // Akt: «Xomashyo qayerdan?» — ixtiyoriy, lekin standart holda
+              // to'ldirilgan (mahsulot ombori bilan bir xil).
+              if (hasOptionalFrom)
+                _chip(
+                  icon: Icons.warehouse_outlined,
+                  label: _from == null
+                      ? 'Xomashyo qayerdan?'
+                      : dict.skladName(_from),
+                  sub: 'xomashyo · sex ombori',
+                  onTap: (widget.receiveMode || onePlace)
+                      ? null
+                      : () => _pickSklad(isFrom: true),
+                ),
+              if ((hasFrom || hasOptionalFrom) && hasTo)
                 const Icon(Icons.arrow_forward, size: 16, color: Colors.grey),
               if (hasTo)
                 _chip(
                   icon: Icons.inventory_2_outlined,
-                  label: _to == null ? 'Qaysi omborga?' : dict.skladName(_to),
+                  label: _to == null
+                      ? (isAct ? 'Mahsulot qayerga?' : 'Qaysi omborga?')
+                      : dict.skladName(_to),
+                  sub: isAct ? 'mahsulot' : null,
                   warn: _to == null,
-                  onTap: widget.receiveMode ? null : () => _pickSklad(isFrom: false),
+                  onTap: (widget.receiveMode || (isAct && onePlace))
+                      ? null
+                      : () => _pickSklad(isFrom: false),
                 ),
               _chip(
                 icon: Icons.event,
@@ -1054,6 +1167,25 @@ class _QuickDocUiState extends State<QuickDocUi> {
               ),
             ],
           ),
+          // Ikki xil ombor: bitta neytral qatorda tushuntiriladi (xato emas).
+          if (_splitSklads)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 15, color: Colors.grey.shade700),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      'Xomashyo: ${dict.skladName(_from)} → '
+                      'mahsulot: ${dict.skladName(_to)}',
+                      style: TextStyle(
+                          fontSize: 12, color: Colors.grey.shade800),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           if (backdated)
             Padding(
               padding: const EdgeInsets.only(top: 6),
@@ -1099,9 +1231,12 @@ class _QuickDocUiState extends State<QuickDocUi> {
     );
   }
 
+  /// Chip: [sub] — kichik kulrang ostyozuv (qaysi chip nimaga tegishli:
+  /// «xomashyo · sex ombori» / «mahsulot»).
   Widget _chip({
     required IconData icon,
     required String label,
+    String? sub,
     VoidCallback? onTap,
     bool warn = false,
   }) {
@@ -1123,12 +1258,23 @@ class _QuickDocUiState extends State<QuickDocUi> {
             const SizedBox(width: 5),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 190),
-              child: Text(label,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      color: color)),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: color)),
+                  if (sub != null)
+                    Text(sub,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 10.5, color: Colors.grey.shade600)),
+                ],
+              ),
             ),
             if (onTap != null)
               Icon(Icons.expand_more, size: 15, color: color),
@@ -1138,12 +1284,23 @@ class _QuickDocUiState extends State<QuickDocUi> {
     );
   }
 
+  /// Foydalanuvchiga bitta ombor ochiq (yoki lug'at hali bo'sh) — tanlagich
+  /// ma'nosiz, chip oddiy yozuv bo'lib qoladi. Server `GET /sklads` ni
+  /// o'zi cheklaydi, mijoz tomonda qo'shimcha filtr YO'Q.
+  bool _onePlaceOf(CoreDictProvider dict) => dict.activeSklads.length <= 1;
+
+  /// Aktda xomashyo va mahsulot omborlari boshqa-boshqa.
+  bool get _splitSklads =>
+      hasOptionalFrom && _from != null && _to != null && _from != _to;
+
   Future<void> _pickSklad({required bool isFrom}) async {
     // `GET /sklads` allaqachon foydalanuvchi omborlari bilan cheklangan
     // (API_V2: users.sklads) — qo'shimcha mijoz tomon filtri kerak emas.
     final list = context.read<CoreDictProvider>().activeSklads;
     final id = await _pickFromList<CoreSklad>(
-      title: isFrom ? 'Qaysi ombordan' : 'Qaysi omborga',
+      title: isAct
+          ? (isFrom ? 'Xomashyo qaysi ombordan' : 'Mahsulot qaysi omborga')
+          : (isFrom ? 'Qaysi ombordan' : 'Qaysi omborga'),
       items: list,
       label: (s) => s.name,
       idOf: (s) => s.id,
@@ -1360,6 +1517,42 @@ class _QuickDocUiState extends State<QuickDocUi> {
 
   // ── Qatorlar ro'yxati ──
 
+  /// Bo'limlar: qayta ishlashda «Sarf → Mahsulot», aktda esa avval TAOM
+  /// (asosiy ish), keyin ixtiyoriy «Sarf (ingredientlar)». Oddiy turlarda —
+  /// bitta ro'yxat.
+  List<Widget> _sections() {
+    if (isProduction) {
+      return [
+        _sectionTitle('Sarf (xomashyo)', flag: 1),
+        ..._linesOf(1),
+        const SizedBox(height: 8),
+        _sectionTitle('Mahsulot (chiqish)', flag: 0),
+        ..._linesOf(0),
+      ];
+    }
+    if (isAct) {
+      final dict = context.watch<CoreDictProvider>();
+      return [
+        _sectionTitle('Mahsulot (taomlar)', flag: 0),
+        ..._linesOf(0),
+        const SizedBox(height: 8),
+        _sectionTitle('Sarf (ingredientlar)', flag: 1),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Text(
+            _lines.any((l) => l.flag == 1)
+                ? 'Sarf ${dict.skladName(_from ?? _to)} omboridan yechiladi'
+                : 'Ixtiyoriy: bo\'sh qoldirsangiz retsept bo\'yicha server '
+                    'o\'zi yozadi (${dict.skladName(_from ?? _to)} ombori)',
+            style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
+          ),
+        ),
+        ..._linesOf(1),
+      ];
+    }
+    return _linesOf(0);
+  }
+
   Widget _sectionTitle(String title, {required int flag}) {
     final active = _activeFlag == flag;
     return Padding(
@@ -1391,9 +1584,12 @@ class _QuickDocUiState extends State<QuickDocUi> {
     );
   }
 
-  /// Ishlab chiqarishda tanlangan tovar qaysi bo'limga tushishi (qidiruv
+  /// Ishlab chiqarish/aktda tanlangan tovar qaysi bo'limga tushishi (qidiruv
   /// paytida bo'lim sarlavhalari ko'rinmaydi).
   Widget _flagSwitch() {
+    final names = isAct
+        ? const {0: 'Taom', 1: 'Sarf'}
+        : const {1: 'Sarf', 0: 'Mahsulot'};
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Row(
@@ -1401,7 +1597,7 @@ class _QuickDocUiState extends State<QuickDocUi> {
           Text('Qo\'shiladi:',
               style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
           const SizedBox(width: 6),
-          for (final e in const {1: 'Sarf', 0: 'Mahsulot'}.entries)
+          for (final e in names.entries)
             Padding(
               padding: const EdgeInsets.only(right: 6),
               child: ChoiceChip(

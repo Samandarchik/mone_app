@@ -2,7 +2,8 @@
 // ekran, tur bo'yicha maydonlar — receipt (corr supplier, qaysi omborga,
 // narx), issue (dan, corr payment/writeoff/debtor, sotuv summasi), transfer/
 // reserve (dan/ga), production (dan/ga, ikki jadval: sarf flag=1 va mahsulot
-// flag=0), act (ga, taomlar), inventory (ombor, sana, tovar ro'yxati: joriy
+// flag=0), act (mahsulot ombori «ga» + xomashyo ombori FAQAT ko'rsatiladi,
+// taomlar), inventory (ombor, sana, tovar ro'yxati: joriy
 // qoldiq + fakt; «faqat farqlilar»; bo'sh qoldirilganlar yuborilmaydi).
 // Miqdor: tanlangan birlikda kiritiladi (kg/l/dona), serverga BUTUN base
 // (`coreQtyFromUi`); narx — 1 birlik, butun so'm; summa avtomatik; sotuv
@@ -145,6 +146,7 @@ class _DocFormState extends State<_DocForm> {
   bool get hasPrice => CoreDocType.hasPrice(type);
   bool get hasSale => CoreDocType.hasSaleAmount(type);
   bool get isProduction => type == CoreDocType.production;
+  bool get isAct => type == CoreDocType.act;
 
   @override
   void initState() {
@@ -220,9 +222,11 @@ class _DocFormState extends State<_DocForm> {
 
   /// Qator qaysi ombor qoldig'ini ko'rsatadi: production'da sarf (flag=1)
   /// «dan» omboridan yechiladi, mahsulot (flag=0) «ga» omboriga kiradi;
+  /// aktda ham shunday, lekin xomashyo ombori ixtiyoriy (`from ?? to`);
   /// qolgan turlarda chiqim bo'lsa «dan», aks holda «ga».
   int? _skladForFlag(int flag) {
     if (isProduction) return flag == 1 ? _from : _to;
+    if (isAct) return flag == 1 ? (_from ?? _to) : _to;
     return hasFrom ? _from : _to;
   }
 
@@ -239,7 +243,10 @@ class _DocFormState extends State<_DocForm> {
         id: widget.existing?.id ?? 0,
         type: type,
         docDate: _date,
-        fromSklad: hasFrom ? _from : null,
+        // Akt: xomashyo ombori (`from_sklad`) bu formada TANLANMAYDI, lekin
+        // hujjatda bo'lsa saqlanib qoladi — PUT to'liq almashtirish, aks
+        // holda xomashyo ombori yo'qolib ketardi (ACT_KONTRAKT §3).
+        fromSklad: (hasFrom || isAct) ? _from : null,
         toSklad: hasTo ? _to : null,
         corrId: hasCorr ? _corr : null,
         comment: _comment.text.trim(),
@@ -431,9 +438,21 @@ class _DocFormState extends State<_DocForm> {
         if (hasTo)
           CoreSkladDropdown(
             value: _to,
-            label: 'Qaysi omborga',
+            label: isAct ? 'Mahsulot qaysi omborga' : 'Qaysi omborga',
             enabled: editable,
             onChanged: (v) => setState(() => _to = v),
+          ),
+        // Akt: xomashyo ombori faqat KO'RSATILADI (tanlash «Tez kiritish»
+        // formasida). Bir xil bo'lsa ortiqcha qator chiqmaydi.
+        if (isAct && _from != null && _from != _to)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: InputDecorator(
+              decoration: coreInput('Xomashyo qayerdan (sex ombori)'),
+              child: Text(
+                  context.watch<CoreDictProvider>().skladName(_from),
+                  style: const TextStyle(fontSize: 14)),
+            ),
           ),
         if (hasCorr) ...[
           const SizedBox(height: 10),

@@ -189,9 +189,20 @@ class _DocDetailUiState extends State<DocDetailUi> {
                     ),
                     const Divider(),
                     kv('Sana', coreDate(doc.docDate)),
-                    if (doc.fromSklad != null)
-                      kv('Dan', dict.skladName(doc.fromSklad)),
-                    if (doc.toSklad != null) kv('Ga', dict.skladName(doc.toSklad)),
+                    // Aktda `from_sklad` — XOMASHYO ombori (server uni doim
+                    // to'ldiradi; `to_sklad` ga teng bo'lsa ortiqcha qator
+                    // chiqmaydi), `to_sklad` — mahsulot ombori.
+                    if (doc.type == CoreDocType.act) ...[
+                      if (doc.fromSklad != null && doc.fromSklad != doc.toSklad)
+                        kv('Xomashyo ombori', dict.skladName(doc.fromSklad)),
+                      if (doc.toSklad != null)
+                        kv('Mahsulot ombori', dict.skladName(doc.toSklad)),
+                    ] else ...[
+                      if (doc.fromSklad != null)
+                        kv('Dan', dict.skladName(doc.fromSklad)),
+                      if (doc.toSklad != null)
+                        kv('Ga', dict.skladName(doc.toSklad)),
+                    ],
                     if (doc.corrId != null) kv('Kontragent', dict.corrName(doc.corrId)),
                     if (doc.comment.isNotEmpty) kv('Izoh', doc.comment),
                     if (doc.source.isNotEmpty) kv('Manba', doc.source),

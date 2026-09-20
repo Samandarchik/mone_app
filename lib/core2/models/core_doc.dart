@@ -49,8 +49,21 @@ abstract final class CoreDocType {
   /// shartnoma «transfer kabi» deydi — transfer ruxsati bilan tekshiriladi.
   static String permType(String t) => t == reserve ? transfer : t;
 
+  /// MAJBURIY «qayerdan» ombori bo'lgan turlar (bo'sh bo'lsa forma
+  /// saqlanmaydi). `act` bu yerda YO'Q — unda «qayerdan» ixtiyoriy
+  /// (ACT_KONTRAKT §1, §11.1).
   static bool hasFrom(String t) =>
       t == issue || t == transfer || t == production || t == reserve;
+
+  /// IXTIYORIY «qayerdan» (xomashyo ombori): akt — ingredientlar sex
+  /// omboridan yechiladi, mahsulot esa `to_sklad` ga kiradi. Yuborilmasa
+  /// server `to_sklad` ni oladi (eski xatti-harakat).
+  static bool hasOptionalFrom(String t) => t == act;
+
+  /// «Qayerdan» ombori umuman bormi (majburiy yoki ixtiyoriy) — ko'rsatish
+  /// va `from_sklad` ni yuborish uchun.
+  static bool hasAnyFrom(String t) => hasFrom(t) || hasOptionalFrom(t);
+
   static bool hasTo(String t) =>
       t == receipt || t == transfer || t == production || t == act ||
       t == inventory || t == reserve;
@@ -241,6 +254,11 @@ class CoreDoc {
       );
 
   /// POST/PUT tanasi (server hisoblaydigan maydonlar yuborilmaydi).
+  ///
+  /// `from_sklad`: aktda — XOMASHYO ombori (flag=1 qatorlar shundan
+  /// yechiladi), `null` bo'lsa server `to_sklad` ni oladi. PUT to'liq
+  /// almashtirish bo'lgani uchun tanlangan qiymat HAR SAFAR yuboriladi
+  /// (ACT_KONTRAKT §3).
   Map<String, dynamic> toJson() => {
         'type': type,
         'doc_date': docDate,

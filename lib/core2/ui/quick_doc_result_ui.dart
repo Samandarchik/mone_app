@@ -108,8 +108,11 @@ class _QuickDocResultUiState extends State<QuickDocResultUi> {
   }
 
   Widget _successCard(CoreDictProvider dict) {
+    // Akt bitta omborda bo'lsa server `from_sklad` ni `to_sklad` ga
+    // tenglashtirib qaytaradi — «X → X» ko'rinmasin.
+    final same = doc.fromSklad != null && doc.fromSklad == doc.toSklad;
     final parts = <String>[
-      if (doc.fromSklad != null) dict.skladName(doc.fromSklad),
+      if (doc.fromSklad != null && !same) dict.skladName(doc.fromSklad),
       if (doc.toSklad != null) dict.skladName(doc.toSklad),
     ];
     return Container(

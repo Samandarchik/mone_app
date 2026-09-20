@@ -119,3 +119,51 @@ class CoreRecipe {
     return sorted.first;
   }
 }
+
+/// `GET /recipes/expand` javobi (ACT_KONTRAKT §7): mahsulotning shu
+/// sanadagi retsepti SH5 `expand_sub` qoidasi bilan yoyilgan ingredientlar.
+///
+/// `rule` — yangi serverda doim `"expand_sub"` (maydon yo'q bo'lsa server
+/// ESKI, javob baribir ingredientlar ro'yxati). `cut` — sikl yoki 12 dan
+/// chuqur ichma-ichlik tufayli ICHKARIGA YOYILMAGAN yarim tayyorlar
+/// (`good_id` lar): ular ro'yxatga o'zi bo'lib tushadi.
+class CoreRecipeExpand {
+  final int goodId;
+  final String date; // YYYY-MM-DD
+  final int qty; // BUTUN base birlik
+  final String rule; // 'expand_sub' yoki bo'sh (eski server)
+  final List<Map<String, dynamic>> ingredients;
+  final List<int> cut;
+
+  const CoreRecipeExpand({
+    this.goodId = 0,
+    this.date = '',
+    this.qty = 0,
+    this.rule = '',
+    this.ingredients = const [],
+    this.cut = const [],
+  });
+
+  /// Server yangilanganmi (`rule` maydoni bor).
+  bool get newServer => rule.isNotEmpty;
+
+  /// Sikl/chuqurlik tufayli yoyilmagan yarim tayyor bormi.
+  bool get hasCut => cut.isNotEmpty;
+
+  factory CoreRecipeExpand.fromJson(Map<String, dynamic> j) => CoreRecipeExpand(
+        goodId: (j['good_id'] as num?)?.toInt() ?? 0,
+        date: (j['date'] ?? '').toString().split('T').first,
+        qty: (j['qty'] as num?)?.toInt() ?? 0,
+        rule: (j['rule'] ?? '').toString(),
+        ingredients: (j['ingredients'] as List?)
+                ?.whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList() ??
+            const [],
+        cut: (j['cut'] as List?)
+                ?.map((e) => (e as num?)?.toInt() ?? 0)
+                .where((e) => e > 0)
+                .toList() ??
+            const [],
+      );
+}
