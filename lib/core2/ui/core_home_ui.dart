@@ -25,6 +25,7 @@ import 'package:uz_ai_dev/core2/services/core_stock_service.dart';
 import 'package:uz_ai_dev/core2/ui/core_hub_ui.dart';
 import 'package:uz_ai_dev/core2/ui/doc_detail_ui.dart';
 import 'package:uz_ai_dev/core2/ui/docs_list_ui.dart';
+import 'package:uz_ai_dev/core2/ui/inventory_count_logic.dart';
 import 'package:uz_ai_dev/core2/ui/inventory_count_ui.dart';
 import 'package:uz_ai_dev/core2/ui/quick_doc_ui.dart';
 import 'package:uz_ai_dev/core2/ui/sh5_compare_ui.dart';
@@ -78,6 +79,10 @@ class _HomeBodyState extends State<_HomeBody> {
   bool _initDone = false;
 
   List<CoreDoc> _incoming = const [];
+
+  /// Sanoqchi topshirgan sanoq qoralamalari — tasdiqlash ruxsati bor
+  /// xodim ularni tekshirib «Tasdiqlash» qiladi (izohda «[topshirildi] »).
+  List<CoreDoc> _handovers = const [];
   List<CoreDoc> _drafts = const [];
   List<CoreDoc> _today = const [];
   CoreSh5Compare? _sh5;
@@ -177,16 +182,30 @@ class _HomeBodyState extends State<_HomeBody> {
       );
       if (!mounted) return;
       final incoming = <CoreDoc>[];
+      final handovers = <CoreDoc>[];
       final mine = <CoreDoc>[];
+      final canPostInv = session.canPost(CoreDocType.inventory);
       for (final d in drafts.items) {
         final toMe = d.type == CoreDocType.transfer &&
             _sklad != null &&
             d.toSklad == _sklad &&
             d.fromSklad != _sklad;
-        (toMe ? incoming : mine).add(d);
+        if (toMe) {
+          incoming.add(d);
+          continue;
+        }
+        // Sanoqchi (post ruxsatisiz) topshirgan sanoq — tekshirish kerak.
+        if (canPostInv &&
+            d.type == CoreDocType.inventory &&
+            invIsHandover(d.comment)) {
+          handovers.add(d);
+          continue;
+        }
+        mine.add(d);
       }
       setState(() {
         _incoming = incoming;
+        _handovers = handovers;
         _drafts = mine;
         _today = today.items;
       });
@@ -519,10 +538,10 @@ class _HomeBodyState extends State<_HomeBody> {
   // ───────────────────────────── Kutilmoqda ─────────────────────────────
 
   Widget _pending() {
-    final empty = _incoming.isEmpty && _drafts.isEmpty;
+    final empty = _incoming.isEmpty && _handovers.isEmpty && _drafts.isEmpty;
     return _section(
       title: 'Kutilmoqda',
-      badge: _incoming.length + _drafts.length,
+      badge: _incoming.length + _handovers.length + _drafts.length,
       child: empty
           ? Padding(
               padding: const EdgeInsets.symmetric(vertical: 14),
@@ -533,23 +552,40 @@ class _HomeBodyState extends State<_HomeBody> {
             )
           : Column(
               children: [
-                for (final d in _incoming) _pendingTile(d, incoming: true),
-                for (final d in _drafts) _pendingTile(d, incoming: false),
+                for (final d in _incoming) _pendingTile(d, _Pending.incoming),
+                for (final d in _handovers) _pendingTile(d, _Pending.handover),
+                for (final d in _drafts) _pendingTile(d, _Pending.draft),
               ],
             ),
     );
   }
 
-  Widget _pendingTile(CoreDoc d, {required bool incoming}) {
+  Widget _pendingTile(CoreDoc d, _Pending kind) {
     final dict = context.watch<CoreDictProvider>();
     final color = coreTypeColor(d.type);
+    final border = switch (kind) {
+      _Pending.incoming => Colors.blue.shade200,
+      _Pending.handover => Colors.deepPurple.shade200,
+      _Pending.draft => Colors.grey.shade300,
+    };
+    final title = switch (kind) {
+      _Pending.incoming => '${dict.skladName(d.fromSklad)} dan keldi',
+      _Pending.handover =>
+        '${dict.skladName(d.toSklad)} sanog\'i topshirildi — tekshirish',
+      _Pending.draft => '${coreTypeUz(d.type)} · tugallanmagan',
+    };
+    final action = switch (kind) {
+      _Pending.incoming => 'Qabul qilish',
+      _Pending.handover => 'Tekshirish',
+      _Pending.draft => 'Davom',
+    };
+    final time = coreTimeUz(d.createdAt);
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-            color: incoming ? Colors.blue.shade200 : Colors.grey.shade300),
+        border: Border.all(color: border),
       ),
       child: ListTile(
         dense: true,
@@ -559,24 +595,29 @@ class _HomeBodyState extends State<_HomeBody> {
           child: Icon(coreTypeIconUz(d.type), size: 17, color: color),
         ),
         title: Text(
-          incoming
-              ? '${dict.skladName(d.fromSklad)} dan keldi'
-              : '${coreTypeUz(d.type)} · tugallanmagan',
+          title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
         ),
         subtitle: Text(
           '${coreDayUz(d.docDate)} · № ${d.number.isEmpty ? d.id : d.number}'
+          '${kind == _Pending.handover && time.isNotEmpty ? ' · $time' : ''}'
           '${d.total > 0 ? ' · ${coreSumUz(d.total)}' : ''}',
           style: const TextStyle(fontSize: 11.5),
         ),
         trailing: FilledButton(
           style: FilledButton.styleFrom(
-            backgroundColor: incoming ? Colors.blue.shade700 : kCoreAccentDark,
+            backgroundColor: switch (kind) {
+              _Pending.incoming => Colors.blue.shade700,
+              _Pending.handover => Colors.deepPurple.shade600,
+              _Pending.draft => kCoreAccentDark,
+            },
             visualDensity: VisualDensity.compact,
           ),
-          onPressed: () => _openPending(d, incoming: incoming),
-          child: Text(incoming ? 'Qabul qilish' : 'Davom',
-              style: const TextStyle(fontSize: 12.5)),
+          onPressed: () =>
+              _openPending(d, incoming: kind == _Pending.incoming),
+          child: Text(action, style: const TextStyle(fontSize: 12.5)),
         ),
       ),
     );
@@ -763,6 +804,10 @@ class _HomeBodyState extends State<_HomeBody> {
     );
   }
 }
+
+/// «Kutilmoqda» qatorining turi: menga kelayotgan ko'chirish, sanoqchi
+/// topshirgan sanoq (tekshirish) yoki o'z tugallanmagan qoralamam.
+enum _Pending { incoming, handover, draft }
 
 class _SkladSheet extends StatefulWidget {
   final List<CoreSklad> sklads;

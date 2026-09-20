@@ -49,6 +49,10 @@ class CountValue {
 }
 
 /// Telefon uchun pastki varaq klaviaturasi. `null` — bekor qilindi.
+///
+/// [expand] / [onExpandChanged] — taom/p-f (`is_complect`) qatori uchun
+/// «o'zi / tarkibi» almashtirgichi (hujjat qatoridagi `flag`). `null` bo'lsa
+/// almashtirgich KO'RSATILMAYDI (oddiy xom ashyo qatori).
 Future<CountValue?> showCountKeypad(
   BuildContext context, {
   required String goodName,
@@ -56,6 +60,8 @@ Future<CountValue?> showCountKeypad(
   required int currentBase,
   int? initialBase,
   String? hint,
+  bool? expand,
+  ValueChanged<bool>? onExpandChanged,
 }) {
   return showModalBottomSheet<CountValue>(
     context: context,
@@ -74,6 +80,8 @@ Future<CountValue?> showCountKeypad(
           currentBase: currentBase,
           initialBase: initialBase,
           hint: hint,
+          expand: expand,
+          onExpandChanged: onExpandChanged,
           onDone: (v) => Navigator.pop(ctx, v),
           onCancel: () => Navigator.pop(ctx),
         ),
@@ -95,6 +103,11 @@ class CountKeypad extends StatefulWidget {
   /// Qo'shimcha kulrang izoh (masalan guruh nomi).
   final String? hint;
 
+  /// Taom/p-f qatori tanlovi: `false` — «o'zi» (flag 1), `true` — «tarkibi»
+  /// (flag 0). `null` — komplekt tovar emas, almashtirgich ko'rsatilmaydi.
+  final bool? expand;
+  final ValueChanged<bool>? onExpandChanged;
+
   final ValueChanged<CountValue> onDone;
   final VoidCallback? onCancel;
 
@@ -106,6 +119,8 @@ class CountKeypad extends StatefulWidget {
     required this.onDone,
     this.initialBase,
     this.hint,
+    this.expand,
+    this.onExpandChanged,
     this.onCancel,
   });
 
@@ -117,6 +132,9 @@ class _CountKeypadState extends State<CountKeypad> {
   late final List<CountUnit> _units = countUnitsFor(widget.baseUnit);
   int _unitIdx = 0;
   String _text = '';
+
+  /// Taom/p-f: «tarkibi» tanlanganmi (flag 0).
+  late bool _expand = widget.expand ?? false;
 
   CountUnit get _unit => _units[_unitIdx];
 
@@ -218,6 +236,7 @@ class _CountKeypadState extends State<CountKeypad> {
             ],
           ),
         ),
+        if (widget.onExpandChanged != null) _expandRow(),
         // Kiritilayotgan qiymat + birlik almashtirgich.
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -307,6 +326,55 @@ class _CountKeypadState extends State<CountKeypad> {
             ),
           ),
       ],
+    );
+  }
+
+  /// Taom/p-f qatori: farq taomning O'ZIGA yozilsinmi yoki retsept bo'yicha
+  /// TARKIBIGA (ingredientlarga) yoyilsinmi.
+  Widget _expandRow() {
+    void set(bool v) {
+      if (v == _expand) return;
+      setState(() => _expand = v);
+      widget.onExpandChanged?.call(v);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.restaurant_menu, size: 16, color: Colors.grey.shade700),
+              const SizedBox(width: 6),
+              Text('Taom/p-f:',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+              const SizedBox(width: 8),
+              ChoiceChip(
+                label: const Text('o\'zi', style: TextStyle(fontSize: 12)),
+                selected: !_expand,
+                selectedColor: kCoreAccent.withValues(alpha: 0.3),
+                visualDensity: VisualDensity.compact,
+                onSelected: (_) => set(false),
+              ),
+              const SizedBox(width: 6),
+              ChoiceChip(
+                label: const Text('tarkibi', style: TextStyle(fontSize: 12)),
+                selected: _expand,
+                selectedColor: kCoreAccent.withValues(alpha: 0.3),
+                visualDensity: VisualDensity.compact,
+                onSelected: (_) => set(true),
+              ),
+            ],
+          ),
+          Text(
+            _expand
+                ? 'Farq retsept bo\'yicha ingredientlarga yoyiladi.'
+                : 'Farq taomning o\'ziga yoziladi (hozirgi tartib).',
+            style: TextStyle(fontSize: 10.5, color: Colors.grey.shade600),
+          ),
+        ],
+      ),
     );
   }
 

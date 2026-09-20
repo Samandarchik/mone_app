@@ -29,11 +29,25 @@
 // `POST /docs`, keyin `PUT /docs/{id}`); tarmoq xatosida qayta urinadi va
 // tepada «saqlanmadi» belgisi ko'rinadi. `docId` berilsa (yoki shu ombor+sana
 // uchun qoralama topilsa) sanash davom ettiriladi.
+//
+// SH5 odatlaridan olingan qo'shimchalar (SH5_BIZNES_MANTIQ §P25, §P26):
+//  • «Hammasini 0 qilish…» / «Hammasini hisobdagidek» — joriy filtrdagi
+//    SANALMAGAN qatorlarni ommaviy to'ldirish (kiritilgan fakt hech qachon
+//    ustidan yozilmaydi), «Bekor qilish» bilan; mantiq
+//    `inventory_count_logic.dart` da (test bilan qoplangan);
+//  • toifa (guruh) chiplari — sanoq shablon bo'yicha ketadi («Выпечка»,
+//    «Напитки», «Хозтовары»); tanlov foydalanuvchi+ombor bo'yicha
+//    SharedPreferences'da eslab qolinadi, izohga toifa nomlari qo'shiladi;
+//  • taom/p-f qatorida «o'zi / tarkibi» almashtirgichi (qator `flag`) —
+//    TEGILMASA natija bugungidek (komplekt → flag 1);
+//  • post ruxsati yo'q sanoqchi uchun «Sanoqni topshirish» (izoh prefiksi
+//    «[topshirildi] »), tekshiruvchi uni «Bugun» → «Kutilmoqda» dan ochadi.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uz_ai_dev/core/context_extension.dart';
 import 'package:uz_ai_dev/core2/core_format.dart';
 import 'package:uz_ai_dev/core2/models/core_dicts.dart';
@@ -48,6 +62,7 @@ import 'package:uz_ai_dev/core2/provider/core_stock_provider.dart';
 import 'package:uz_ai_dev/core2/services/core_client.dart';
 import 'package:uz_ai_dev/core2/services/core_doc_service.dart';
 import 'package:uz_ai_dev/core2/ui/doc_detail_ui.dart';
+import 'package:uz_ai_dev/core2/ui/inventory_count_logic.dart';
 import 'package:uz_ai_dev/core2/ui/widgets/core_widgets.dart';
 import 'package:uz_ai_dev/core2/ui/widgets/count_keypad.dart';
 import 'package:uz_ai_dev/core2/ui/widgets/good_picker.dart';
@@ -82,12 +97,47 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
 
   int? _sklad;
   String _date = todayIso();
+
+  /// Sof izoh (prefikssiz) — qoralamadan `InvComment.parse` bilan ajratiladi.
   String _comment = '';
+
+  /// «[nolga tushirish] » prefiksi qo'yilganmi (ommaviy 0).
+  bool _zeroed = false;
+
+  /// «[topshirildi] » prefiksi — sanoqchi topshirgan qoralama.
+  bool _handover = false;
+
+  /// Topshirgan odam va vaqti (izohga qo'shiladi, ekranda ham ko'rinadi).
+  String _handoverNote = '';
 
   /// good_id → fakt matni (tovarning ko'rsatish birligida: kg / l / dona).
   /// Bo'sh matn — «sanalmagan» (hujjatga yuborilmaydi).
   final Map<int, TextEditingController> _fact = {};
   final Map<int, FocusNode> _focus = {};
+
+  /// Taom/p-f (`is_complect`) qatori tanlovi: true — «tarkibi» (flag 0,
+  /// ingredientlarga yoyiladi), false — «o'zi» (flag 1). Kalit YO'Q bo'lsa —
+  /// tegilmagan, bugungi xatti-harakat (komplekt → «o'zi»).
+  final Map<int, bool> _expand = {};
+
+  /// Tanlangan toifalar (guruh chiplari). Bo'sh — hammasi.
+  final Set<String> _pickedGroups = {};
+
+  /// «faqat tanlangan guruhlar» — xulosa va «sanalmaganlar» ogohlantirishi
+  /// ham shu toifalar bilan cheklanadi.
+  bool _onlyGroups = true;
+  String? _groupsPrefKey;
+
+  /// Ro'yxatni har bosilgan tugmada QAYTA QURMASLIK uchun: faqat tepadagi
+  /// belgi/taraqqiyot shu xabarchiga ulangan (700 qatorli ombor).
+  final ValueNotifier<int> _rev = ValueNotifier<int>(0);
+
+  /// Lug'at keshi o'zgargan sari `_allRows` keshi bekor qilinadi.
+  int _dictTick = 0;
+  int _rowsTick = -1;
+  List<CoreStockRow>? _rowsStock;
+  int _rowsExtra = -1;
+  List<_InvRow> _rowsCache = const [];
 
   /// Qoldiqda yo'q, qo'lda qo'shilgan tovarlar.
   final List<CoreGood> _extra = [];
@@ -128,6 +178,7 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
     _dict = context.read<CoreDictProvider>();
     _docs = context.read<CoreDocsProvider>();
     _stockP = context.read<CoreStockProvider>();
+    _dict.addListener(_onDict);
     final user = context.read<CoreSession>().user;
     if (_sklad == null && user != null && user.sklads.isNotEmpty) {
       _sklad = user.sklads.first;
@@ -143,12 +194,21 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
         return;
       }
       if (_sklad != null) _loadStock();
+      await _restoreGroups();
       await _offerExistingDraft();
     });
   }
 
+  /// Lug'at keshi (tovar kartalari, guruhlar) yangilanishi — qator keshi
+  /// bekor qilinadi, aks holda eski guruh/`is_complect` qolib ketardi.
+  void _onDict() {
+    _dictTick++;
+  }
+
   @override
   void dispose() {
+    _dict.removeListener(_onDict);
+    _rev.dispose();
     _saveTimer?.cancel();
     _retryTimer?.cancel();
     _search.dispose();
@@ -200,7 +260,12 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
     _docId = doc.id;
     _date = doc.docDate;
     _sklad = doc.toSklad ?? _sklad;
-    _comment = doc.comment;
+    // Izoh prefikslari («[nolga tushirish] », «[topshirildi] ») ajratiladi —
+    // qayta saqlashda takror qo'shilmasin.
+    final parts = InvComment.parse(doc.comment);
+    _comment = parts.base;
+    _zeroed = parts.zeroed;
+    _handover = parts.handover;
     for (final l in doc.lines) {
       final good = _dict.goodById(l.goodId) ??
           CoreGood(
@@ -212,6 +277,9 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
       _goodsById.putIfAbsent(good.id, () => good);
       if (!_extra.any((g) => g.id == good.id)) _extra.add(good);
       _ctrl(good.id).text = coreQtyUz(l.qty, good.baseUnit);
+      // Saqlangan `flag` dan «o'zi / tarkibi» tanlovi tiklanadi (komplekt
+      // bo'lmagan tovarda tanlov natijaga ta'sir qilmaydi — doim 0).
+      _expand[good.id] = l.flag == 0;
     }
     _dict.ensureGoods(doc.lines.map((l) => l.goodId));
     _saveState = _SaveState.saved;
@@ -251,7 +319,24 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
 
   // ───────────────────────── Qatorlar / filtr ─────────────────────────
 
+  /// Qatorlar ro'yxati — 700 qatorli omborda har `setState` da qayta
+  /// qurilmasin: qoldiq javobi, qo'lda qo'shilganlar soni va lug'at keshi
+  /// o'zgarmagan bo'lsa oldingi ro'yxat qaytariladi.
   List<_InvRow> _allRows(List<CoreStockRow> stock) {
+    if (identical(stock, _rowsStock) &&
+        _rowsExtra == _extra.length &&
+        _rowsTick == _dictTick) {
+      return _rowsCache;
+    }
+    final rows = _buildRows(stock);
+    _rowsStock = stock;
+    _rowsExtra = _extra.length;
+    _rowsTick = _dictTick;
+    _rowsCache = rows;
+    return rows;
+  }
+
+  List<_InvRow> _buildRows(List<CoreStockRow> stock) {
     final rows = <_InvRow>[];
     final seen = <int>{};
     for (final r in stock) {
@@ -292,7 +377,20 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
     return coreQtyFromUi(v, r.good.preferredUnit);
   }
 
+  /// Fakt kiritilganmi (matn bo'sh emasmi) — son o'girilmaydi (tez).
+  bool _isCounted(int goodId) => (_fact[goodId]?.text ?? '').trim().isNotEmpty;
+
+  /// Tanlangan toifalar qamrovi: xulosa, taraqqiyot va ommaviy amallar shu
+  /// ro'yxat ustida ishlaydi («faqat tanlangan guruhlar» rejimi).
+  List<_InvRow> _scoped(List<_InvRow> all) => _pickedGroups.isEmpty
+      ? all
+      : invScopeRows(all, _pickedGroups, (r) => _groupOf(r.good));
+
   bool _matches(_InvRow r) {
+    if (_pickedGroups.isNotEmpty &&
+        !invInGroupScope(_pickedGroups, _groupOf(r.good))) {
+      return false;
+    }
     if (_q.isNotEmpty && !r.good.name.toLowerCase().contains(_q)) return false;
     final fact = _factBase(r);
     switch (_tab) {
@@ -348,10 +446,16 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
 
   // ───────────────────────── Avto-saqlash ─────────────────────────
 
+  /// Qiymat o'zgardi — `setState` CHAQIRILMAYDI (aks holda har bosilgan
+  /// tugmada butun ro'yxat qayta qurilardi): faqat tepadagi belgi va
+  /// taraqqiyot `_rev` orqali yangilanadi.
+  void _bump() => _rev.value++;
+
   void _touch() {
     _saveTimer?.cancel();
     _retryTimer?.cancel();
-    setState(() => _saveState = _SaveState.dirty);
+    _saveState = _SaveState.dirty;
+    _bump();
     _saveTimer = Timer(const Duration(seconds: 2), _autoSave);
   }
 
@@ -369,8 +473,10 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
         unit: unit.unit,
         qty: qty,
         // Ledger: inventar qatorida flag 1 = tayyor mahsulot (taom) fakti —
-        // retsept bo'yicha yoyilmaydi; 0 = xom qator.
-        flag: good.isComplect ? 1 : 0,
+        // retsept bo'yicha yoyilmaydi; 0 = xom qator. Almashtirgichga
+        // tegilmagan bo'lsa (`_expand` da kalit yo'q) natija bugungidek.
+        flag: invLineFlag(
+            isComplect: good.isComplect, expand: _expand[goodId]),
       ));
     }
 
@@ -392,43 +498,269 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
       type: CoreDocType.inventory,
       docDate: _date,
       toSklad: _sklad,
-      comment: _comment,
+      comment: _docComment(),
       lines: lines,
     );
   }
 
-  Future<void> _autoSave() async {
-    if (!mounted || _posting || _sklad == null) return;
+  /// Hujjat izohi: prefikslar + sof izoh + tanlangan toifa nomlari
+  /// (SH5 da sanoq izohi aynan toifa bo'ladi: «Выпечка», «Напитки»).
+  String _docComment() => invBuildComment(
+        base: _comment,
+        zeroed: _zeroed,
+        handover: _handover,
+        groups: _pickedGroups.toList()..sort(),
+        note: _handoverNote,
+      );
+
+  /// [force] — «Sanoqni topshirish» oqimi: tugma bloklangan (`_posting`)
+  /// bo'lsa ham saqlanadi.
+  Future<bool> _autoSave({bool force = false}) async {
+    if (!mounted || (_posting && !force) || _sklad == null) return false;
     final doc = _buildDoc();
     // Bo'sh hujjat saqlanmaydi (server `lines` bo'sh bo'lsa 422 beradi).
     if (doc.lines.isEmpty) {
-      setState(() => _saveState = _SaveState.idle);
-      return;
+      _saveState = _SaveState.idle;
+      _bump();
+      return false;
     }
-    setState(() => _saveState = _SaveState.saving);
+    _saveState = _SaveState.saving;
+    _bump();
     try {
       final saved = _docId == null
           ? await _docs.create(doc)
           : await _docs.update(_docId!, doc);
-      if (!mounted) return;
-      setState(() {
-        _docId = saved.id > 0 ? saved.id : _docId;
-        _saveState = _SaveState.saved;
-        _saveError = null;
-      });
+      if (!mounted) return false;
+      _docId = saved.id > 0 ? saved.id : _docId;
+      _saveState = _SaveState.saved;
+      _saveError = null;
+      _bump();
+      return true;
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       final err = CoreClient.wrap(e);
-      setState(() {
-        _saveState = _SaveState.failed;
-        _saveError = err.display;
-      });
+      _saveState = _SaveState.failed;
+      _saveError = err.display;
+      _bump();
       // Tarmoq/serverga ulanish xatosi — o'zi qayta urinadi.
       if (err.network) {
         _retryTimer?.cancel();
         _retryTimer = Timer(const Duration(seconds: 10), _autoSave);
       }
+      return false;
     }
+  }
+
+  // ─────────────── Ommaviy to'ldirish («Hammasini 0» / hisobdagidek) ───────────────
+
+  /// Joriy filtrdagi (hammasi / tanlangan toifalar / qidiruv) qatorlar.
+  /// Ommaviy amal AYNAN shu ro'yxat ustida ishlaydi — foydalanuvchi ekranda
+  /// nimani ko'rsa, o'shani to'ldiradi.
+  List<_InvRow> _bulkScope(List<_InvRow> all) {
+    // Tab («Sanalmagan» / «Farqli») ommaviy amalga ta'sir qilmaydi: sanalgan
+    // qator baribir chetlab o'tiladi, «Farqli» esa mantiqsiz qamrov berardi.
+    final rows = _scoped(all);
+    if (_q.isEmpty) return rows;
+    return rows.where((r) => r.good.name.toLowerCase().contains(_q)).toList();
+  }
+
+  /// Qamrov nomi — tasdiq dialogida yoziladi.
+  String get _scopeTitle {
+    if (_q.isNotEmpty) return 'qidiruv natijasi «${_search.text.trim()}»';
+    if (_pickedGroups.isNotEmpty) {
+      final names = _pickedGroups.toList()..sort();
+      return 'tanlangan toifa: ${names.join(', ')}';
+    }
+    return 'butun ombor';
+  }
+
+  /// [zero] true — fakt 0 (xarajat yopish), false — fakt = hisob qoldig'i.
+  Future<void> _bulkFill(List<_InvRow> all, bool showCost,
+      {required bool zero}) async {
+    final scope = _bulkScope(all);
+    final plan = invPlanBulkFill(
+      [
+        for (final r in scope)
+          InvFillTarget(
+            goodId: r.good.id,
+            value: zero ? '0' : coreQtyUz(r.current, r.good.baseUnit),
+            current: r.current,
+            price: r.lastPrice,
+          ),
+      ],
+      (id) => _fact[id]?.text,
+    );
+    final already = scope.length - plan.length;
+    if (plan.isEmpty) {
+      showCoreInfo(context,
+          'Bu ro\'yxatdagi hamma qatorga fakt kiritilgan — o\'zgarish yo\'q');
+      return;
+    }
+    final money = plan.fold<int>(0, (s, t) => s + t.amount);
+    final body = StringBuffer()
+      ..writeln('Ombor: ${_dict.skladName(_sklad)}')
+      ..writeln('Qamrov: $_scopeTitle')
+      ..writeln('${plan.length} ta sanalmagan qator'
+          '${already > 0 ? ' (sanalgan $already ta qator o\'zgarmaydi)' : ''}');
+    if (zero) {
+      if (showCost && money != 0) {
+        body.writeln('Hisobdan chiqadigan summa: ${coreSumUz(money)}');
+      }
+      body.write('\nHammasi 0 bo\'ladi — qoldiq nolga tushadi.');
+    } else {
+      body.write('\nHar qatorga hisobdagi qoldiq yoziladi (farq chiqmaydi).');
+    }
+    final ok = await confirmDialog(
+      context,
+      zero ? 'Hammasini 0 qilish' : 'Hammasini hisobdagidek',
+      body.toString(),
+      okText: zero ? 'Ha, 0 qilinsin' : 'Ha, to\'ldirilsin',
+      danger: zero,
+    );
+    if (!ok || !mounted) return;
+    final undo = invUndoOf(plan, (id) => _fact[id]?.text, wasZeroed: _zeroed);
+    for (final t in plan) {
+      _ctrl(t.goodId).text = t.value;
+    }
+    if (zero) _zeroed = true;
+    setState(() {});
+    _touch();
+    final sm = ScaffoldMessenger.of(context);
+    sm.hideCurrentSnackBar();
+    sm.showSnackBar(SnackBar(
+      duration: const Duration(seconds: 8),
+      content: Text(zero
+          ? '${plan.length} ta qator 0 qilindi'
+          : '${plan.length} ta qator hisobdagidek to\'ldirildi'),
+      action: SnackBarAction(
+        label: 'Bekor qilish',
+        onPressed: () => _undoBulk(undo),
+      ),
+    ));
+  }
+
+  /// Ommaviy amalni qaytarish (xotirada) — avto-saqlash OXIRGI holatni
+  /// yuboradi, ya'ni serverda ham eski faktlar qoladi.
+  void _undoBulk(InvBulkUndo undo) {
+    if (undo.isEmpty) return;
+    undo.previous.forEach((goodId, text) {
+      _ctrl(goodId).text = text;
+    });
+    _zeroed = undo.wasZeroed;
+    setState(() {});
+    _touch();
+  }
+
+  // ───────────────────── Toifa (guruh) shablonlari ─────────────────────
+
+  /// Tanlov foydalanuvchi + ombor bo'yicha eslab qolinadi.
+  String? _groupsKey() {
+    final uid = context.read<CoreSession>().user?.id ?? 0;
+    return _sklad == null ? null : 'core_count_groups_${uid}_$_sklad';
+  }
+
+  Future<void> _restoreGroups() async {
+    final key = _groupsKey();
+    if (key == null) return;
+    _groupsPrefKey = key;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getStringList(key) ?? const [];
+      if (!mounted || saved.isEmpty) return;
+      setState(() {
+        _pickedGroups
+          ..clear()
+          ..addAll(saved);
+      });
+    } catch (e) {
+      // Saqlangan tanlov o'qilmasa sanash baribir ishlaydi.
+      debugPrint('inventory_count_ui[toifa keshi]: $e');
+    }
+  }
+
+  Future<void> _saveGroups() async {
+    final key = _groupsPrefKey ?? _groupsKey();
+    if (key == null) return;
+    _groupsPrefKey = key;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_pickedGroups.isEmpty) {
+        await prefs.remove(key);
+      } else {
+        await prefs.setStringList(key, _pickedGroups.toList()..sort());
+      }
+    } catch (e) {
+      debugPrint('inventory_count_ui[toifa saqlash]: $e');
+    }
+  }
+
+  void _toggleGroup(String name) {
+    setState(() {
+      if (!_pickedGroups.remove(name)) _pickedGroups.add(name);
+    });
+    _saveGroups();
+    // Izohga toifa nomlari qo'shiladi — qoralama yangilanishi kerak.
+    if (_docId != null) _touch();
+  }
+
+  // ───────────────────── Sanoqni topshirish (sanoqchi) ─────────────────────
+
+  /// Post ruxsati yo'q xodim: qoralama saqlanadi, izoh boshiga
+  /// «[topshirildi] » qo'yiladi, tekshiruvchi «Kutilmoqda» dan ochadi.
+  Future<void> _handoverCount(int counted) async {
+    final user = context.read<CoreSession>().user;
+    final now = DateTime.now();
+    final stamp =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final who = (user?.name ?? '').trim();
+    final ok = await confirmDialog(
+      context,
+      'Sanoqni topshirish',
+      '${_dict.skladName(_sklad)} · ${coreDateUz(_date)}\n'
+          '$counted ta qatorga fakt kiritilgan.\n\n'
+          'Sanoq tekshirish uchun yuboriladi — tasdiqlashni '
+          'ruxsati bor xodim bajaradi.',
+      okText: 'Topshirish',
+    );
+    if (!ok || !mounted) return;
+    _saveTimer?.cancel();
+    _retryTimer?.cancel();
+    _handover = true;
+    _handoverNote =
+        'topshirdi: ${who.isEmpty ? 'sanoqchi' : who} ${coreDateUz(_date)} $stamp';
+    setState(() => _posting = true);
+    final saved = await _autoSave(force: true);
+    if (!mounted) return;
+    setState(() => _posting = false);
+    if (!saved) {
+      showCoreInfo(context,
+          _saveError ?? 'Saqlanmadi — internetni tekshirib, qayta urining');
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(children: [
+          Icon(Icons.send_outlined, color: Colors.green.shade700),
+          const SizedBox(width: 8),
+          const Expanded(child: Text('Sanoq topshirildi')),
+        ]),
+        content: Text(
+          '${_dict.skladName(_sklad)} · ${coreDateUz(_date)}\n'
+          '$counted ta qator · $_handoverNote\n\n'
+          'Tekshiruvchi «Bugun» sahifasidagi «Kutilmoqda» dan ochib tasdiqlaydi.',
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: kCoreAccent, foregroundColor: Colors.white),
+            child: const Text('Yopish'),
+          ),
+        ],
+      ),
+    );
+    if (mounted) Navigator.pop(context);
   }
 
   // ───────────────────────── Yakunlash / post ─────────────────────────
@@ -644,15 +976,65 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
         title: const Text('Sanash',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         actions: [
-          _saveBadge(),
+          // Belgi faqat `_rev` o'zgarganda qayta chiziladi — ro'yxat emas.
+          ValueListenableBuilder<int>(
+            valueListenable: _rev,
+            builder: (_, __, ___) => _saveBadge(),
+          ),
           IconButton(
             tooltip: 'Yangilash',
             onPressed: _loadStock,
             icon: const Icon(Icons.refresh),
           ),
+          _menu(),
         ],
       ),
       body: CoreConnectGate(child: _body()),
+    );
+  }
+
+  /// Qo'shimcha amallar menyusi (ommaviy to'ldirish).
+  Widget _menu() {
+    return PopupMenuButton<String>(
+      tooltip: 'Qo\'shimcha',
+      enabled: !_posting,
+      onSelected: (v) {
+        final session = context.read<CoreSession>();
+        final showCost = session.has(CorePerms.stockCostView);
+        final stock = _sklad == null
+            ? const <CoreStockRow>[]
+            : (_stockP.rowsFor(_sklad!) ?? const <CoreStockRow>[]);
+        final all = _allRows(stock);
+        if (all.isEmpty) {
+          showCoreInfo(context, 'Ro\'yxat bo\'sh');
+          return;
+        }
+        _bulkFill(all, showCost, zero: v == 'zero');
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem<String>(
+          value: 'zero',
+          child: Row(children: [
+            Icon(Icons.exposure_zero, size: 20, color: Colors.red.shade700),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text('Hammasini 0 qilish…',
+                  style: TextStyle(fontSize: 13.5)),
+            ),
+          ]),
+        ),
+        const PopupMenuItem<String>(
+          value: 'book',
+          child: Row(children: [
+            Icon(Icons.done_all, size: 20),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text('Hammasini hisobdagidek',
+                  style: TextStyle(fontSize: 13.5)),
+            ),
+          ]),
+        ),
+      ],
     );
   }
 
@@ -714,7 +1096,9 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
 
     final all = _allRows(stock);
     final visible = all.where(_matches).toList();
-    final counted = all.where((r) => _factBase(r) != null).length;
+    // «faqat tanlangan guruhlar» — xulosa, taraqqiyot va «sanalmaganlar»
+    // ogohlantirishi shu qamrov bilan cheklanadi.
+    final scope = _onlyGroups ? _scoped(all) : all;
 
     if (_loadingDoc) {
       return const Center(child: CircularProgressIndicator.adaptive());
@@ -724,7 +1108,7 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
       final wide = c.maxWidth >= _kWideBreakpoint;
       return Column(
         children: [
-          _header(session, all.length, counted),
+          _header(session, all, scope),
           Expanded(
             child: _sklad == null
                 ? const Center(child: Text('Omborni tanlang'))
@@ -745,14 +1129,13 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
                               )
                             : _list(visible, wide, showCost),
           ),
-          _bottomBar(session, all, showCost, counted),
+          _bottomBar(session, scope, showCost),
         ],
       );
     });
   }
 
-  Widget _header(CoreSession session, int total, int counted) {
-    final ratio = total == 0 ? 0.0 : counted / total;
+  Widget _header(CoreSession session, List<_InvRow> all, List<_InvRow> scope) {
     return Container(
       color: kCoreBg,
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
@@ -809,8 +1192,12 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
                     setState(() {
                       _sklad = v;
                       _resetCount();
+                      // Toifa tanlovi HAR OMBOR uchun alohida eslanadi.
+                      _pickedGroups.clear();
+                      _groupsPrefKey = null;
                     });
                     _loadStock();
+                    _restoreGroups();
                   },
                 ),
               ),
@@ -841,24 +1228,32 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
             ],
           ),
           const SizedBox(height: 8),
-          // Taraqqiyot.
-          Row(
-            children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: ratio,
-                    minHeight: 6,
-                    backgroundColor: Colors.grey.shade300,
-                    valueColor: AlwaysStoppedAnimation(kCoreAccentDark),
+          // Taraqqiyot — faqat `_rev` o'zgarganda qayta chiziladi.
+          ValueListenableBuilder<int>(
+            valueListenable: _rev,
+            builder: (_, __, ___) {
+              final p =
+                  invProgress(scope.map((r) => r.good.id), _isCounted);
+              return Row(
+                children: [
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: p.ratio,
+                        minHeight: 6,
+                        backgroundColor: Colors.grey.shade300,
+                        valueColor: AlwaysStoppedAnimation(kCoreAccentDark),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text('$counted/$total sanaldi',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
-            ],
+                  const SizedBox(width: 8),
+                  Text('${p.counted}/${p.total} sanaldi',
+                      style: TextStyle(
+                          fontSize: 12, color: Colors.grey.shade700)),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 6),
           // Tablar.
@@ -879,11 +1274,175 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
                     onSelected: (_) => setState(() => _tab = t[0] as int),
                   ),
                 ),
+              if (_handover) ...[
+                const Spacer(),
+                Tooltip(
+                  message: _handoverNote,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue.shade200),
+                    ),
+                    child: Text('topshirilgan',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blue.shade800)),
+                  ),
+                ),
+              ],
             ],
+          ),
+          _groupChips(all),
+          _complectSwitch(all),
+        ],
+      ),
+    );
+  }
+
+  /// Toifa (guruh) shablonlari — SH5 da sanoq aynan shu bo'yicha ketadi
+  /// («Выпечка», «Напитки», «Хозтовары»). Ko'p tanlanadi, tanlov eslab
+  /// qolinadi, izohga nomlari qo'shiladi.
+  Widget _groupChips(List<_InvRow> all) {
+    final counts = <String, int>{};
+    for (final r in all) {
+      final g = _groupOf(r.good);
+      counts[g] = (counts[g] ?? 0) + 1;
+    }
+    if (counts.length <= 1) return const SizedBox.shrink();
+    final names = counts.keys.toList()
+      ..sort((a, b) {
+        if (a == _kOther) return 1;
+        if (b == _kOther) return -1;
+        return a.toLowerCase().compareTo(b.toLowerCase());
+      });
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 34,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: ChoiceChip(
+                  label: const Text('Hammasi',
+                      style: TextStyle(fontSize: 12.5)),
+                  selected: _pickedGroups.isEmpty,
+                  selectedColor: kCoreAccent.withValues(alpha: 0.3),
+                  onSelected: (_) {
+                    if (_pickedGroups.isEmpty) return;
+                    setState(_pickedGroups.clear);
+                    _saveGroups();
+                    if (_docId != null) _touch();
+                  },
+                ),
+              ),
+              for (final n in names)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: FilterChip(
+                    label: Text('$n · ${counts[n]}',
+                        style: const TextStyle(fontSize: 12.5)),
+                    selected: _pickedGroups.contains(n),
+                    selectedColor: kCoreAccent.withValues(alpha: 0.3),
+                    onSelected: (_) => _toggleGroup(n),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (_pickedGroups.isNotEmpty)
+          InkWell(
+            onTap: () => setState(() => _onlyGroups = !_onlyGroups),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  Icon(
+                    _onlyGroups
+                        ? Icons.check_box
+                        : Icons.check_box_outline_blank,
+                    size: 18,
+                    color: _onlyGroups ? kCoreAccentDark : Colors.grey.shade600,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'faqat tanlangan guruhlar — yakunlashda ham '
+                      'shu toifalar hisoblanadi',
+                      style: TextStyle(
+                          fontSize: 11.5, color: Colors.grey.shade700),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Taom / yarim tayyor (p-f) qatorlari uchun umumiy almashtirgich.
+  /// TEGILMASA hech narsa o'zgarmaydi — natija bugungidek («o'zi»).
+  Widget _complectSwitch(List<_InvRow> all) {
+    final complects = [for (final r in all) if (r.good.isComplect) r];
+    if (complects.isEmpty) return const SizedBox.shrink();
+    final expanded =
+        complects.where((r) => _expand[r.good.id] == true).length;
+    final allSelf = expanded == 0;
+    final allExpand = expanded == complects.length;
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.restaurant_menu, size: 15, color: Colors.grey.shade700),
+              const SizedBox(width: 5),
+              Text('Taom/p-f ${complects.length} ta:',
+                  style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700)),
+              const SizedBox(width: 6),
+              ChoiceChip(
+                label: const Text('o\'zi', style: TextStyle(fontSize: 12)),
+                selected: allSelf,
+                selectedColor: kCoreAccent.withValues(alpha: 0.3),
+                visualDensity: VisualDensity.compact,
+                onSelected: (_) => _setAllExpand(complects, false),
+              ),
+              const SizedBox(width: 6),
+              ChoiceChip(
+                label: const Text('tarkibi', style: TextStyle(fontSize: 12)),
+                selected: allExpand,
+                selectedColor: kCoreAccent.withValues(alpha: 0.3),
+                visualDensity: VisualDensity.compact,
+                onSelected: (_) => _setAllExpand(complects, true),
+              ),
+            ],
+          ),
+          Text(
+            '«o\'zi» — farq taomning o\'ziga yoziladi (hozirgi tartib); '
+            '«tarkibi» — farq retsept bo\'yicha ingredientlarga yoyiladi.',
+            style: TextStyle(fontSize: 10.5, color: Colors.grey.shade600),
           ),
         ],
       ),
     );
+  }
+
+  void _setAllExpand(List<_InvRow> complects, bool expand) {
+    setState(() {
+      for (final r in complects) {
+        _expand[r.good.id] = expand;
+      }
+    });
+    if (_docId != null || _fact.isNotEmpty) _touch();
   }
 
   /// Ombor/sana almashsa kiritilgan faktlar boshqa qoldiqqa tegishli bo'lardi.
@@ -903,11 +1462,17 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
     _fact.clear();
     _focus.clear();
     _extra.clear();
+    _expand.clear();
     _docId = null;
+    _comment = '';
+    _zeroed = false;
+    _handover = false;
+    _handoverNote = '';
     _saveTimer?.cancel();
     _retryTimer?.cancel();
     _saveState = _SaveState.idle;
     _saveError = null;
+    _bump();
   }
 
   Future<void> _addGood() async {
@@ -1048,8 +1613,48 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
     );
   }
 
+  /// Taom/p-f qatorining «o'zi / tarkibi» almashtirgichi (qator `flag`).
+  /// Faqat `is_complect` tovarda ko'rinadi; bosilmasa natija bugungidek.
+  Widget _expandChip(_InvRow r) {
+    if (!r.good.isComplect) return const SizedBox.shrink();
+    final expand = _expand[r.good.id] == true;
+    final color = expand ? Colors.indigo.shade700 : Colors.grey.shade700;
+    return Padding(
+      padding: const EdgeInsets.only(left: 6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: _posting
+            ? null
+            : () {
+                setState(() => _expand[r.good.id] = !expand);
+                if (_isCounted(r.good.id)) _touch();
+              },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color.withValues(alpha: 0.45)),
+          ),
+          child: Text(
+            expand ? 'tarkibi' : 'o\'zi',
+            style: TextStyle(
+                fontSize: 10, fontWeight: FontWeight.w600, color: color),
+          ),
+        ),
+      ),
+    );
+  }
+
   // ── Telefon qatori: bosilsa klaviatura ──
-  Widget _phoneRow(_InvRow r, bool showCost) {
+  // Qator O'Z controller'ini kuzatadi: fakt o'zgarganda faqat shu qator
+  // qayta chiziladi (700 qatorli omborda butun ro'yxat emas).
+  Widget _phoneRow(_InvRow r, bool showCost) => ValueListenableBuilder(
+        valueListenable: _ctrl(r.good.id),
+        builder: (_, __, ___) => _phoneRowBody(r, showCost),
+      );
+
+  Widget _phoneRowBody(_InvRow r, bool showCost) {
     final fact = _factBase(r);
     final delta = fact == null ? null : fact - r.current;
     // Ramka: sanalmagan qatorda QIZIL faqat manfiy qoldiqda; partiyasiz /
@@ -1091,6 +1696,7 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
                                   fontSize: 14, fontWeight: FontWeight.w600)),
                         ),
                         _reasonBadge(r),
+                        _expandChip(r),
                       ],
                     ),
                     const SizedBox(height: 2),
@@ -1165,6 +1771,17 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
       currentBase: r.current,
       initialBase: _factBase(r),
       hint: _groupOf(r.good),
+      // Taom/p-f qatori: «o'zi / tarkibi» (qator `flag`) — tegilmasa
+      // bugungidek «o'zi».
+      expand: r.good.isComplect ? (_expand[r.good.id] ?? false) : null,
+      onExpandChanged: !r.good.isComplect
+          ? null
+          : (v) {
+              _expand[r.good.id] = v;
+              if (!mounted) return;
+              setState(() {});
+              if (_isCounted(r.good.id)) _touch();
+            },
     );
     if (res == null || !mounted) return;
     setState(() {
@@ -1175,7 +1792,15 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
   }
 
   // ── Kompyuter jadvali: katakka to'g'ridan-to'g'ri yoziladi ──
-  Widget _wideRow(_InvRow r, List<int> order, bool showCost) {
+  // Har harfda butun ro'yxat emas, FAQAT shu qator qayta chiziladi
+  // (`TextEditingController` — `ValueListenable`).
+  Widget _wideRow(_InvRow r, List<int> order, bool showCost) =>
+      ValueListenableBuilder(
+        valueListenable: _ctrl(r.good.id),
+        builder: (_, __, ___) => _wideRowBody(r, order, showCost),
+      );
+
+  Widget _wideRowBody(_InvRow r, List<int> order, bool showCost) {
     final fact = _factBase(r);
     final delta = fact == null ? null : fact - r.current;
     final unit = r.good.preferredUnit;
@@ -1210,6 +1835,7 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
                           fontSize: 13.5, fontWeight: FontWeight.w600)),
                 ),
                 _reasonBadge(r),
+                _expandChip(r),
               ],
             ),
           ),
@@ -1246,11 +1872,15 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               ),
-              onChanged: (_) {
+              // `setState` YO'Q: qator o'z controller'ini kuzatadi, tepadagi
+              // taraqqiyot esa `_touch` ichidagi `_rev` orqali yangilanadi.
+              onChanged: (_) => _touch(),
+              onSubmitted: (_) {
+                // Tab filtri («Sanalmagan»/«Farqli») Enter bosilganda qayta
+                // hisoblanadi — yozayotganda qator ostidan sirg'alib ketmaydi.
                 setState(() {});
-                _touch();
+                _focusNext(r.good.id, order);
               },
-              onSubmitted: (_) => _focusNext(r.good.id, order),
             ),
           ),
           const SizedBox(width: 8),
@@ -1262,7 +1892,6 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
                 : () {
                     _ctrl(r.good.id).text =
                         coreQtyUz(r.current, r.good.baseUnit);
-                    setState(() {});
                     _touch();
                   },
             icon: const Icon(Icons.done_all, size: 18),
@@ -1302,9 +1931,12 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
     _node(order[i + 1]).requestFocus();
   }
 
-  Widget _bottomBar(
-      CoreSession session, List<_InvRow> all, bool showCost, int counted) {
+  /// Pastki tugma. Tasdiqlash ruxsati BOR bo'lsa — «Yakunlash»; sanoqchida
+  /// (faqat `doc.inventory.create`) — «Sanoqni topshirish» (qoralama saqlanadi,
+  /// tekshiruvchi «Kutilmoqda» dan ochadi).
+  Widget _bottomBar(CoreSession session, List<_InvRow> scope, bool showCost) {
     final canPost = session.canPost(CoreDocType.inventory);
+    final canCreate = session.canCreate(CoreDocType.inventory);
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
       decoration: BoxDecoration(
@@ -1317,19 +1949,34 @@ class _InventoryCountUiState extends State<InventoryCountUi> {
             ? const SizedBox(
                 height: 46,
                 child: Center(child: CircularProgressIndicator.adaptive()))
-            : ElevatedButton.icon(
-                onPressed: counted == 0 || !canPost
-                    ? null
-                    : () => _finish(all, showCost),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green.shade700,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size.fromHeight(48),
-                ),
-                icon: const Icon(Icons.check_circle_outline),
-                label: Text(canPost
-                    ? 'Yakunlash ($counted ta sanaldi)'
-                    : 'Tasdiqlash ruxsati yo\'q'),
+            : ValueListenableBuilder<int>(
+                valueListenable: _rev,
+                builder: (_, __, ___) {
+                  final counted =
+                      invProgress(scope.map((r) => r.good.id), _isCounted)
+                          .counted;
+                  final enabled = counted > 0 && (canPost || canCreate);
+                  return ElevatedButton.icon(
+                    onPressed: !enabled
+                        ? null
+                        : (canPost
+                            ? () => _finish(scope, showCost)
+                            : () => _handoverCount(counted)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green.shade700,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size.fromHeight(48),
+                    ),
+                    icon: Icon(canPost
+                        ? Icons.check_circle_outline
+                        : Icons.send_outlined),
+                    label: Text(canPost
+                        ? 'Yakunlash ($counted ta sanaldi)'
+                        : (canCreate
+                            ? 'Sanoqni topshirish ($counted ta sanaldi)'
+                            : 'Sanash ruxsati yo\'q')),
+                  );
+                },
               ),
       ),
     );
