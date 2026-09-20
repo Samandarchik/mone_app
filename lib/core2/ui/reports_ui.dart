@@ -1,39 +1,135 @@
-// core2/ui/reports_ui.dart — mone_core hisobotlari (ReportsUi, perm
-// report.view), 3 tab: Aylanma (/reports/turnover — ombor + davr, jadval:
-// tovar, ochilish/kirim/chiqim/yopilish miqdor va qiymat), Qoldiq qiymati
-// (/reports/stock-value — ombor bo'yicha pozitsiya, qiymat, jami), Defitsit
-// (/reports/deficit — ombor×tovar jamlangan partiyasiz chiqimlar: miqdor,
-// hujjatlar soni, davr; bosilsa tovar kartochkasi). Javoblar
-// `{"items":[…]}`. Miqdorlar base'dan kg/l/dona ko'rinishda, pul butun so'm.
+// core2/ui/reports_ui.dart — «Hisobotlar» bo'limi bosh ekrani (ReportsUi,
+// perm `report.view`): hisobot TANLASH ro'yxati, 4 guruhga bo'lingan —
+// «Qoldiq va aylanma», «Kamomad va hisobdan chiqarish», «Xaridlar»,
+// «Ishlab chiqarish va tannarx». Har bir hisobot o'z ekranida
+// (`core2/ui/reports/*.dart`), SH5 atamasi kichik kulrang ostyozuv bilan.
+//
+// Ekranlar: Aylanma (`/reports/turnover`), Qoldiq qiymati
+// (`/reports/stock-value`), Kamomad va ortiqcha (`/reports/inventory-diff`),
+// Hisobdan chiqarish (`/reports/issues`), Defitsit (`/reports/deficit`),
+// Xaridlar va narx tarixi (`/reports/purchases`), Ishlab chiqarish
+// (`/reports/production`), Tannarx va food cost (`/reports/cost`),
+// Kalkulyatsiya kartasi (`/reports/recipe-cost`). Hammasida «Excel (CSV)».
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/core/context_extension.dart';
-import 'package:uz_ai_dev/core2/models/core_qty.dart';
-import 'package:uz_ai_dev/core2/models/core_report.dart';
-import 'package:uz_ai_dev/core2/models/core_stock.dart';
-import 'package:uz_ai_dev/core2/provider/core_dict_provider.dart';
-import 'package:uz_ai_dev/core2/services/core_stock_service.dart';
-import 'package:uz_ai_dev/core2/ui/stock_ui.dart';
+import 'package:uz_ai_dev/core2/models/core_user.dart';
+import 'package:uz_ai_dev/core2/provider/core_session_provider.dart';
+import 'package:uz_ai_dev/core2/ui/reports/cost_report_ui.dart';
+import 'package:uz_ai_dev/core2/ui/reports/deficit_ui.dart';
+import 'package:uz_ai_dev/core2/ui/reports/inventory_diff_ui.dart';
+import 'package:uz_ai_dev/core2/ui/reports/issues_report_ui.dart';
+import 'package:uz_ai_dev/core2/ui/reports/production_report_ui.dart';
+import 'package:uz_ai_dev/core2/ui/reports/purchases_report_ui.dart';
+import 'package:uz_ai_dev/core2/ui/reports/recipe_cost_ui.dart';
+import 'package:uz_ai_dev/core2/ui/reports/stock_value_ui.dart';
+import 'package:uz_ai_dev/core2/ui/reports/turnover_ui.dart';
 import 'package:uz_ai_dev/core2/ui/widgets/core_widgets.dart';
 
-class ReportsUi extends StatefulWidget {
+/// Ro'yxatdagi bitta hisobot.
+class _ReportEntry {
+  final String title;
+  final String sh5; // SH5 dagi nomi (kichik kulrang ostyozuv)
+  final String hint;
+  final IconData icon;
+  final Widget Function() open;
+  const _ReportEntry({
+    required this.title,
+    required this.sh5,
+    required this.hint,
+    required this.icon,
+    required this.open,
+  });
+}
+
+class _ReportGroup {
+  final String title;
+  final List<_ReportEntry> items;
+  const _ReportGroup(this.title, this.items);
+}
+
+const List<_ReportGroup> _groups = [
+  _ReportGroup('Qoldiq va aylanma', [
+    _ReportEntry(
+      title: 'Aylanma',
+      sh5: 'Оборотная ведомость',
+      hint: 'Boshi + kirim − chiqim = oxiri (tovar bo\'yicha)',
+      icon: Icons.swap_vert,
+      open: TurnoverUi.new,
+    ),
+    _ReportEntry(
+      title: 'Qoldiq qiymati',
+      sh5: 'Ведомость остатков',
+      hint: 'Sana bo\'yicha ombor qoldig\'ining qiymati',
+      icon: Icons.inventory_outlined,
+      open: StockValueUi.new,
+    ),
+  ]),
+  _ReportGroup('Kamomad va hisobdan chiqarish', [
+    _ReportEntry(
+      title: 'Kamomad va ortiqcha',
+      sh5: 'Сличительная ведомость',
+      hint: 'Sanoq farqlari: ombor, tovar va oy kesimida',
+      icon: Icons.balance,
+      open: InventoryDiffUi.new,
+    ),
+    _ReportEntry(
+      title: 'Hisobdan chiqarish',
+      sh5: 'Списание — sabablar bo\'yicha',
+      hint: 'Sabab (kontragent) → ombor → tovar, summalar bilan',
+      icon: Icons.delete_sweep_outlined,
+      open: IssuesReportUi.new,
+    ),
+    _ReportEntry(
+      title: 'Defitsit',
+      sh5: 'Partiyasiz chiqim',
+      hint: 'Qoldiqsiz yechilgan tovarlar (manfiy qoldiq sababi)',
+      icon: Icons.remove_circle_outline,
+      open: DeficitUi.new,
+    ),
+  ]),
+  _ReportGroup('Xaridlar', [
+    _ReportEntry(
+      title: 'Xaridlar va narx tarixi',
+      sh5: 'Приход · narxlar',
+      hint: 'Yetkazuvchi × tovar: summa, o\'rtacha narx, o\'zgarish %',
+      icon: Icons.local_shipping_outlined,
+      open: PurchasesReportUi.new,
+    ),
+  ]),
+  _ReportGroup('Ishlab chiqarish va tannarx', [
+    _ReportEntry(
+      title: 'Ishlab chiqarish',
+      sh5: 'Акт выпуска · Переработка',
+      hint: 'Mahsulot × ombor: miqdor, ingredient tannarxi, 1 birlik',
+      icon: Icons.factory_outlined,
+      open: ProductionReportUi.new,
+    ),
+    _ReportEntry(
+      title: 'Tannarx va food cost',
+      sh5: 'Себестоимость',
+      hint: 'Taom: tannarx, sotuv, foyda va food cost %',
+      icon: Icons.restaurant_menu,
+      open: CostReportUi.new,
+    ),
+    _ReportEntry(
+      title: 'Kalkulyatsiya kartasi',
+      sh5: 'Калькуляционная карта',
+      hint: 'Retsept bo\'yicha 1 birlik tannarxi (sana tanlab)',
+      icon: Icons.calculate_outlined,
+      open: RecipeCostUi.new,
+    ),
+  ]),
+];
+
+class ReportsUi extends StatelessWidget {
   const ReportsUi({super.key});
 
   @override
-  State<ReportsUi> createState() => _ReportsUiState();
-}
-
-class _ReportsUiState extends State<ReportsUi> with SingleTickerProviderStateMixin {
-  late final TabController _tab = TabController(length: 3, vsync: this);
-
-  @override
-  void dispose() {
-    _tab.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final canView =
+        context.select<CoreSession, bool>((s) => s.has(CorePerms.reportView));
+    final wide = MediaQuery.of(context).size.width >= 900;
     return Scaffold(
       backgroundColor: kCoreBg,
       appBar: AppBar(
@@ -41,421 +137,78 @@ class _ReportsUiState extends State<ReportsUi> with SingleTickerProviderStateMix
         elevation: 0,
         title: const Text('Hisobotlar',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        bottom: TabBar(
-          controller: _tab,
-          indicatorColor: kCoreAccent,
-          labelColor: kCoreAccentDark,
-          unselectedLabelColor: Colors.black54,
-          tabs: const [
-            Tab(text: 'Aylanma'),
-            Tab(text: 'Qoldiq qiymati'),
-            Tab(text: 'Defitsit'),
+      ),
+      body: CoreConnectGate(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+          children: [
+            if (!canView)
+              Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: const Text(
+                  'Hisobotlarni ko\'rish uchun ruxsat yo\'q (report.view) —'
+                  ' administratorga ayting',
+                  style: TextStyle(fontSize: 12.5),
+                ),
+              ),
+            for (final g in _groups) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 10, 4, 6),
+                child: Text(g.title,
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: kCoreAccentDark)),
+              ),
+              if (wide)
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    for (final e in g.items)
+                      SizedBox(width: 420, child: _card(context, e)),
+                  ],
+                )
+              else
+                for (final e in g.items) _card(context, e),
+            ],
           ],
         ),
       ),
-      body: CoreConnectGate(
-        child: TabBarView(
-          controller: _tab,
-          children: const [_TurnoverTab(), _StockValueTab(), _DeficitTab()],
-        ),
-      ),
     );
   }
-}
 
-// ───────────────────────── Aylanma ─────────────────────────
-
-class _TurnoverTab extends StatefulWidget {
-  const _TurnoverTab();
-
-  @override
-  State<_TurnoverTab> createState() => _TurnoverTabState();
-}
-
-class _TurnoverTabState extends State<_TurnoverTab> with AutomaticKeepAliveClientMixin {
-  final _service = CoreStockService();
-  int? _sklad;
-  String _from = isoOf(DateTime.now().subtract(const Duration(days: 30)));
-  String _to = todayIso();
-  List<CoreTurnoverRow>? _rows;
-  String? _error;
-  bool _loading = false;
-
-  @override
-  bool get wantKeepAlive => true;
-
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final r = await _service.turnover(skladId: _sklad, dateFrom: _from, dateTo: _to);
-      if (mounted) setState(() => _rows = r);
-    } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    final rows = _rows ?? const <CoreTurnoverRow>[];
-    final dict = context.read<CoreDictProvider>();
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-          child: Column(
+  Widget _card(BuildContext context, _ReportEntry e) => Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: ListTile(
+          onTap: () => context.push(e.open()),
+          leading: CircleAvatar(
+            backgroundColor: kCoreAccent.withValues(alpha: 0.2),
+            child: Icon(e.icon, color: kCoreAccentDark, size: 20),
+          ),
+          title: Text(e.title,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CoreSkladDropdown(
-                value: _sklad,
-                label: 'Ombor',
-                allowNull: true,
-                onChanged: (v) => setState(() => _sklad = v),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        final now = DateTime.now();
-                        final r = await showDateRangePicker(
-                          context: context,
-                          firstDate: DateTime(now.year - 3),
-                          lastDate: DateTime(now.year + 1),
-                          initialDateRange: DateTimeRange(
-                              start: DateTime.parse(_from), end: DateTime.parse(_to)),
-                        );
-                        if (r != null) {
-                          setState(() {
-                            _from = isoOf(r.start);
-                            _to = isoOf(r.end);
-                          });
-                        }
-                      },
-                      icon: const Icon(Icons.date_range, size: 18),
-                      label: Text('${coreDate(_from)} – ${coreDate(_to)}'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: _loading ? null : _load,
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: kCoreAccent, foregroundColor: Colors.white),
-                    child: const Text('Ko\'rsatish'),
-                  ),
-                ],
-              ),
+              Text(e.sh5,
+                  style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600)),
+              const SizedBox(height: 2),
+              Text(e.hint, style: const TextStyle(fontSize: 12)),
             ],
           ),
+          trailing: const Icon(Icons.chevron_right),
         ),
-        Expanded(
-          child: _error != null
-              ? CoreErrorView(message: _error!, onRetry: _load)
-              : _loading
-                  ? const Center(child: CircularProgressIndicator.adaptive())
-                  : _rows == null
-                      ? const Center(child: Text('Davr tanlab «Ko\'rsatish» bosing'))
-                      : rows.isEmpty
-                          ? const Center(child: Text('Ma\'lumot yo\'q'))
-                          : SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: SingleChildScrollView(
-                                padding: const EdgeInsets.all(12),
-                                child: DataTable(
-                                  headingRowHeight: 36,
-                                  dataRowMinHeight: 32,
-                                  dataRowMaxHeight: 40,
-                                  columnSpacing: 14,
-                                  headingTextStyle: const TextStyle(
-                                      fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
-                                  dataTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
-                                  columns: const [
-                                    DataColumn(label: Text('Tovar')),
-                                    DataColumn(label: Text('Ochilish'), numeric: true),
-                                    DataColumn(label: Text('Kirim'), numeric: true),
-                                    DataColumn(label: Text('Chiqim'), numeric: true),
-                                    DataColumn(label: Text('Yopilish'), numeric: true),
-                                    DataColumn(label: Text('Yopilish, so\'m'), numeric: true),
-                                  ],
-                                  rows: [
-                                    for (final r in rows)
-                                      DataRow(cells: [
-                                        DataCell(SizedBox(
-                                          width: 160,
-                                          child: Text(
-                                              r.goodName.isNotEmpty ? r.goodName : dict.goodName(r.goodId),
-                                              overflow: TextOverflow.ellipsis),
-                                        )),
-                                        DataCell(Text(coreFormatQtyUnit(r.openQty, _unit(r, dict)))),
-                                        DataCell(Text('+${coreFormatQty(r.inQty, _unit(r, dict))}',
-                                            style: TextStyle(color: Colors.green.shade700))),
-                                        DataCell(Text('−${coreFormatQty(r.outQty, _unit(r, dict))}',
-                                            style: TextStyle(color: Colors.red.shade700))),
-                                        DataCell(Text(coreFormatQtyUnit(r.closeQty, _unit(r, dict)),
-                                            style: TextStyle(
-                                                fontWeight: FontWeight.w600,
-                                                color: r.closeQty < 0 ? Colors.red : Colors.black87))),
-                                        DataCell(Text(coreMoney(r.closeCost))),
-                                      ]),
-                                  ],
-                                ),
-                              ),
-                            ),
-        ),
-      ],
-    );
-  }
-
-  String _unit(CoreTurnoverRow r, CoreDictProvider dict) =>
-      dict.goodById(r.goodId)?.baseUnit ?? r.baseUnit;
-}
-
-// ───────────────────────── Qoldiq qiymati ─────────────────────────
-
-class _StockValueTab extends StatefulWidget {
-  const _StockValueTab();
-
-  @override
-  State<_StockValueTab> createState() => _StockValueTabState();
-}
-
-class _StockValueTabState extends State<_StockValueTab> with AutomaticKeepAliveClientMixin {
-  final _service = CoreStockService();
-  String _date = todayIso();
-  List<CoreStockSummary>? _rows;
-  String? _error;
-
-  @override
-  bool get wantKeepAlive => true;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() {
-      _rows = null;
-      _error = null;
-    });
-    try {
-      List<CoreStockSummary> r;
-      try {
-        r = await _service.stockValue(date: _date);
-      } catch (_) {
-        // /reports/stock-value hali bo'lmasa /stock/summary bilan bir xil shakl.
-        r = await _service.summary(date: _date);
-      }
-      if (mounted) setState(() => _rows = r);
-    } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    final dict = context.read<CoreDictProvider>();
-    final rows = _rows ?? const <CoreStockSummary>[];
-    final total = rows.fold<int>(0, (s, r) => s + (r.cost ?? 0));
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () async {
-                    final d = await pickDate(context, _date);
-                    if (d != null) {
-                      setState(() => _date = d);
-                      _load();
-                    }
-                  },
-                  icon: const Icon(Icons.calendar_today, size: 18),
-                  label: Text('Sana: ${coreDate(_date)}'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text('Jami: ${coreMoney(total)}',
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-            ],
-          ),
-        ),
-        Expanded(
-          child: _error != null
-              ? CoreErrorView(message: _error!, onRetry: _load)
-              : _rows == null
-                  ? const Center(child: CircularProgressIndicator.adaptive())
-                  : rows.isEmpty
-                      ? const Center(child: Text('Ma\'lumot yo\'q'))
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
-                          itemCount: rows.length,
-                          itemBuilder: (_, i) {
-                            final r = rows[i];
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: Colors.grey.shade300),
-                              ),
-                              child: ListTile(
-                                dense: true,
-                                leading: const Icon(Icons.warehouse_outlined, color: kCoreAccentDark),
-                                title: Text(r.name.isNotEmpty ? r.name : dict.skladName(r.skladId),
-                                    style: const TextStyle(fontWeight: FontWeight.w600)),
-                                subtitle: Text(
-                                  '${r.positions} pozitsiya'
-                                  '${r.qtyNegative > 0 ? ' · manfiy: ${r.qtyNegative}' : ''}',
-                                  style: TextStyle(
-                                      fontSize: 11.5,
-                                      color: r.qtyNegative > 0 ? Colors.red.shade700 : Colors.grey.shade600),
-                                ),
-                                trailing: Text('${coreMoney(r.cost ?? 0)} so\'m',
-                                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                              ),
-                            );
-                          },
-                        ),
-        ),
-      ],
-    );
-  }
-}
-
-// ───────────────────────── Defitsit ─────────────────────────
-
-class _DeficitTab extends StatefulWidget {
-  const _DeficitTab();
-
-  @override
-  State<_DeficitTab> createState() => _DeficitTabState();
-}
-
-class _DeficitTabState extends State<_DeficitTab> with AutomaticKeepAliveClientMixin {
-  final _service = CoreStockService();
-  String _from = isoOf(DateTime.now().subtract(const Duration(days: 30)));
-  String _to = todayIso();
-  List<CoreDeficitRow>? _rows;
-  String? _error;
-
-  @override
-  bool get wantKeepAlive => true;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() {
-      _rows = null;
-      _error = null;
-    });
-    try {
-      final r = await _service.deficit(dateFrom: _from, dateTo: _to);
-      if (mounted) setState(() => _rows = r);
-    } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    final dict = context.read<CoreDictProvider>();
-    final rows = _rows ?? const <CoreDeficitRow>[];
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-          child: OutlinedButton.icon(
-            onPressed: () async {
-              final now = DateTime.now();
-              final r = await showDateRangePicker(
-                context: context,
-                firstDate: DateTime(now.year - 3),
-                lastDate: DateTime(now.year + 1),
-                initialDateRange:
-                    DateTimeRange(start: DateTime.parse(_from), end: DateTime.parse(_to)),
-              );
-              if (r != null) {
-                setState(() {
-                  _from = isoOf(r.start);
-                  _to = isoOf(r.end);
-                });
-                _load();
-              }
-            },
-            icon: const Icon(Icons.date_range, size: 18),
-            label: Text('${coreDate(_from)} – ${coreDate(_to)}'),
-          ),
-        ),
-        Expanded(
-          child: _error != null
-              ? CoreErrorView(message: _error!, onRetry: _load)
-              : _rows == null
-                  ? const Center(child: CircularProgressIndicator.adaptive())
-                  : rows.isEmpty
-                      ? const Center(child: Text('Defitsit yo\'q'))
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
-                          itemCount: rows.length,
-                          itemBuilder: (_, i) {
-                            final r = rows[i];
-                            final unit = r.baseUnit.isNotEmpty
-                                ? r.baseUnit
-                                : (dict.goodById(r.goodId)?.baseUnit ?? 'pcs');
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: Colors.red.shade200),
-                              ),
-                              child: ListTile(
-                                dense: true,
-                                // Tovar kartochkasi — partiyasiz chiqimlar qaysi hujjatdan.
-                                onTap: () => context.push(StockCardUi(
-                                  skladId: r.skladId,
-                                  goodId: r.goodId,
-                                  goodName: r.goodName.isNotEmpty
-                                      ? r.goodName
-                                      : dict.goodName(r.goodId),
-                                  baseUnit: unit,
-                                )),
-                                leading: Icon(Icons.remove_circle_outline,
-                                    color: Colors.red.shade700),
-                                title: Text(
-                                    r.goodName.isNotEmpty ? r.goodName : dict.goodName(r.goodId),
-                                    style: const TextStyle(fontWeight: FontWeight.w600)),
-                                subtitle: Text(
-                                  '${r.skladName.isNotEmpty ? r.skladName : dict.skladName(r.skladId)}'
-                                  ' · ${r.docs} hujjat · ${coreDate(r.firstDate)} – ${coreDate(r.lastDate)}'
-                                  '${r.cost != 0 ? ' · ${coreMoney(r.cost)} so\'m' : ''}',
-                                  style: const TextStyle(fontSize: 11.5),
-                                ),
-                                trailing: Text(
-                                  coreFormatQtyUnit(r.qty, unit),
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.bold, color: Colors.red.shade700),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-        ),
-      ],
-    );
-  }
+      );
 }

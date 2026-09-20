@@ -10,6 +10,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:uz_ai_dev/core/context_extension.dart';
 import 'package:uz_ai_dev/core2/models/core_dicts.dart';
 import 'package:uz_ai_dev/core2/models/core_qty.dart';
 import 'package:uz_ai_dev/core2/models/core_recipe.dart';
@@ -17,6 +18,7 @@ import 'package:uz_ai_dev/core2/models/core_user.dart';
 import 'package:uz_ai_dev/core2/provider/core_dict_provider.dart';
 import 'package:uz_ai_dev/core2/provider/core_session_provider.dart';
 import 'package:uz_ai_dev/core2/services/core_recipe_service.dart';
+import 'package:uz_ai_dev/core2/ui/reports/recipe_cost_ui.dart';
 import 'package:uz_ai_dev/core2/ui/widgets/core_widgets.dart';
 import 'package:uz_ai_dev/core2/ui/widgets/good_picker.dart';
 
@@ -251,7 +253,17 @@ class _RecipeDetailUiState extends State<RecipeDetailUi> {
         elevation: 0,
         title: Text(r?.title.isNotEmpty == true ? r!.title : 'Retsept',
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+        actions: [
+          // Tannarx (kalkulyatsiya kartasi) — shu retsept mahsuloti bo'yicha.
+          if (r != null)
+            IconButton(
+              tooltip: 'Kalkulyatsiya kartasi',
+              onPressed: () => context.push(
+                  RecipeCostUi(goodId: r.goodId, goodName: r.name)),
+              icon: const Icon(Icons.calculate_outlined),
+            ),
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
+        ],
       ),
       body: CoreConnectGate(
         child: r == null
