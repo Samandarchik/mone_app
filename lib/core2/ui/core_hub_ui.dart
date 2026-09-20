@@ -12,6 +12,7 @@ import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core2/models/core_doc.dart';
 import 'package:uz_ai_dev/core2/models/core_user.dart';
 import 'package:uz_ai_dev/core2/provider/core_session_provider.dart';
+import 'package:uz_ai_dev/core2/ui/core_home_ui.dart';
 import 'package:uz_ai_dev/core2/ui/dict_corrs_ui.dart';
 import 'package:uz_ai_dev/core2/ui/dict_goods_ui.dart';
 import 'package:uz_ai_dev/core2/ui/dict_sklads_ui.dart';
@@ -34,6 +35,14 @@ class CoreHubUi extends StatelessWidget {
   Widget build(BuildContext context) {
     final session = context.watch<CoreSession>();
     final cards = <_HubItem>[
+      // Admin bosh menyusi hub'ga olib kiradi (CoreEntryMenu yo'q) — xodimlar ko'radigan «Bugun» shu yerdan ochiladi.
+      _HubItem(
+        icon: Icons.today_outlined,
+        title: 'Bugun',
+        subtitle: 'Oson rejim: kirim, ko\'chirish, sanash',
+        page: const CoreHomeUi(),
+        visible: session.canAnyDoc || session.has(CorePerms.stockView),
+      ),
       _HubItem(
         icon: Icons.description_outlined,
         title: 'Hujjatlar',
