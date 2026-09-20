@@ -23,7 +23,6 @@
 // qilsa — sarlavhada bir qatorli eslatma; oxirgi juftlik foydalanuvchi +
 // tur bo'yicha SharedPreferences'da eslab qolinadi (ACT_KONTRAKT §1, §11).
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -44,6 +43,7 @@ import 'package:uz_ai_dev/core2/services/core_doc_service.dart';
 import 'package:uz_ai_dev/core2/services/core_recipe_service.dart';
 import 'package:uz_ai_dev/core2/ui/quick_doc_result_ui.dart';
 import 'package:uz_ai_dev/core2/ui/widgets/core_widgets.dart';
+import 'package:uz_ai_dev/core2/ui/widgets/good_search.dart';
 import 'package:uz_ai_dev/core2/ui/widgets/qty_keypad.dart';
 
 /// Ikki panel chegarasi (kompyuter tartibi).
@@ -132,8 +132,9 @@ class _QuickDocUiState extends State<QuickDocUi> {
   String? _searchError;
   int _hi = 0;
 
-  // «Tez-tez» chiplari.
-  List<_FreqGood> _freq = const [];
+  // «Tez-tez» chiplari (widgets/good_search.dart — tarqatish ekrani bilan
+  // umumiy).
+  List<CoreFreqGood> _freq = const [];
 
   // Ishlab chiqarish: qaysi bo'limga qo'shilyapti (1 — sarf, 0 — mahsulot).
   int _activeFlag = 1;
@@ -365,7 +366,7 @@ class _QuickDocUiState extends State<QuickDocUi> {
   }
 
   Future<void> _loadFreq(int sklad) async {
-    final list = await _FreqGood.load(
+    final list = await CoreFreqGood.load(
       service: _docService,
       skladId: sklad,
       type: type,
@@ -1478,39 +1479,11 @@ class _QuickDocUiState extends State<QuickDocUi> {
     );
   }
 
-  Widget _freqChips() {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Wrap(
-        spacing: 6,
-        runSpacing: 4,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text('Tez-tez:',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
-          ),
-          for (final f in _freq)
-            ActionChip(
-              label: Text(f.shortName, style: const TextStyle(fontSize: 12)),
-              backgroundColor: Colors.white,
-              onPressed: () => _openFreq(f),
-            ),
-        ],
-      ),
-    );
-  }
+  Widget _freqChips() => CoreFreqChips(items: _freq, onPick: _openFreq);
 
-  Future<void> _openFreq(_FreqGood f) async {
-    final dict = context.read<CoreDictProvider>();
-    var good = dict.goodById(f.goodId);
-    if (good == null || good.partial) {
-      await dict.ensureGoods([f.goodId]);
-      if (!mounted) return;
-      good = dict.goodById(f.goodId);
-    }
-    good ??= CoreGood(
-        id: f.goodId, name: f.name, baseUnit: f.baseUnit, partial: true);
+  Future<void> _openFreq(CoreFreqGood f) async {
+    final good =
+        await CoreFreqGood.resolve(context.read<CoreDictProvider>(), f);
     if (!mounted) return;
     await _openKeypad(good);
   }
@@ -1853,121 +1826,5 @@ class _PickSheetState<T> extends State<_PickSheet<T>> {
         ],
       ),
     );
-  }
-}
-
-// ───────────────────────────── «Tez-tez» ─────────────────────────────
-
-/// Shu ombor + shu amal uchun eng ko'p ishlatilgan tovar.
-///
-/// Server `GET /docs` qatorlarni QAYTARMAYDI (ro'yxat yengil bo'lishi uchun),
-/// shuning uchun oxirgi 30 kunning eng so'nggi [_maxDetail] hujjati
-/// `GET /docs/{id}` bilan olinadi va tovarlar MIJOZ tomonda sanaladi.
-/// Server yukini cheklash: ro'yxat bir sahifa ([_maxDocs] dan oshmaydi),
-/// natija SharedPreferences'da KUNLIK keshlanadi (kalit: ombor + tur).
-class _FreqGood {
-  final int goodId;
-  final String name;
-  final String baseUnit;
-  final int count;
-
-  const _FreqGood({
-    required this.goodId,
-    required this.name,
-    required this.baseUnit,
-    this.count = 0,
-  });
-
-  /// Chipda uzun nom kesiladi.
-  String get shortName =>
-      name.length <= 22 ? name : '${name.substring(0, 21)}…';
-
-  Map<String, dynamic> toJson() =>
-      {'id': goodId, 'n': name, 'u': baseUnit, 'c': count};
-
-  factory _FreqGood.fromJson(Map<String, dynamic> j) => _FreqGood(
-        goodId: (j['id'] as num?)?.toInt() ?? 0,
-        name: (j['n'] ?? '').toString(),
-        baseUnit: (j['u'] ?? 'mpcs').toString(),
-        count: (j['c'] as num?)?.toInt() ?? 0,
-      );
-
-  static const int _maxDocs = 200; // serverdan so'raladigan eng ko'p hujjat
-  static const int _maxDetail = 30; // qatorlari o'qiladigan hujjat soni
-  static const int _chipCount = 12;
-
-  static Future<List<_FreqGood>> load({
-    required CoreDocService service,
-    required int skladId,
-    required String type,
-  }) async {
-    final key = 'core_freq_${type}_$skladId';
-    final prefs = await SharedPreferences.getInstance();
-    final today = coreToday();
-    final raw = prefs.getString(key);
-    if (raw != null && raw.isNotEmpty) {
-      try {
-        final m = jsonDecode(raw) as Map<String, dynamic>;
-        if (m['day'] == today) {
-          return (m['items'] as List)
-              .whereType<Map>()
-              .map((e) => _FreqGood.fromJson(Map<String, dynamic>.from(e)))
-              .toList();
-        }
-      } catch (_) {/* kesh buzilgan — qayta hisoblanadi */}
-    }
-    try {
-      final page = await service.list(
-        type: type,
-        status: CoreDocStatus.posted,
-        sklad: skladId,
-        dateFrom: coreDaysAgo(30),
-        limit: 100,
-      );
-      final docs = page.items.take(_maxDocs).take(_maxDetail).toList();
-      final count = <int, int>{};
-      final names = <int, String>{};
-      final units = <int, String>{};
-      const chunk = 6;
-      for (var i = 0; i < docs.length; i += chunk) {
-        final part = docs.sublist(i, (i + chunk).clamp(0, docs.length));
-        final full = await Future.wait(part.map((d) async {
-          try {
-            return await service.get(d.id);
-          } catch (_) {
-            return null;
-          }
-        }));
-        for (final doc in full) {
-          if (doc == null) continue;
-          for (final l in doc.lines) {
-            if (l.goodId <= 0) continue;
-            count[l.goodId] = (count[l.goodId] ?? 0) + 1;
-            names[l.goodId] = l.goodName;
-            units[l.goodId] = coreBaseUnitOf(l.unit);
-          }
-        }
-      }
-      final top = count.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
-      final out = [
-        for (final e in top.take(_chipCount))
-          _FreqGood(
-            goodId: e.key,
-            name: names[e.key] ?? 'Tovar #${e.key}',
-            baseUnit: units[e.key] ?? 'mpcs',
-            count: e.value,
-          ),
-      ];
-      await prefs.setString(
-          key,
-          jsonEncode({
-            'day': today,
-            'items': [for (final f in out) f.toJson()],
-          }));
-      return out;
-    } catch (_) {
-      return const [];
-    }
   }
 }

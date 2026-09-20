@@ -3,13 +3,21 @@
 // raqam, sana, ombor(lar), summa, holat chip; scroll oxirida `loadMore`;
 // FAB «+» → tur tanlash (perms bo'yicha) → DocFormUi. Karta bosilsa
 // DocDetailUi. Ro'yxat `Selector` bilan faqat items/loading'ni kuzatadi.
+//
+// CORE_DEBT_KONTRAKT §4: qatorda KIM KIRITGANI (`created_by_name`) ko'rinadi,
+// filtrlarga «Kim kiritgan» (`?created_by=` — foydalanuvchilar `GET /users`
+// dan, ruxsat bo'lmasa faqat «Men») va «Manba» (`?source=` — Ilova / SH5 /
+// Kassa) qo'shildi.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/core/context_extension.dart';
 import 'package:uz_ai_dev/core2/models/core_doc.dart';
+import 'package:uz_ai_dev/core2/models/core_user.dart';
 import 'package:uz_ai_dev/core2/provider/core_dict_provider.dart';
 import 'package:uz_ai_dev/core2/provider/core_docs_provider.dart';
 import 'package:uz_ai_dev/core2/provider/core_session_provider.dart';
+import 'package:uz_ai_dev/core2/services/core_admin_service.dart';
+import 'package:uz_ai_dev/core2/ui/doc_actions_logic.dart';
 import 'package:uz_ai_dev/core2/ui/doc_detail_ui.dart';
 import 'package:uz_ai_dev/core2/ui/doc_form_ui.dart';
 import 'package:uz_ai_dev/core2/ui/widgets/core_widgets.dart';
@@ -189,14 +197,51 @@ class _DocsBodyState extends State<_DocsBody> {
   }
 }
 
-class _FilterBar extends StatelessWidget {
+class _FilterBar extends StatefulWidget {
   final CoreDocsProvider provider;
   const _FilterBar({required this.provider});
 
   @override
+  State<_FilterBar> createState() => _FilterBarState();
+}
+
+class _FilterBarState extends State<_FilterBar> {
+  /// «Kim kiritgan» variantlari: id → ism. `users.manage` bo'lmasa faqat
+  /// joriy foydalanuvchi («Men») qoladi.
+  Map<int, String> _users = const {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsers();
+  }
+
+  Future<void> _loadUsers() async {
+    final session = context.read<CoreSession>();
+    final me = session.user;
+    final out = <int, String>{};
+    if (me != null) {
+      out[me.id] = me.name.isEmpty ? 'Men' : '${me.name} (men)';
+    }
+    if (session.has(CorePerms.usersManage)) {
+      try {
+        for (final u in await CoreAdminService().users()) {
+          if (!u.active && u.id != me?.id) continue;
+          out.putIfAbsent(u.id, () => u.name.isEmpty ? 'user #${u.id}' : u.name);
+        }
+      } catch (_) {
+        // Ruxsat yo'q yoki server javob bermadi — faqat «Men» qoladi.
+      }
+    }
+    if (mounted) setState(() => _users = out);
+  }
+
+  String _userLabel(int id) => _users[id] ?? 'user #$id';
+
+  @override
   Widget build(BuildContext context) {
     final dict = context.read<CoreDictProvider>();
-    final p = provider;
+    final p = widget.provider;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -276,6 +321,44 @@ class _FilterBar extends StatelessWidget {
               onPicked: (v) => v == null
                   ? p.setFilters(clearSklad: true)
                   : p.setFilters(sklad: int.tryParse(v)),
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Kim kiritgan (`created_by`) — §4.
+          _chip(
+            context,
+            label: p.createdByFilter == null
+                ? 'Kim kiritgan'
+                : _userLabel(p.createdByFilter!),
+            active: p.createdByFilter != null,
+            onTap: () => _pick(
+              context,
+              title: 'Kim kiritgan',
+              options: {
+                for (final e in _users.entries) '${e.key}': e.value,
+              },
+              current: p.createdByFilter?.toString(),
+              onPicked: (v) => v == null
+                  ? p.setFilters(clearCreatedBy: true)
+                  : p.setFilters(createdBy: int.tryParse(v)),
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Manba: Ilova / SH5 / Kassa (`source`) — §4.
+          _chip(
+            context,
+            label: p.sourceFilter == null
+                ? 'Manba'
+                : coreSourceUz(p.sourceFilter!),
+            active: p.sourceFilter != null,
+            onTap: () => _pick(
+              context,
+              title: 'Manba',
+              options: coreSourceFilterOptions,
+              current: p.sourceFilter,
+              onPicked: (v) => v == null
+                  ? p.setFilters(clearSource: true)
+                  : p.setFilters(source: v),
             ),
           ),
           const SizedBox(width: 6),
@@ -416,9 +499,24 @@ class DocCard extends StatelessWidget {
                         Text('${coreMoney(doc.total)} so\'m',
                             style: const TextStyle(
                                 fontSize: 13, fontWeight: FontWeight.w600)),
+                        // Kim kiritgan (oyna/kassa hujjatida bo'sh keladi).
+                        if (doc.createdByName.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Icon(Icons.person_outline,
+                              size: 13, color: Colors.grey.shade500),
+                          const SizedBox(width: 2),
+                          Flexible(
+                            child: Text(doc.createdByName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: 11.5,
+                                    color: Colors.grey.shade600)),
+                          ),
+                        ],
                         if (doc.source.isNotEmpty && doc.source != 'app') ...[
                           const SizedBox(width: 8),
-                          Text(doc.source,
+                          Text(coreSourceUz(doc.source),
                               style: TextStyle(
                                   fontSize: 11, color: Colors.grey.shade500)),
                         ],

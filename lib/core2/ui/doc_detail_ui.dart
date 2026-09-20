@@ -6,8 +6,15 @@
 // posted_by/at). Tugmalar perms bo'yicha: Tahrirlash (draft), Tasdiqlash
 // (draft → post, warnings dialog), Bekor qilish (posted → cancel,
 // doc.cancel), O'chirish (draft).
+//
+// CORE_DEBT_KONTRAKT §1–§2: o'tkazilgan hujjatda ASOSIY amal — «Tuzatish»
+// (`/rework`: bekor + qoralama nusxa bitta tranzaksiyada, so'ng oson rejim
+// muharriri ochiladi) va ikkinchi darajali «Nusxa olish» (`/copy`, sana
+// bugun). SH5 oynasi / kassa hujjatlarida «Tuzatish» o'rniga kulrang izoh.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:uz_ai_dev/core2/core_format.dart';
+import 'package:uz_ai_dev/core2/core_labels.dart';
 import 'package:uz_ai_dev/core2/models/core_dicts.dart';
 import 'package:uz_ai_dev/core2/models/core_doc.dart';
 import 'package:uz_ai_dev/core2/models/core_qty.dart';
@@ -15,7 +22,10 @@ import 'package:uz_ai_dev/core2/provider/core_dict_provider.dart';
 import 'package:uz_ai_dev/core2/provider/core_docs_provider.dart';
 import 'package:uz_ai_dev/core2/provider/core_session_provider.dart';
 import 'package:uz_ai_dev/core2/provider/core_stock_provider.dart';
+import 'package:uz_ai_dev/core2/ui/doc_actions_logic.dart';
 import 'package:uz_ai_dev/core2/ui/doc_form_ui.dart';
+import 'package:uz_ai_dev/core2/ui/inventory_count_ui.dart';
+import 'package:uz_ai_dev/core2/ui/quick_doc_ui.dart';
 import 'package:uz_ai_dev/core2/ui/widgets/core_widgets.dart';
 
 class DocDetailUi extends StatefulWidget {
@@ -99,6 +109,137 @@ class _DocDetailUiState extends State<DocDetailUi> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  // ───────────────── «Tuzatish» va «Nusxa olish» (§1–§2) ─────────────────
+
+  /// «Tuzatish»: hujjat bekor qilinadi va nusxasi QORALAMA bo'lib ochiladi.
+  /// Aktda qo'shimcha tanlov — sarfni retsept bo'yicha qayta hisoblash
+  /// (`drop_inputs`). Orqa sanali hujjatda qayta hisob uzoq davom etishi
+  /// mumkin — tugma `_busy` bilan bloklanadi.
+  Future<void> _rework() async {
+    final doc = _doc;
+    if (doc == null) return;
+    final backdated = coreIsoDay(doc.docDate) != coreToday();
+    final choice = await _askRework(doc, backdated);
+    if (choice == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final draft = await context
+          .read<CoreDocsProvider>()
+          .rework(doc.id, dropInputs: choice);
+      if (!mounted) return;
+      context.read<CoreStockProvider>().refreshSklads([doc.fromSklad, doc.toSklad]);
+      await _openDraft(draft);
+    } catch (e) {
+      if (mounted) showNewApiErrorUz(context, e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Tasdiqlash oynasi. Natija: `drop_inputs` qiymati (bekor qilinsa null).
+  Future<bool?> _askRework(CoreDoc doc, bool backdated) {
+    var dropInputs = false;
+    final isAct = doc.type == CoreDocType.act;
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setInner) => AlertDialog(
+          title: const Text('Tuzatish'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Hujjat bekor qilinadi va nusxasi qoralama bo\'lib ochiladi. '
+                'Tuzatib, qayta o\'tkazasiz.\n\n'
+                'Qoralamani o\'tkazmaguningizcha qoldiqda '
+                '${doc.number.isEmpty ? 'bu hujjat' : '№ ${doc.number}'} '
+                'YO\'Q bo\'ladi.',
+                style: const TextStyle(fontSize: 13.5),
+              ),
+              if (isAct)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: CheckboxListTile(
+                    value: dropInputs,
+                    onChanged: (v) => setInner(() => dropInputs = v == true),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: const Text('Sarfni retsept bo\'yicha qayta hisoblash',
+                        style: TextStyle(fontSize: 13)),
+                    subtitle: Text(
+                      'Miqdorni o\'zgartirsangiz yoqing: eski ingredient '
+                      'qatorlari tashlanadi, qayta o\'tkazishda server '
+                      'retsept bo\'yicha o\'zi yozadi.',
+                      style:
+                          TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
+                    ),
+                  ),
+                ),
+              if (backdated)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    'Orqa sanali hujjat — qoldiq o\'sha sanadan qayta '
+                    'hisoblanadi, bu 10–15 soniya davom etishi mumkin.',
+                    style: TextStyle(
+                        fontSize: 11.5, color: Colors.orange.shade900),
+                  ),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx), child: const Text('Bekor')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, dropInputs),
+              child: const Text('Tuzatish'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// «Nusxa olish»: asl hujjat tegilmaydi, bugungi sana bilan qoralama.
+  Future<void> _copy() async {
+    final doc = _doc;
+    if (doc == null) return;
+    setState(() => _busy = true);
+    try {
+      final draft = await context.read<CoreDocsProvider>().copy(doc.id);
+      if (!mounted) return;
+      await _openDraft(draft);
+    } catch (e) {
+      if (mounted) showNewApiErrorUz(context, e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Qoralamani TO'G'RI muharrirda ochish: sanoq — «Sanash» ekrani, oson
+  /// rejim turlari — «Tez kiritish», qolgani (rezerv) — eski forma.
+  Future<void> _openDraft(CoreDoc draft) async {
+    final page = switch (draft.type) {
+      CoreDocType.inventory =>
+        InventoryCountUi(skladId: draft.toSklad, docId: draft.id),
+      CoreDocType.receipt ||
+      CoreDocType.issue ||
+      CoreDocType.transfer ||
+      CoreDocType.production ||
+      CoreDocType.act =>
+        QuickDocUi(
+          type: draft.type,
+          skladId: draft.fromSklad ?? draft.toSklad,
+          draft: draft,
+        ),
+      _ => DocFormUi(type: draft.type, existing: draft),
+    };
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    if (mounted) _load();
   }
 
   Future<void> _delete() async {
@@ -205,8 +346,24 @@ class _DocDetailUiState extends State<DocDetailUi> {
                     ],
                     if (doc.corrId != null) kv('Kontragent', dict.corrName(doc.corrId)),
                     if (doc.comment.isNotEmpty) kv('Izoh', doc.comment),
-                    if (doc.source.isNotEmpty) kv('Manba', doc.source),
-                    if (doc.externalId != null && doc.externalId!.isNotEmpty)
+                    if (doc.source.isNotEmpty)
+                      kv('Manba', coreSourceUz(doc.source)),
+                    // Tuzatish qoralamasi — asl hujjatga havola (§1).
+                    if (doc.isRework)
+                      kv(
+                          'Tuzatish',
+                          doc.fromNumber.isNotEmpty
+                              ? '№ ${doc.fromNumber} hujjatining tuzatilgani'
+                              : 'asl hujjat #${doc.reworkSourceId ?? '—'}'),
+                    if (doc.copiedFrom != null)
+                      kv(
+                          'Nusxa',
+                          doc.fromNumber.isNotEmpty
+                              ? '№ ${doc.fromNumber} dan'
+                              : '#${doc.copiedFrom} dan'),
+                    if (doc.externalId != null &&
+                        doc.externalId!.isNotEmpty &&
+                        !doc.isRework)
                       kv('Tashqi ID', doc.externalId!),
                     kv('Jami', '${coreMoney(doc.total)} so\'m', bold: true),
                     if (doc.saleAmount > 0)
@@ -376,8 +533,10 @@ class _DocDetailUiState extends State<DocDetailUi> {
       children: [
         const Text('Tarix', style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 6),
-        kv('Yaratdi',
-            '${doc.createdBy == null ? '—' : 'user #${doc.createdBy}'}${doc.createdAt != null ? ' · ${coreDate(doc.createdAt, withTime: true)}' : ''}'),
+        kv(
+            'Yaratdi',
+            '${doc.createdByName.isNotEmpty ? doc.createdByName : (doc.createdBy == null ? '—' : 'user #${doc.createdBy}')}'
+            '${doc.createdAt != null ? ' · ${coreDate(doc.createdAt, withTime: true)}' : ''}'),
         if (doc.postedAt != null || doc.postedBy != null)
           kv('O\'tkazdi',
               '${doc.postedBy == null ? '—' : 'user #${doc.postedBy}'} · ${coreDate(doc.postedAt, withTime: true)}'),
@@ -387,6 +546,15 @@ class _DocDetailUiState extends State<DocDetailUi> {
   }
 
   Widget _actions(CoreDoc doc, CoreSession session) {
+    // Qaysi amallar ko'rinishi — sof mantiq (doc_actions_logic.dart).
+    final acts = coreDocActionsFor(
+      status: doc.status,
+      source: doc.source,
+      canCancel: session.canCancel,
+      canCreateType: session.canCreate(doc.type),
+      canBackdate: session.canBackdate,
+      backdated: coreIsoDay(doc.docDate) != coreToday(),
+    );
     final buttons = <Widget>[];
     if (doc.isDraft) {
       buttons.add(IconButton(
@@ -407,19 +575,41 @@ class _DocDetailUiState extends State<DocDetailUi> {
           ),
         ));
       }
-    } else if (doc.isPosted && session.canCancel) {
-      buttons.add(Expanded(
-        child: OutlinedButton.icon(
+    } else {
+      if (doc.isPosted && session.canCancel) {
+        buttons.add(IconButton(
+          tooltip: 'Bekor qilish',
           onPressed: _cancel,
-          style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.red.shade700,
-              minimumSize: const Size.fromHeight(46)),
-          icon: const Icon(Icons.undo),
-          label: const Text('Bekor qilish'),
-        ),
-      ));
+          icon: Icon(Icons.undo, color: Colors.red.shade700),
+        ));
+      }
+      if (acts.copy) {
+        buttons.add(Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _copy,
+            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46)),
+            icon: const Icon(Icons.content_copy, size: 18),
+            label: const Text('Nusxa olish'),
+          ),
+        ));
+      }
+      if (acts.rework) {
+        if (acts.copy) buttons.add(const SizedBox(width: 8));
+        buttons.add(Expanded(
+          child: ElevatedButton.icon(
+            onPressed: _rework,
+            style: ElevatedButton.styleFrom(
+                backgroundColor: kCoreAccent,
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(46)),
+            icon: const Icon(Icons.build_outlined, size: 18),
+            label: const Text('Tuzatish'),
+          ),
+        ));
+      }
     }
-    if (buttons.isEmpty) return const SizedBox.shrink();
+    final note = acts.mirrorNote;
+    if (buttons.isEmpty && note.isEmpty) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
       decoration: BoxDecoration(
@@ -430,7 +620,31 @@ class _DocDetailUiState extends State<DocDetailUi> {
         top: false,
         child: _busy
             ? const Center(child: CircularProgressIndicator.adaptive())
-            : Row(children: buttons),
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Oyna/kassa hujjati: «Tuzatish» o'rniga kichik kulrang izoh.
+                  if (note.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline,
+                              size: 15, color: Colors.grey.shade600),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Text(note,
+                                style: TextStyle(
+                                    fontSize: 11.5,
+                                    color: Colors.grey.shade700)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (buttons.isNotEmpty) Row(children: buttons),
+                ],
+              ),
       ),
     );
   }

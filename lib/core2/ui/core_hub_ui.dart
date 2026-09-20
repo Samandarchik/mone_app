@@ -16,6 +16,7 @@ import 'package:uz_ai_dev/core2/ui/core_home_ui.dart';
 import 'package:uz_ai_dev/core2/ui/dict_corrs_ui.dart';
 import 'package:uz_ai_dev/core2/ui/dict_goods_ui.dart';
 import 'package:uz_ai_dev/core2/ui/dict_sklads_ui.dart';
+import 'package:uz_ai_dev/core2/ui/distribute_ui.dart';
 import 'package:uz_ai_dev/core2/ui/doc_form_ui.dart';
 import 'package:uz_ai_dev/core2/ui/docs_list_ui.dart';
 import 'package:uz_ai_dev/core2/ui/integration_ui.dart';
@@ -56,6 +57,13 @@ class CoreHubUi extends StatelessWidget {
         subtitle: 'Tez kirim: РЫНОК → ombor',
         page: const DocFormUi.marketReceipt(),
         visible: session.canCreate(CoreDocType.receipt),
+      ),
+      _HubItem(
+        icon: Icons.call_split,
+        title: 'Tarqatish',
+        subtitle: 'Перемещение × bir nechta ombor',
+        page: const DistributeUi(),
+        visible: session.canCreate(CoreDocType.transfer),
       ),
       _HubItem(
         icon: Icons.fact_check_outlined,

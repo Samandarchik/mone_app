@@ -4,6 +4,11 @@
 // (CoreDocType/CoreDocStatus), post javobidagi ogohlantirish
 // (CoreDocWarning), ro'yxat (CoreDocPage) va post natijasi
 // (CoreDocPostResult). JSON snake_case — ledger.Doc/Line bilan 1:1.
+//
+// CORE_DEBT_KONTRAKT §1–§4: `created_by_name` (kim kiritgan — oyna/kassa
+// hujjatlarida yo'q), «Tuzatish» javobidagi `reworked_from`/`from_number`,
+// «Nusxa» javobidagi `copied_from`, `POST /docs/quick-batch` natijasi
+// (CoreDocBatchResult: `docs[]`, `existing[]`, `warnings[].doc_index`).
 
 abstract final class CoreDocType {
   static const String receipt = 'receipt';
@@ -156,6 +161,11 @@ class CoreDocWarning {
   final int qty;
   final String msg;
 
+  /// `quick-batch`: to'plamdagi nechanchi hujjatdan (0 dan). `-1` — hujjatga
+  /// bog'lanmagan (orqa sanali to'liq qayta hisobdan) yoki bitta hujjatli
+  /// javob (`/docs/{id}/post`).
+  final int docIndex;
+
   const CoreDocWarning({
     this.code = '',
     this.skladId,
@@ -163,6 +173,7 @@ class CoreDocWarning {
     this.goodName = '',
     this.qty = 0,
     this.msg = '',
+    this.docIndex = -1,
   });
 
   factory CoreDocWarning.fromJson(Map<String, dynamic> j) => CoreDocWarning(
@@ -172,6 +183,7 @@ class CoreDocWarning {
         goodName: (j['good_name'] ?? '').toString(),
         qty: (j['qty'] as num?)?.toInt() ?? 0,
         msg: (j['msg'] ?? '').toString(),
+        docIndex: (j['doc_index'] as num?)?.toInt() ?? -1,
       );
 }
 
@@ -196,6 +208,19 @@ class CoreDoc {
   // Post javobidagi ogohlantirishlar (tafsilot GET'ida kelmaydi — UI saqlaydi).
   final List<CoreDocWarning> warnings;
 
+  /// Kim kiritgan (`users.name`). Oyna/kassa hujjatlarida bo'sh
+  /// (`created_by` = null) — CORE_DEBT_KONTRAKT §4.
+  final String createdByName;
+
+  /// «Tuzatish» (`/docs/{id}/rework`) javobi: asl hujjat id va raqami.
+  final int? reworkedFrom;
+
+  /// «Nusxa olish» (`/docs/{id}/copy`) javobi: manba hujjat id.
+  final int? copiedFrom;
+
+  /// Asl (tuzatilgan/nusxa olingan) hujjat raqami.
+  final String fromNumber;
+
   const CoreDoc({
     this.id = 0,
     required this.type,
@@ -215,6 +240,10 @@ class CoreDoc {
     this.total = 0,
     this.lines = const [],
     this.warnings = const [],
+    this.createdByName = '',
+    this.reworkedFrom,
+    this.copiedFrom,
+    this.fromNumber = '',
   });
 
   /// Sotuv summasi — qatorlar `sale_amount` yig'indisi (butun so'm).
@@ -251,7 +280,25 @@ class CoreDoc {
                     CoreDocWarning.fromJson(Map<String, dynamic>.from(e)))
                 .toList() ??
             const [],
+        createdByName: (j['created_by_name'] ?? '').toString(),
+        reworkedFrom: (j['reworked_from'] as num?)?.toInt(),
+        copiedFrom: (j['copied_from'] as num?)?.toInt(),
+        fromNumber: (j['from_number'] ?? '').toString(),
       );
+
+  /// «Tuzatish» qoralamasimi: server orqa havolani `external_id` da
+  /// `tuzatish:<eski id>` ko'rinishida saqlaydi (CORE_DEBT_KONTRAKT §1).
+  static const String reworkPrefix = 'tuzatish:';
+
+  bool get isRework =>
+      reworkedFrom != null || (externalId?.startsWith(reworkPrefix) ?? false);
+
+  /// Tuzatilgan asl hujjat id (topilmasa null).
+  int? get reworkSourceId =>
+      reworkedFrom ??
+      (externalId != null && externalId!.startsWith(reworkPrefix)
+          ? int.tryParse(externalId!.substring(reworkPrefix.length))
+          : null);
 
   /// POST/PUT tanasi (server hisoblaydigan maydonlar yuborilmaydi).
   ///
@@ -297,6 +344,10 @@ class CoreDoc {
         total: total,
         lines: lines,
         warnings: warnings ?? this.warnings,
+        createdByName: createdByName,
+        reworkedFrom: reworkedFrom,
+        copiedFrom: copiedFrom,
+        fromNumber: fromNumber,
       );
 }
 
@@ -323,4 +374,42 @@ class CoreDocPostResult {
         const <CoreDocWarning>[];
     return CoreDocPostResult(doc: CoreDoc.fromJson(docJson), warnings: w);
   }
+}
+
+/// `POST /docs/quick-batch` javobi (CORE_DEBT_KONTRAKT §3): hamma hujjat
+/// BITTA tranzaksiyada yaratilib o'tkaziladi — `docs[]` kirish tartibida,
+/// `existing[]` — avvaldan mavjud (qayta yaratilmagan) hujjat indekslari,
+/// `warnings[].doc_index` — qaysi hujjatdan (−1 — bog'lanmagan).
+class CoreDocBatchResult {
+  final List<CoreDoc> docs;
+  final List<CoreDocWarning> warnings;
+  final List<int> existing;
+
+  const CoreDocBatchResult({
+    this.docs = const [],
+    this.warnings = const [],
+    this.existing = const [],
+  });
+
+  int get total => docs.fold(0, (s, d) => s + d.total);
+
+  factory CoreDocBatchResult.fromJson(Map<String, dynamic> j) =>
+      CoreDocBatchResult(
+        docs: (j['docs'] as List?)
+                ?.whereType<Map>()
+                .map((e) => CoreDoc.fromJson(Map<String, dynamic>.from(e)))
+                .toList() ??
+            const [],
+        warnings: (j['warnings'] as List?)
+                ?.whereType<Map>()
+                .map((e) =>
+                    CoreDocWarning.fromJson(Map<String, dynamic>.from(e)))
+                .toList() ??
+            const [],
+        existing: (j['existing'] as List?)
+                ?.whereType<num>()
+                .map((e) => e.toInt())
+                .toList() ??
+            const [],
+      );
 }

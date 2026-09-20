@@ -24,6 +24,9 @@ class CoreDocsProvider extends ChangeNotifier with ClearableProvider {
   String? dateFrom;
   String? dateTo;
   int? skladFilter;
+  // «Kim kiritgan» (`?created_by=`) va «Manba» (`?source=`) — §4.
+  int? createdByFilter;
+  String? sourceFilter;
   String search = '';
 
   List<CoreDoc> get items => _items;
@@ -44,6 +47,8 @@ class CoreDocsProvider extends ChangeNotifier with ClearableProvider {
         dateFrom: dateFrom,
         dateTo: dateTo,
         sklad: skladFilter,
+        source: sourceFilter,
+        createdBy: createdByFilter,
         search: search,
         limit: pageSize,
         offset: 0,
@@ -69,6 +74,8 @@ class CoreDocsProvider extends ChangeNotifier with ClearableProvider {
         dateFrom: dateFrom,
         dateTo: dateTo,
         sklad: skladFilter,
+        source: sourceFilter,
+        createdBy: createdByFilter,
         search: search,
         limit: pageSize,
         offset: _items.length,
@@ -89,11 +96,15 @@ class CoreDocsProvider extends ChangeNotifier with ClearableProvider {
     String? from,
     String? to,
     int? sklad,
+    int? createdBy,
+    String? source,
     String? searchText,
     bool clearType = false,
     bool clearStatus = false,
     bool clearDates = false,
     bool clearSklad = false,
+    bool clearCreatedBy = false,
+    bool clearSource = false,
   }) {
     if (clearType) typeFilter = null;
     if (type != null) typeFilter = type;
@@ -107,6 +118,10 @@ class CoreDocsProvider extends ChangeNotifier with ClearableProvider {
     if (to != null) dateTo = to;
     if (clearSklad) skladFilter = null;
     if (sklad != null) skladFilter = sklad;
+    if (clearCreatedBy) createdByFilter = null;
+    if (createdBy != null) createdByFilter = createdBy;
+    if (clearSource) sourceFilter = null;
+    if (source != null) sourceFilter = source;
     if (searchText != null) search = searchText;
     load();
   }
@@ -162,6 +177,32 @@ class CoreDocsProvider extends ChangeNotifier with ClearableProvider {
     return doc;
   }
 
+  /// «Tuzatish»: asl hujjat bekor bo'ladi, qaytgan QORALAMA ro'yxatga
+  /// qo'shiladi. Asl hujjatning yangi holati javobda kelmaydi — uni
+  /// ro'yxatdan olib tashlaymiz (ekran yangilanganda bekor bo'lib qaytadi).
+  Future<CoreDoc> rework(int id, {bool dropInputs = false}) async {
+    final draft = await _service.rework(id, dropInputs: dropInputs);
+    removeLocal(id);
+    upsert(draft);
+    return draft;
+  }
+
+  /// «Nusxa olish»: asl hujjat tegilmaydi, yangi qoralama qo'shiladi.
+  Future<CoreDoc> copy(int id, {String? docDate}) async {
+    final draft = await _service.copy(id, docDate: docDate);
+    upsert(draft);
+    return draft;
+  }
+
+  /// Tarqatish matritsasi — bitta so'rovda bir nechta hujjat.
+  Future<CoreDocBatchResult> quickBatch(List<Map<String, dynamic>> docs) async {
+    final res = await _service.quickBatch(docs);
+    for (final d in res.docs) {
+      upsert(d);
+    }
+    return res;
+  }
+
   Future<void> delete(int id) async {
     await _service.delete(id);
     removeLocal(id);
@@ -181,6 +222,8 @@ class CoreDocsProvider extends ChangeNotifier with ClearableProvider {
     dateFrom = null;
     dateTo = null;
     skladFilter = null;
+    createdByFilter = null;
+    sourceFilter = null;
     search = '';
     notifyListeners();
   }

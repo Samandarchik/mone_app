@@ -14,6 +14,7 @@ import 'package:uz_ai_dev/core2/models/core_doc.dart';
 import 'package:uz_ai_dev/core2/models/core_user.dart';
 import 'package:uz_ai_dev/core2/provider/core_dict_provider.dart';
 import 'package:uz_ai_dev/core2/services/core_client.dart';
+import 'package:uz_ai_dev/core2/ui/doc_actions_logic.dart';
 
 // ───────────────────────────── Vazifalar ─────────────────────────────
 
@@ -298,6 +299,16 @@ CoreUiError coreErrorUz(Object e, {String Function(int)? skladName}) {
         hint: 'Hujjat yoki yozuv o\'chirilgan bo\'lishi mumkin. Ro\'yxatni yangilang.',
       );
     case 409:
+      // Oyna/kassa hujjati: ilovadan tuzatilmaydi (CORE_DEBT_KONTRAKT §1).
+      if (err.code == 'mirror_owned') {
+        final src = (err.details['source'] ?? '').toString();
+        return CoreUiError(
+          coreMirrorNoteUz(src),
+          hint: 'Bu hujjat tashqi tizimdan keladi — ilovada faqat «Nusxa '
+              'olish» mumkin.',
+          warning: true,
+        );
+      }
       return CoreUiError(
         'Hujjat holati o\'zgargan',
         hint: details.isNotEmpty
@@ -315,6 +326,13 @@ CoreUiError coreErrorUz(Object e, {String Function(int)? skladName}) {
       }
       final msg422 = _clean(err.message);
       final low = msg422.toLowerCase();
+      // «Dan» va «ga» bitta ombor (ko'chirish, tarqatish to'plami).
+      if (low.contains('bir xil') && low.contains('sklad')) {
+        return const CoreUiError(
+          '«Qayerdan» va «qayerga» bir xil ombor',
+          hint: 'Boshqa qabul qiluvchi omborni tanlang.',
+        );
+      }
       // Xomashyo ombori noto'g'ri (`from_sklad <= 0`).
       if (low.contains('from_sklad')) {
         return const CoreUiError(
@@ -385,6 +403,33 @@ void showErrorUz(BuildContext context, Object e) {
     backgroundColor:
         ui.warning ? Colors.orange.shade800 : Colors.red.shade700,
   ));
+}
+
+// ──────────────────── Yangi endpointlar (eski server) ────────────────────
+
+/// Jonli serverda yangi binar hali qo'yilmagan bo'lsa (`/docs/{id}/rework`,
+/// `/copy`, `/docs/quick-batch`) eski server 404/405 (yoki 501) qaytaradi —
+/// bu hujjat topilmagani emas, ILOVA endpointi yo'qligi.
+const String kCoreOldServerMsg = 'Server yangilanmagan — administratorga ayting';
+
+/// Shu xato yangi endpoint yo'qligidanmi.
+bool coreIsMissingEndpoint(Object e) {
+  final err = CoreClient.wrap(e);
+  return err.status == 404 || err.status == 405 || err.notImplemented;
+}
+
+/// Yangi endpointga borgan so'rov xatosi: endpoint yo'q bo'lsa sariq
+/// «Server yangilanmagan», aks holda odatdagi tarjimon.
+void showNewApiErrorUz(BuildContext context, Object e) {
+  if (coreIsMissingEndpoint(e)) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: const Text(kCoreOldServerMsg),
+      duration: const Duration(seconds: 5),
+      backgroundColor: Colors.orange.shade800,
+    ));
+    return;
+  }
+  showErrorUz(context, e);
 }
 
 /// Oddiy xabar (yashil emas — neytral).

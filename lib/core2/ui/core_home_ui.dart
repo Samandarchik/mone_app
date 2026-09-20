@@ -23,6 +23,7 @@ import 'package:uz_ai_dev/core2/provider/core_session_provider.dart';
 import 'package:uz_ai_dev/core2/services/core_doc_service.dart';
 import 'package:uz_ai_dev/core2/services/core_stock_service.dart';
 import 'package:uz_ai_dev/core2/ui/core_hub_ui.dart';
+import 'package:uz_ai_dev/core2/ui/distribute_ui.dart';
 import 'package:uz_ai_dev/core2/ui/doc_detail_ui.dart';
 import 'package:uz_ai_dev/core2/ui/docs_list_ui.dart';
 import 'package:uz_ai_dev/core2/ui/inventory_count_logic.dart';
@@ -433,6 +434,56 @@ class _HomeBodyState extends State<_HomeBody> {
   }
 
   Widget _taskTile(CoreTask t, {bool compact = false}) {
+    final tile = _plainTaskTile(t, compact: compact);
+    // «Ko'chirish» plitkasi ichida kichik «Tarqatish» amali: bir xil tovarni
+    // bir necha omborga BIR ekranda tarqatish (SH5_BIZNES_MANTIQ P14 —
+    // kuniga ~24 ta ketma-ket ko'chirish). «Bugun» boshqa o'zgarmaydi.
+    if (t.key != CoreDocType.transfer ||
+        !context.read<CoreSession>().canCreate(CoreDocType.transfer)) {
+      return tile;
+    }
+    return Stack(
+      children: [
+        Positioned.fill(child: tile),
+        Positioned(top: 4, right: 4, child: _distributeBadge(t.color)),
+      ],
+    );
+  }
+
+  /// «Tarqatish» — Ko'chirish plitkasi burchagidagi kichik tugma.
+  Widget _distributeBadge(Color color) {
+    return Material(
+      color: Colors.white,
+      shape: StadiumBorder(side: BorderSide(color: color.withValues(alpha: 0.5))),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: _openDistribute,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.call_split, size: 13, color: color),
+              const SizedBox(width: 3),
+              Text('Tarqatish',
+                  style: TextStyle(
+                      fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openDistribute() async {
+    if (_sklad == null) {
+      final id = await _pickSklad(title: 'Avval omborni tanlang');
+      if (id == null || !mounted) return;
+    }
+    await _open(DistributeUi(skladId: _sklad));
+  }
+
+  Widget _plainTaskTile(CoreTask t, {bool compact = false}) {
     return Material(
       color: t.color.withValues(alpha: 0.10),
       shape: RoundedRectangleBorder(
