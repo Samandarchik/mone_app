@@ -222,11 +222,11 @@ class FillingCakePainter extends CustomPainter {
   static const double _wedgeWidth = 1.05;
   // Qatlamlar pastdan tepaga emas, TEPADAN pastga: (ulush, nachinkami).
   static const List<(double, bool)> _layers = [
-    (0.22, false),
-    (0.17, true),
-    (0.22, false),
-    (0.17, true),
-    (0.22, false),
+    (0.20, false),
+    (0.20, true),
+    (0.20, false),
+    (0.20, true),
+    (0.20, false),
   ];
 
   // Bitta bo'lak (slice): burilmagan holatda yoyi orqada, uchi tomoshabinga
@@ -372,6 +372,11 @@ class FillingCakePainter extends CustomPainter {
   // [k]-nachinka qatlami rangi (tepadan: 0, 1).
   Color _fill(int k) => k == 0 ? look.color : (look.color2 ?? look.color);
 
+  // Nachinka va biskvit orasidagi chegara chizig'i — nachinkaning to'qroq
+  // tusi: och (qaymoq) nachinka ham biskvitga «qo'shilib» ketmaydi.
+  static Color _edgeOf(Color fill) =>
+      Color.lerp(fill, Colors.black, 0.32)!.withValues(alpha: 0.85);
+
   // Kesim yuzi: o'qdan chetgacha vertikal to'rtburchak, qatlamlar bo'yicha
   // bo'yalgan. [nx] — normalning ekran-x tashkil etuvchisi (yorug'lik uchun).
   void _paintCutFace(Canvas canvas, double t, double nx) {
@@ -401,20 +406,15 @@ class FillingCakePainter extends CustomPainter {
           axis.translate(0, y1),
         ], true);
       if (isFilling) {
+        // Nachinka — TOZA rangda (oqartiruvchi gradientsiz), biskvitdan
+        // aniq chegara chiziqlari bilan ajratilgan.
         final fill = _fill(fillIdx++);
-        canvas.drawPath(
-          band,
-          Paint()
-            ..shader = LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Color.lerp(fill, Colors.white, 0.22)!,
-                fill,
-                Color.lerp(fill, Colors.black, 0.16)!,
-              ],
-            ).createShader(band.getBounds()),
-        );
+        canvas.drawPath(band, Paint()..color = fill);
+        final edge = Paint()
+          ..strokeWidth = math.max(1.0, _h * 0.014)
+          ..color = _edgeOf(fill);
+        canvas.drawLine(axis.translate(0, y0), rim.translate(0, y0), edge);
+        canvas.drawLine(axis.translate(0, y1), rim.translate(0, y1), edge);
       } else {
         canvas.drawPath(band, Paint()..color = _sponge.spongeLight);
         // Kesimdagi g'ovaklar.
@@ -472,10 +472,21 @@ class FillingCakePainter extends CustomPainter {
           ...arc(_top + f * _h),
           ...arc(_top + (f + part) * _h).reversed,
         ], true);
-      canvas.drawPath(
-        band,
-        Paint()..color = isFilling ? _fill(fillIdx++) : _sponge.sponge,
-      );
+      if (isFilling) {
+        final fill = _fill(fillIdx++);
+        canvas.drawPath(band, Paint()..color = fill);
+        // Biskvit bilan aniq chegara (yuqori va pastki yoy bo'ylab).
+        final edge = Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = math.max(1.0, _h * 0.014)
+          ..color = _edgeOf(fill);
+        canvas.drawPath(
+            Path()..addPolygon(arc(_top + f * _h), false), edge);
+        canvas.drawPath(
+            Path()..addPolygon(arc(_top + (f + part) * _h), false), edge);
+      } else {
+        canvas.drawPath(band, Paint()..color = _sponge.sponge);
+      }
       f += part;
     }
     // Biskvit qatlamlaridagi g'ovaklar — tort bilan birga aylanadi.

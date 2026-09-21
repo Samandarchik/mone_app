@@ -28,6 +28,9 @@ class _Cluster {
   double r, g, b;
   int center = 0;
   int border = 0;
+  // Markazdagi shu guruhga tushgan piksellar (RGBA ofsetlari) — «toza»
+  // rangni hisoblash uchun.
+  final List<int> members = [];
 
   _Cluster(this.r, this.g, this.b);
 
@@ -132,7 +135,9 @@ class FillingPhotoLook {
       }
     }
     for (final i in center) {
-      clusters[nearest(i)].center++;
+      final c = clusters[nearest(i)];
+      c.center++;
+      c.members.add(i);
     }
     for (final i in border) {
       clusters[nearest(i)].border++;
@@ -162,7 +167,8 @@ class FillingPhotoLook {
       }
       into
         ..center = total
-        ..border += c.border;
+        ..border += c.border
+        ..members.addAll(c.members);
     }
 
     final centerN = center.length;
@@ -190,14 +196,59 @@ class FillingPhotoLook {
     if (picks.isEmpty || picks.first.center / centerN < 0.08) return null;
 
     final first = picks.first;
-    Color? second;
+    _Cluster? second;
     for (final c in picks.skip(1)) {
       if (math.sqrt(first.dist(c.r, c.g, c.b)) >= _distinctDist) {
-        second = c.color;
+        second = c;
         break;
       }
     }
-    return FillingLook(first.color, second);
+    return FillingLook(
+      _pure(rgba, first),
+      second == null ? null : _pure(rgba, second),
+    );
+  }
+
+  // Guruhning «toza» rangi. Kichraytirilgan fotoda nachinka va biskvit
+  // chegarasidagi piksellar ARALASH tusda bo'ladi — oddiy o'rtacha rang
+  // xira, biskvitga tortilgan chiqadi. Shuning uchun guruhning eng «toza»
+  // 40% pikseli olinadi va shularning o'rtachasi:
+  //  - rangli guruh (qulupnay, manго, fisitashka ...) — eng YORQIN-to'yingan
+  //    piksellar (to'yinganlik × yorug'lik): soyadagi to'q joylar emas;
+  //  - rangsiz/xira guruh (qaymoq, shokolad) — biskvit rangidan ENG UZOQ
+  //    piksellar (qaymoq — eng oqlari, shokolad — eng to'qlari).
+  static Color _pure(ByteData rgba, _Cluster c) {
+    const sr = 242.0, sg = 206.0, sb = 126.0; // BiscuitPalette.classic.sponge
+    if (c.members.length < 8) return c.color;
+    // To'q ranglar (shokolad) «rangli» hisoblanmaydi: ularda eng to'yingan
+    // piksellar aynan biskvit bilan aralashgan chegaradagilar bo'ladi.
+    final hsv = HSVColor.fromColor(c.color);
+    final vivid = hsv.saturation > 0.5 && hsv.value > 0.5;
+    double score(int i) {
+      final r = rgba.getUint8(i), g = rgba.getUint8(i + 1);
+      final b = rgba.getUint8(i + 2);
+      if (vivid) {
+        final mx = math.max(r, math.max(g, b));
+        final mn = math.min(r, math.min(g, b));
+        // s × v = (max − min) / 255.
+        return (mx - mn).toDouble();
+      }
+      final dr = r - sr, dg = g - sg, db = b - sb;
+      return dr * dr + dg * dg + db * db;
+    }
+
+    final sorted = [...c.members]
+      ..sort((a, b) => score(b).compareTo(score(a)));
+    final n = math.max(8, (sorted.length * 0.4).round());
+    double r = 0, g = 0, b = 0;
+    for (final i in sorted.take(n)) {
+      r += rgba.getUint8(i);
+      g += rgba.getUint8(i + 1);
+      b += rgba.getUint8(i + 2);
+    }
+    final count = math.min(n, sorted.length);
+    return Color.fromARGB(
+        255, (r / count).round(), (g / count).round(), (b / count).round());
   }
 }
 
