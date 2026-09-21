@@ -138,7 +138,9 @@ class Filling3DView extends StatelessWidget {
   }
 }
 
-// Kartadagi kichik statik rasm: shu nachinkali kesilgan tort.
+// Kartadagi kichik statik rasm: shu nachinkali tortning BITTA BO'LAGI
+// (butun tort emas) — kesim yuzlarida nachinka ko'rinadi. Karta tanlansa
+// tepadagi katta 3D'da o'sha nachinkali butun (kesilgan) tort chiqadi.
 class FillingThumb extends StatelessWidget {
   final FillingLook look;
 
@@ -157,24 +159,31 @@ class FillingThumb extends StatelessWidget {
       child: RepaintBoundary(
         child: CustomPaint(
           size: Size.infinite,
-          // Kesim tomoshabinga qarab turadi.
-          painter: FillingCakePainter(look: look, tilt: 0.36, rotation: 0),
+          painter: FillingCakePainter(
+            look: look,
+            slice: true,
+            tilt: 0.36,
+            rotation: 0,
+          ),
         ),
       ),
     );
   }
 }
 
-// Bo'lagi kesib olingan yumaloq tort. Burchak t: ekranda x = cx + r·sin t,
-// chuqurlik cos t (> 0 — tomoshabin tomonda). Chizish tartibi (orqadan
-// oldinga): patnis → kesim yuzlari → oldingi yon devor → tepa.
+// Bo'lagi kesib olingan yumaloq tort ([slice] = false) yoki o'sha tortning
+// BITTA BO'LAGI ([slice] = true — grid kartalari uchun). Burchak t: ekranda
+// x = o'q + r·sin t, chuqurlik cos t (> 0 — tomoshabin tomonda). Chizish
+// tartibi orqadan oldinga: patnis → (kesim yuzlari / yon devor) → tepa.
 class FillingCakePainter extends CustomPainter {
   final FillingLook look;
+  final bool slice;
   final double tilt;
   final double rotation;
 
   FillingCakePainter({
     required this.look,
+    this.slice = false,
     required this.tilt,
     required this.rotation,
   });
@@ -194,6 +203,11 @@ class FillingCakePainter extends CustomPainter {
     (0.22, false),
   ];
 
+  // Bitta bo'lak (slice): burilmagan holatda yoyi orqada, uchi tomoshabinga
+  // qaragan — ikkala kesim yuzi ko'rinadi (biri keng, biri tor).
+  static const double _sliceCenter = math.pi + 0.35;
+
+  // Tort o'qining ekrandagi x'i (bo'lakda markazdan suriladi).
   late double _cx;
   late double _r;
   late double _top;
@@ -204,20 +218,29 @@ class FillingCakePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    _cx = size.width / 2;
+    final midX = size.width / 2;
     final areaH = size.height;
     final plateRx = math.min(size.width * 0.42, areaH * 0.62);
     final plateRy = plateRx * tilt;
     final plateThick = plateRx * 0.05;
-    _r = plateRx * 0.66;
-    _h = math.min(_r * 0.85, areaH * 0.42);
+    // Bo'lak yakka o'zi turadi — kattaroq chiziladi.
+    _r = plateRx * (slice ? 1.0 : 0.66);
+    _h = math.min(plateRx * 0.56, areaH * 0.42);
 
-    final total = _h + _r * tilt + plateRy + plateThick;
+    final footprint = (slice ? plateRx * 0.5 : _r) * tilt;
+    final total = _h + footprint + plateRy + plateThick;
     final plateY = (areaH + total) / 2 - plateRy - plateThick;
     final bottom = plateY;
-    _top = bottom - _h;
 
-    paintPlate3D(canvas, Offset(_cx, plateY), plateRx, plateRy, plateThick);
+    paintPlate3D(canvas, Offset(midX, plateY), plateRx, plateRy, plateThick);
+
+    if (slice) {
+      _paintSlice(canvas, midX, bottom);
+      return;
+    }
+
+    _cx = midX;
+    _top = bottom - _h;
     canvas.drawOval(
       Rect.fromCenter(
         center: Offset(_cx, bottom + _r * tilt * 0.12),
@@ -238,21 +261,78 @@ class FillingCakePainter extends CustomPainter {
     if (math.sin(w1) > 0) _paintCutFace(canvas, w1, -math.cos(w1));
 
     // Oldingi yarim aylana (−π/2 … π/2) dan kesilgan bo'lak olib tashlanadi.
-    var walls = <(double, double)>[(-math.pi / 2, math.pi / 2)];
-    for (final shift in [-2 * math.pi, 0.0, 2 * math.pi]) {
-      final a = _norm(w0) + shift, b = a + _wedgeWidth;
-      walls = [
-        for (final (s, e) in walls) ...[
-          if (a > s) (s, math.min(e, a)),
-          if (b < e) (math.max(s, b), e),
-        ],
-      ].where((w) => w.$2 - w.$1 > 1e-4).toList();
-    }
-    for (final (s, e) in walls) {
+    for (final (s, e) in _frontArcs(w0, _wedgeWidth, inside: false)) {
       _paintWall(canvas, s, e);
     }
 
     _paintTop(canvas, w1, w0 + 2 * math.pi);
+  }
+
+  // Tortning bitta bo'lagi: [s0, s1] sektori. Kesim yuzlarining normali
+  // bu yerda TASHQARIGA qaraydi: s0 da −dp/dt, s1 da +dp/dt.
+  void _paintSlice(Canvas canvas, double midX, double bottom) {
+    final c = _sliceCenter + rotation;
+    final s0 = c - _wedgeWidth / 2, s1 = c + _wedgeWidth / 2;
+    // Bo'lak og'irlik markazi o'qdan ~r/2 da — uni patnis o'rtasiga suramiz.
+    _cx = midX - _r * 0.5 * math.sin(c);
+    _top = bottom - _h - _r * 0.5 * tilt * math.cos(c);
+
+    // Tagidagi soya — bo'lak izi bo'ylab.
+    final foot = Path()
+      ..addPolygon([
+        Offset(_cx, _top + _h),
+        for (var i = 0; i <= 16; i++)
+          _rim(s0 + (s1 - s0) * i / 16, _top + _h),
+      ], true);
+    canvas.drawPath(
+      foot.shift(Offset(0, _h * 0.05)),
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.18)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+    );
+
+    void faces() {
+      if (math.sin(s0) > 0) _paintCutFace(canvas, s0, -math.cos(s0));
+      if (math.sin(s1) < 0) _paintCutFace(canvas, s1, math.cos(s1));
+    }
+
+    void wall() {
+      for (final (s, e) in _frontArcs(s0, _wedgeWidth, inside: true)) {
+        _paintWall(canvas, s, e);
+      }
+    }
+
+    // Yoyi oldinda bo'lsa devor yuzlarni to'sadi, orqada bo'lsa — aksincha.
+    if (math.cos(c) > 0) {
+      faces();
+      wall();
+    } else {
+      wall();
+      faces();
+    }
+    _paintTop(canvas, s0, s1);
+  }
+
+  // Oldingi yarim aylananing (−π/2 … π/2) [from, from + width] sektoriga
+  // tushgan ([inside]) yoki undan tashqaridagi qismlari.
+  static List<(double, double)> _frontArcs(double from, double width,
+      {required bool inside}) {
+    const lo = -math.pi / 2, hi = math.pi / 2;
+    var out = <(double, double)>[if (!inside) (lo, hi)];
+    for (final shift in [-2 * math.pi, 0.0, 2 * math.pi]) {
+      final a = _norm(from) + shift, b = a + width;
+      if (inside) {
+        out.add((math.max(lo, a), math.min(hi, b)));
+      } else {
+        out = [
+          for (final (s, e) in out) ...[
+            if (a > s) (s, math.min(e, a)),
+            if (b < e) (math.max(s, b), e),
+          ],
+        ];
+      }
+    }
+    return out.where((w) => w.$2 - w.$1 > 1e-4).toList();
   }
 
   // Burchakni (−π, π] oralig'iga keltirish.
@@ -456,5 +536,8 @@ class FillingCakePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(FillingCakePainter old) =>
-      old.look != look || old.tilt != tilt || old.rotation != rotation;
+      old.look != look ||
+      old.slice != slice ||
+      old.tilt != tilt ||
+      old.rotation != rotation;
 }
