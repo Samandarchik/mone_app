@@ -205,6 +205,10 @@ class Filling3DView extends StatelessWidget {
   final String? photoUrl;
   // «Покрытие» bo'limi: tort shu rangda tashqaridan qoplangan (painter.coat).
   final Color? coat;
+  // Konstruktor: qoplangan tortdan ham bo'lak kesiladi (painter.coatCut) va
+  // korjlar tanlangan biskvit rangida (painter.sponge).
+  final bool coatCut;
+  final BiscuitPalette sponge;
   final double height;
 
   const Filling3DView({
@@ -212,6 +216,8 @@ class Filling3DView extends StatelessWidget {
     this.look = FillingLook.neutral,
     this.photoUrl,
     this.coat,
+    this.coatCut = false,
+    this.sponge = BiscuitPalette.classic,
     this.height = 240,
   });
 
@@ -225,6 +231,8 @@ class Filling3DView extends StatelessWidget {
         painter: (tilt, rotation) => FillingCakePainter(
           look: photoLook ?? look,
           coat: coat,
+          coatCut: coatCut,
+          sponge: sponge,
           tilt: tilt,
           rotation: rotation,
         ),
@@ -307,6 +315,13 @@ class FillingCakePainter extends CustomPainter {
   // bo'lak rejimi ([slice]) unga ta'sir qilmaydi. null — «yalang'och»,
   // bo'lagi kesilgan tort (nachinka bo'limi).
   final Color? coat;
+  // Konstruktor (3-qadam): qoplangan tortdan ham bo'lak KESIB olinadi —
+  // kesimda ichidagi nachinka va biskvitni o'rab turgan qoplama qatlami
+  // ko'rinadi. Faqat [coat] bilan birga ma'noga ega.
+  final bool coatCut;
+  // Biskvit (korj) ranglari — konstruktorda tanlangan biskvit turidan
+  // (shokoladli, qizil baxmal ...). Bo'limlarda — klassik.
+  final BiscuitPalette sponge;
   final bool slice;
   final double tilt;
   final double rotation;
@@ -314,12 +329,16 @@ class FillingCakePainter extends CustomPainter {
   FillingCakePainter({
     required this.look,
     this.coat,
+    this.coatCut = false,
+    this.sponge = BiscuitPalette.classic,
     this.slice = false,
     required this.tilt,
     required this.rotation,
   });
 
-  static const BiscuitPalette _sponge = BiscuitPalette.classic;
+  BiscuitPalette get _sponge => sponge;
+  // Qoplama qalinligi: tort balandligi / radiusiga nisbatan ulush.
+  static const double _coatPart = 0.075;
   // Kesib olingan bo'lak: markazi va kengligi (radian, tort o'qida).
   // Markaz 0 — burilmagan holatda kesim tomoshabinga qarab ochiladi va
   // ikkala kesim yuzi ham ko'rinadi (kartadagi statik rasm shunday).
@@ -386,8 +405,9 @@ class FillingCakePainter extends CustomPainter {
     );
 
     // «Покрытие»: tort BUTUN — kesilmagan, bo'laksiz; faqat qoplangan devor
-    // (oldingi yarim aylana to'liq) va qoplangan tepa.
-    if (coat != null) {
+    // (oldingi yarim aylana to'liq) va qoplangan tepa. Konstruktorda
+    // ([coatCut]) esa pastdagi umumiy yo'l bilan bo'lagi kesiladi.
+    if (coat != null && !coatCut) {
       _paintWall(canvas, -math.pi / 2, math.pi / 2);
       _paintTop(canvas, 0, 2 * math.pi);
       return;
@@ -584,6 +604,42 @@ class FillingCakePainter extends CustomPainter {
         }
       }
       f += part;
+    }
+    // Qoplangan tort kesimi (konstruktor): qoplama biskvitni TASHQARIDAN
+    // o'rab turgan qatlam bo'lib ko'rinadi — tepada gorizontal, chetda (tort
+    // devori tomonda) vertikal.
+    final coat = this.coat;
+    if (coat != null) {
+      final inward = (axis - rim) * _coatPart;
+      final paint = Paint()..color = coat;
+      canvas.drawPath(
+        Path()
+          ..addPolygon([
+            axis,
+            rim,
+            rim.translate(0, _h * _coatPart),
+            axis.translate(0, _h * _coatPart),
+          ], true),
+        paint,
+      );
+      canvas.drawPath(
+        Path()
+          ..addPolygon([
+            rim,
+            rim + inward,
+            (rim + inward).translate(0, _h),
+            rim.translate(0, _h),
+          ], true),
+        paint,
+      );
+      // Qoplama va biskvit orasidagi ingichka chegara.
+      final edge = Paint()
+        ..strokeWidth = math.max(0.8, _h * 0.01)
+        ..color = _edgeOf(coat);
+      canvas.drawLine(axis.translate(0, _h * _coatPart),
+          (rim + inward).translate(0, _h * _coatPart), edge);
+      canvas.drawLine((rim + inward).translate(0, _h * _coatPart),
+          (rim + inward).translate(0, _h), edge);
     }
     // Yuzning yorug'lik soyasi: chapga qaragani ochroq, o'ngga — to'qroq.
     canvas.drawPath(
@@ -823,6 +879,8 @@ class FillingCakePainter extends CustomPainter {
   bool shouldRepaint(FillingCakePainter old) =>
       old.look != look ||
       old.coat != coat ||
+      old.coatCut != coatCut ||
+      old.sponge != sponge ||
       old.slice != slice ||
       old.tilt != tilt ||
       old.rotation != rotation;
