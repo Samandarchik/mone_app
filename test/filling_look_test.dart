@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uz_ai_dev/admin/model/tech_card.dart';
+import 'package:uz_ai_dev/admin/ui/widgets/filling_color_palette.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
 
 const _strawberry = Color(0xFFD9364A);
@@ -14,6 +15,7 @@ TechCard _card(List<TechItem> items, {String base = 'Основа'}) =>
     TechCard(bases: [TechBase(name: base, ingredients: items)]);
 
 void main() {
+  paletteTests();
   test('nom eng ustun — masalliqlarga qaralmaydi', () {
     final card = _card(const [
       TechItem(name: 'Пюре клубника', unit: 'g', amount: 900),
@@ -58,5 +60,47 @@ void main() {
     expect(FillingLook.detect('Медленная начинка', null), FillingLook.neutral);
     expect(FillingLook.detect('Начинка с мёдом', null).color, _honey);
     expect(FillingLook.detect('Начинка медовая', null).color, _honey);
+  });
+}
+
+// Palitra (tech_card.filling_color) — eng ustun manba.
+void paletteTests() {
+  test('hex ↔ Color', () {
+    expect(fillingColorFromHex('#D9364A'), const Color(0xFFD9364A));
+    expect(fillingColorFromHex(' #d9364a '), const Color(0xFFD9364A));
+    expect(fillingColorFromHex(''), isNull);
+    expect(fillingColorFromHex('#FFF'), isNull);
+    expect(fillingColorFromHex('qizil'), isNull);
+    expect(fillingColorToHex(const Color(0xFFD9364A)), '#D9364A');
+    // Palitradagi har rang saqlash formatidan o'zgarishsiz qaytadi.
+    for (final c in kFillingPalette) {
+      expect(fillingColorFromHex(fillingColorToHex(c)), c);
+    }
+  });
+
+  test('resolve: palitra rangi foto va nomdan ustun, foto tahlil qilinmaydi',
+      () {
+    const card = TechCard(
+      fillingColor: '#8BC34A',
+      biscuitPhotoUrl: '/static/tort.jpg',
+    );
+    final (look, photo) = FillingLook.resolve('Начинка шоколадная', card);
+    expect(look, const FillingLook(Color(0xFF8BC34A)));
+    expect(photo, isNull);
+  });
+
+  test('resolve: rang tanlanmagan — foto URL qaytadi, rang nomdan', () {
+    const card = TechCard(biscuitPhotoUrl: '/static/tort.jpg');
+    final (look, photo) = FillingLook.resolve('Начинка шоколадная', card);
+    expect(look.color, _chocolate);
+    expect(photo, endsWith('/static/tort.jpg'));
+  });
+
+  test('TechCard: filling_color JSON\'da saqlanadi', () {
+    const card = TechCard(fillingColor: '#D9364A');
+    expect(card.toJson()['filling_color'], '#D9364A');
+    expect(TechCard.fromJson(card.toJson()).fillingColor, '#D9364A');
+    expect(TechCard.fromJson(const {}).fillingColor, '');
+    expect(card.copyWith(bakeTimeMin: 5).fillingColor, '#D9364A');
   });
 }

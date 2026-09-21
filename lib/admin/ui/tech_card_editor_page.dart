@@ -33,6 +33,7 @@ import 'package:uz_ai_dev/admin/services/api_product_service.dart';
 import 'package:uz_ai_dev/admin/services/tech_image_upload_service.dart';
 import 'package:uz_ai_dev/admin/ui/composition_picker_page.dart';
 import 'package:uz_ai_dev/admin/ui/widgets/cutting_scheme.dart';
+import 'package:uz_ai_dev/admin/ui/widgets/filling_color_palette.dart';
 import 'package:uz_ai_dev/admin/ui/widgets/product_type_radio.dart';
 import 'package:uz_ai_dev/admin/ui/widgets/tech_card_section.dart';
 import 'package:uz_ai_dev/admin/ui/widgets/tech_item_editor.dart';
@@ -178,11 +179,17 @@ class TechCardEditorPage extends StatefulWidget {
   /// «П/Ф Бисквит» va «П/Ф Начинка» oynalaridan ochganda.
   final bool showBiscuitPhoto;
 
+  /// true — «Nachinka rangi» palitrasi (tech_card.filling_color): tanlangan
+  /// rang saqlangach shef «П/Ф Начинка» 3D tortida nachinka shu rangda
+  /// chiziladi. Faqat «П/Ф Начинка» oynasidan ochganda.
+  final bool showFillingColor;
+
   const TechCardEditorPage({
     super.key,
     required this.product,
     this.canEditPrices = true,
     this.showBiscuitPhoto = false,
+    this.showFillingColor = false,
   });
 
   @override
@@ -1753,6 +1760,12 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
                   // yoki Штук = 1 — kesish yo'q) faqat mahsulot rasmi chiqadi.
                   if (_schemeVisible) _cuttingScheme() else _productPhoto(),
                   if (widget.showBiscuitPhoto) _biscuitPhotoSection(),
+                  if (widget.showFillingColor)
+                    FillingColorPalette(
+                      value: c.fillingColor,
+                      onChanged: (hex) =>
+                          setState(() => c.fillingColor = hex),
+                    ),
                   _headerTables(wide),
                   _stagesRow(),
                   const SizedBox(height: 12),

@@ -353,6 +353,9 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
           // nachinkada qatlamlar RANGI fotodan olinadi.
           showBiscuitPhoto:
               widget.showCakeConstructor || widget.showFillingCake,
+          // «П/Ф Начинка»: rang palitrasi — tanlangan rang saqlangach 3D
+          // tortda nachinka shu rangda chiziladi (foto/tarkibdan ustun).
+          showFillingColor: widget.showFillingCake,
         ),
       ),
     );
@@ -589,18 +592,20 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                   color: _bgColor,
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
                   child: widget.showFillingCake
-                      // «П/Ф Начинка»: kesilgan tort, nachinka rangi
-                      // tanlangan mahsulot тех картасидан.
-                      ? Filling3DView(
-                          height: _biscuitViewH,
-                          look: selected == null
-                              ? FillingLook.neutral
-                              : FillingLook.detect(
-                                  selected.name, selected.techCard),
-                          // Tex kartada foto bo'lsa — nachinka rangi fotodan
-                          // (nom/tarkibdan ustun).
-                          photoUrl: biscuitPhotoUrlOf(selected?.techCard),
-                        )
+                      // «П/Ф Начинка»: kesilgan tort. Nachinka ko'rinishi
+                      // tanlangan mahsulot тех картасидан, ustuvorlik:
+                      // palitra rangi → foto → nom/tarkib (resolve).
+                      ? () {
+                          final (look, photoUrl) = selected == null
+                              ? (FillingLook.neutral, null)
+                              : FillingLook.resolve(
+                                  selected.name, selected.techCard);
+                          return Filling3DView(
+                            height: _biscuitViewH,
+                            look: look,
+                            photoUrl: photoUrl,
+                          );
+                        }()
                       : Biscuit3DView(
                           height: _biscuitViewH,
                           dims: BiscuitDims.fromTechCard(selected?.techCard),
@@ -890,11 +895,12 @@ class _ProductGridCard extends StatelessWidget {
     // uning 3D chizmasi: o'lchami va turi тех картадан. Tex kartada biskvit
     // fotosi bo'lsa — chizmaning YON TOMONIGA shu fotoning o'zi o'raladi
     // (chizilgan mevalar o'rniga); karta to'liq foto bilan to'ldirilmaydi.
+    // Nachinka: palitra rangi → foto → nom/tarkib (FillingLook.resolve).
+    final (fillingLook, fillingPhoto) = filling
+        ? FillingLook.resolve(product.name, product.techCard)
+        : (FillingLook.neutral, null);
     final Widget placeholder = filling
-        ? FillingThumb(
-            look: FillingLook.detect(product.name, product.techCard),
-            photoUrl: biscuitPhotoUrlOf(product.techCard),
-          )
+        ? FillingThumb(look: fillingLook, photoUrl: fillingPhoto)
         : BiscuitThumb(
             dims: BiscuitDims.fromTechCard(product.techCard),
             palette: BiscuitPalette.detect(product.name, product.techCard),

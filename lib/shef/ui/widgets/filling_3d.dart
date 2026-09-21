@@ -1,7 +1,9 @@
 // shef/ui/widgets/filling_3d.dart — «П/Ф Начинка» uchun 3D ko'rinish:
 // bo'lagi kesib olingan yumaloq tort — 3 ta biskvit qatlami va ular orasida
 // 2 ta NACHINKA qatlami. Kesimda (va «yalang'och» yon tomonda) nachinka
-// ko'rinadi; uning rangi FAQAT тех картадан (FillingLook.detect):
+// ko'rinadi. Manba ustuvorligi (FillingLook.resolve): tex kartadagi PALITRADAN
+// tanlangan rang (filling_color) → tex kartadagi foto → nom/tarkib.
+// Nom/tarkibdan rang (FillingLook.detect):
 //   1) mahsulot nomi → 2) blok nomlari → 3) masalliqlar.
 // Masalliqlarda miqdori (g/ml) ENG KO'P bo'lgan rang beruvchi masalliq
 // tanlanadi (masalan 300 g qulupnay pyuresi + 50 g shokolad → qulupnay);
@@ -18,6 +20,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:uz_ai_dev/admin/model/tech_card.dart';
+import 'package:uz_ai_dev/admin/ui/widgets/filling_color_palette.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/cake_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/filling_photo_look.dart';
@@ -125,6 +128,17 @@ class FillingLook {
       }
     }
     return null;
+  }
+
+  // Mahsulot uchun 3D manbai — (ko'rinish, foto URL) — ustuvorlik bilan:
+  //  1) tex kartadagi PALITRADAN tanlangan rang (filling_color) — eng ustun:
+  //     nachinka aynan shu rangda, foto tahlil QILINMAYDI (URL null);
+  //  2) tex kartadagi foto — qatlamlar/ranglar fotodan (URL qaytadi);
+  //  3) nom / blok / masalliqlardan (detect).
+  static (FillingLook, String?) resolve(String name, TechCard? card) {
+    final picked = fillingColorFromHex(card?.fillingColor ?? '');
+    if (picked != null) return (FillingLook(picked), null);
+    return (detect(name, card), biscuitPhotoUrlOf(card));
   }
 
   static FillingLook detect(String name, TechCard? card) {

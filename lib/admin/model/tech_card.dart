@@ -287,6 +287,10 @@ class TechCard {
   // «П/Ф Бисквит»). "/static/..." yoki '' (yo'q). JSON: biscuit_photo_url.
   // 3D rasmga foto QO'YILMAYDI — u тех карта tarkibidan chiziladi.
   final String biscuitPhotoUrl;
+  // Tex kartadagi PALITRADAN tanlangan rang: "#RRGGBB" yoki '' (tanlanmagan).
+  // Shef «П/Ф Начинка» 3D rasmida nachinka shu rangda chiziladi — foto va
+  // nom/tarkibdan USTUN (filling_3d.dart). JSON: filling_color.
+  final String fillingColor;
 
   const TechCard({
     this.batchQty = 1,
@@ -310,6 +314,7 @@ class TechCard {
     this.bakeTimeMin = 0,
     this.bakeTempC = 0,
     this.biscuitPhotoUrl = '',
+    this.fillingColor = '',
   });
 
   factory TechCard.fromJson(Map<String, dynamic> json) {
@@ -343,6 +348,7 @@ class TechCard {
       bakeTimeMin: _asInt(json['bake_time_min']),
       bakeTempC: _asInt(json['bake_temp_c']),
       biscuitPhotoUrl: json['biscuit_photo_url']?.toString() ?? '',
+      fillingColor: json['filling_color']?.toString() ?? '',
     );
   }
 
@@ -384,6 +390,7 @@ class TechCard {
         'bake_time_min': bakeTimeMin,
         'bake_temp_c': bakeTempC,
         'biscuit_photo_url': biscuitPhotoUrl,
+        'filling_color': fillingColor,
       };
 
   TechCard copyWith({
@@ -412,6 +419,7 @@ class TechCard {
     int? bakeTimeMin,
     int? bakeTempC,
     String? biscuitPhotoUrl,
+    String? fillingColor,
   }) {
     return TechCard(
       batchQty: batchQty ?? this.batchQty,
@@ -435,6 +443,7 @@ class TechCard {
       bakeTimeMin: bakeTimeMin ?? this.bakeTimeMin,
       bakeTempC: bakeTempC ?? this.bakeTempC,
       biscuitPhotoUrl: biscuitPhotoUrl ?? this.biscuitPhotoUrl,
+      fillingColor: fillingColor ?? this.fillingColor,
     );
   }
 

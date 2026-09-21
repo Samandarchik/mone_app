@@ -44,6 +44,9 @@ class TechCardController {
   // Tayyor biskvit fotosi ("/static/..." yoki '') — tex kartada saqlanadi.
   String biscuitPhotoUrl;
 
+  // Palitradan tanlangan nachinka rangi ("#RRGGBB" yoki '').
+  String fillingColor;
+
   TechCardController([TechCard? initial])
       : batchQty = (initial?.batchQty ?? 1) < 1 ? 1 : (initial?.batchQty ?? 1),
         batchUnit = initial?.batchUnit == 'g' ? 'g' : '',
@@ -63,7 +66,8 @@ class TechCardController {
         salePrice = initial?.salePrice ?? 0,
         bakeTimeMin = initial?.bakeTimeMin ?? 0,
         bakeTempC = initial?.bakeTempC ?? 0,
-        biscuitPhotoUrl = initial?.biscuitPhotoUrl ?? '';
+        biscuitPhotoUrl = initial?.biscuitPhotoUrl ?? '',
+        fillingColor = initial?.fillingColor ?? '';
 
   // Partiya JAMI donasi = bitta list donasi (batchQty) × list soni (listQty).
   // Barcha «1 dona» / «за N штук» hisob-ko'rsatishlar shu songa tayanadi.
@@ -91,6 +95,7 @@ class TechCardController {
         bakeTimeMin: bakeTimeMin,
         bakeTempC: bakeTempC,
         biscuitPhotoUrl: biscuitPhotoUrl,
+        fillingColor: fillingColor,
       );
 
   // «Состав» uchun showInSostav=true bo'lgan nomlar.
