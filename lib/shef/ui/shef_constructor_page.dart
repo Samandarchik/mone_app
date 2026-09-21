@@ -11,7 +11,9 @@
 //       kesimda nachinka. Odatda 2 qatlam; «+ Qatlam» yana qo'shadi (5
 //       tagacha), «×» olib tashlaydi. «N-qatlam» chipi — faol qatlam: griddan
 //       tanlangan nachinka shunga yoziladi, ya'ni har qatlam o'z mahsuloti,
-//       o'z ranglari va o'z tex kartasi bilan. N nachinka -> N+1 korj, tort
+//       o'z ranglari va o'z tex kartasi bilan. Chiplar ostida faol qatlamning
+//       RANG PALITRASI: tanlangan rang shu qatlamda mahsulot rangidan ustun
+//       (chipdagi nuqta — qatlamning hozirgi rangi). N nachinka -> N+1 korj, tort
 //       balandligi o'zgarmaydi.
 //   3 — Покрытие: o'sha tort tanlangan krem bilan tashqaridan TO'LIQ
 //       qoplangan, bo'lagi kesilgan — kesimda nachinka ham, qoplama qatlami
@@ -29,6 +31,7 @@ import 'package:uz_ai_dev/admin/model/product_model.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
+import 'package:uz_ai_dev/admin/ui/widgets/filling_color_palette.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:uz_ai_dev/shef/model/production_model.dart';
@@ -67,6 +70,11 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
   // qo'shadi (pastga). N nachinka → N+1 korj, hammasi biskvit balandligi
   // ichida.
   final List<int?> _fillingIds = [null, null];
+  // Har qatlamning QO'LDA tanlangan rangi ("#RRGGBB"; '' — tanlanmagan:
+  // rang qatlam mahsulotidan). Qatlam tugmalari ostidagi palitradan
+  // tanlanadi va mahsulot rangidan USTUN turadi. _fillingIds bilan bir xil
+  // uzunlikda; faqat shu ekranda yashaydi (tex kartaga yozilmaydi).
+  final List<String> _layerColors = ['', ''];
   // Hozir nachinka tanlanayotgan qatlam (_fillingIds indeksi).
   int _activeLayer = 0;
 
@@ -179,54 +187,84 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
                   ],
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '${_step + 1}. ${_steps[_step].$2}',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-              // 2-qadam: nachinka qatlamlari — qaysi qatlamga tanlanayotgani
-              // va «+ Qatlam» (yana nachinka qatlami qo'shish).
-              if (_step == 1 && fillings.isNotEmpty) _layerBar(layers),
+              // Tugmalar ostidagi hamma narsa — BITTA suriladigan maydon:
+              // sarlavha, (2-qadamda) qatlamlar + palitra va mahsulotlar
+              // gridi. Palitra to'liq ochilganda ham joy yetadi — grid pastga
+              // suriladi, tepadagi 3D va qadam tugmalari joyida qoladi.
               Expanded(
-                child: items.isEmpty
-                    ? _EmptyHint(biscuit: _step == 0)
-                    : GridView.builder(
-                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          mainAxisSpacing: 10,
-                          crossAxisSpacing: 10,
-                          mainAxisExtent: 150,
+                child: CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+                        child: Text(
+                          '${_step + 1}. ${_steps[_step].$2}',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                        itemCount: items.length,
-                        itemBuilder: (context, index) {
-                          final p = items[index];
-                          return _PickCard(
-                            product: p,
-                            step: _step,
-                            selected: p.id == selectedId,
-                            onTap: () => setState(() {
-                              if (_step == 0) {
-                                _biscuitId = p.id;
-                              } else if (_step == 1) {
-                                _fillingIds[_activeLayer] = p.id;
-                              } else {
-                                _coatingId = p.id;
-                              }
-                            }),
-                            onOpenTechCard: () => _openTechCard(p),
-                          );
-                        },
                       ),
+                    ),
+                    // 2-qadam: nachinka qatlamlari — qaysi qatlamga
+                    // tanlanayotgani, «+ Qatlam» va faol qatlamning rang
+                    // palitrasi (yig'iladigan — strelka hammasini ochadi).
+                    if (_step == 1 && fillings.isNotEmpty) ...[
+                      SliverToBoxAdapter(child: _layerBar(layers)),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+                          child: FillingColorPalette(
+                            key: ValueKey('layer-palette-$_activeLayer'),
+                            title: '${_activeLayer + 1}-qatlam rangi',
+                            value: _layerColors[_activeLayer],
+                            onChanged: (hex) => setState(
+                                () => _layerColors[_activeLayer] = hex),
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (items.isEmpty)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: _EmptyHint(biscuit: _step == 0),
+                      )
+                    else
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
+                        sliver: SliverGrid(
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 10,
+                            mainAxisExtent: 150,
+                          ),
+                          delegate: SliverChildBuilderDelegate(
+                            childCount: items.length,
+                            (context, index) {
+                              final p = items[index];
+                              return _PickCard(
+                                product: p,
+                                step: _step,
+                                selected: p.id == selectedId,
+                                onTap: () => setState(() {
+                                  if (_step == 0) {
+                                    _biscuitId = p.id;
+                                  } else if (_step == 1) {
+                                    _fillingIds[_activeLayer] = p.id;
+                                  } else {
+                                    _coatingId = p.id;
+                                  }
+                                }),
+                                onOpenTechCard: () => _openTechCard(p),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ],
           );
@@ -279,9 +317,11 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
         // (pastki). k-qatlam o'z mahsulotining (k juft -> 1-, toq -> 2-)
         // palitrasini oladi: bitta mahsulot ikki qatlamda turganda
         // avvalgidek «yuqori/pastki» ranglar chiqadi.
+        // Qatlam palitrasidan qo'lda tanlangan rang hammasidan ustun.
         fillings: [
           for (var k = 0; k < resolved.length; k++)
-            (photoLooks[k] ?? resolved[k].$1).bandsOf(k.isEven ? 0 : 1),
+            _pickedBands(k) ??
+                (photoLooks[k] ?? resolved[k].$1).bandsOf(k.isEven ? 0 : 1),
         ],
         // 3-qadam: tashqaridan qoplangan, lekin bo'lagi kesilgan — ichidagi
         // nachinka ham ko'rinadi.
@@ -293,6 +333,23 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
         coatCut: true,
       ),
     );
+  }
+
+  // [k]-qatlam uchun palitradan qo'lda tanlangan rang (bo'lmasa null).
+  List<FillingBand>? _pickedBands(int k) {
+    final c = fillingColorFromHex(_layerColors[k]);
+    return c == null ? null : [FillingBand(c, 1)];
+  }
+
+  // Qatlamning hozirgi asosiy rangi — chipdagi rangli nuqta uchun (foto
+  // tahlili kutilmaydi: palitra → mahsulot palitrasi / nom-tarkib).
+  Color _layerDot(int k, ProductModelAdmin? p) {
+    final picked = fillingColorFromHex(_layerColors[k]);
+    if (picked != null) return picked;
+    if (p == null) return FillingLook.neutral.color;
+    final bands =
+        FillingLook.resolve(p.name, p.techCard).$1.bandsOf(k.isEven ? 0 : 1);
+    return bands.reduce((a, b) => b.part > a.part ? b : a).color;
   }
 
   // Nachinka qatlamlari qatori: «1-qatlam», «2-qatlam» ... (tepadan pastga) —
@@ -309,6 +366,14 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
             Padding(
               padding: const EdgeInsets.only(right: 6),
               child: InputChip(
+                // Qatlamning hozirgi rangi.
+                avatar: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _layerDot(i, layers[i]),
+                    border: Border.all(color: Colors.black26),
+                  ),
+                ),
                 label: Text('${i + 1}-qatlam'),
                 selected: _activeLayer == i,
                 showCheckmark: false,
@@ -326,6 +391,7 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
                     ? null
                     : () => setState(() {
                           _fillingIds.removeAt(i);
+                          _layerColors.removeAt(i);
                           if (_activeLayer >= _fillingIds.length) {
                             _activeLayer = _fillingIds.length - 1;
                           }
@@ -342,6 +408,7 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
               // ustidagi qatlamning nachinkasi — keyin griddan almashtiriladi.
               onPressed: () => setState(() {
                 _fillingIds.add(layers.last?.id);
+                _layerColors.add('');
                 _activeLayer = _fillingIds.length - 1;
               }),
             ),
@@ -421,7 +488,7 @@ class _PickCard extends StatelessWidget {
   final int step;
   final bool selected;
   final VoidCallback onTap;
-  // Shu mahsulotning тех картаси (burchakdagi tugma yoki ikki marta bosish).
+  // Shu mahsulotning тех картаси — kartani IKKI MARTA bosish.
   final VoidCallback onOpenTechCard;
 
   const _PickCard({
@@ -477,31 +544,20 @@ class _PickCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: LayoutBuilder(
-                        builder: (context, box) => url != null
-                            ? AppNetworkImage(
-                                imageUrl: url,
-                                width: box.maxWidth,
-                                height: box.maxHeight,
-                                fit: BoxFit.cover,
-                                placeholder: (_) => drawn,
-                                errorWidget: (_) => drawn,
-                              )
-                            : SizedBox.expand(child: drawn),
-                      ),
-                    ),
-                    // Ko'rinadigan kirish: тех карта (palitra, foto, retsept).
-                    Positioned(
-                      top: 3,
-                      right: 3,
-                      child: TechCardOpenButton(onTap: onOpenTechCard),
-                    ),
-                  ],
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: LayoutBuilder(
+                    builder: (context, box) => url != null
+                        ? AppNetworkImage(
+                            imageUrl: url,
+                            width: box.maxWidth,
+                            height: box.maxHeight,
+                            fit: BoxFit.cover,
+                            placeholder: (_) => drawn,
+                            errorWidget: (_) => drawn,
+                          )
+                        : SizedBox.expand(child: drawn),
+                  ),
                 ),
               ),
               const SizedBox(height: 5),

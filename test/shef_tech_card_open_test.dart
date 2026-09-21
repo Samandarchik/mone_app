@@ -1,8 +1,9 @@
-// Shef: tex kartaga KIRISH yo'llari (regressiya qorovuli). Bir marta konstruktorda
-// tex kartaga umuman kirib bo'lmay qolgan edi — kartada na tugma, na ikki marta
-// bosish bor edi. Tekshiriladi: konstruktor kartasidagi tugma (2-qadam — ikkita
-// nachinka palitrasi, 3-qadam — «Покрытие rangi»), bo'lim gridi kartasidagi tugma
-// va eski usul — kartani ikki marta bosish.
+// Shef: tex kartaga KIRISH va konstruktor (regressiya qorovuli).
+// Tex karta kartani IKKI MARTA bosish bilan ochiladi — bo'limlar gridida ham,
+// konstruktorda ham (bir marta konstruktorda tex kartaga umuman kirib
+// bo'lmay qolgan edi). Kartada alohida «kitob» tugmasi YO'Q.
+// Yana: palitra yig'iladigan; konstruktorning nachinka qadamida qatlamlar
+// («+ Qatlam» / «×») va faol qatlamning rang palitrasi.
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -51,6 +52,13 @@ Widget _app(Widget home, CategoryProviderAdmin cats,
       child: MaterialApp(home: home),
     );
 
+// Rang doirachalari (FillingColorPalette ichidagi 36px doiralar).
+Finder _swatches() => find.byWidgetPredicate((w) =>
+    w is Container &&
+    w.decoration is BoxDecoration &&
+    (w.decoration! as BoxDecoration).shape == BoxShape.circle &&
+    w.constraints?.maxWidth == 36);
+
 void main() {
   late CategoryProviderAdmin cats;
   late ProductProviderAdmin products;
@@ -65,8 +73,10 @@ void main() {
     cats = CategoryProviderAdmin();
     products = ProductProviderAdmin();
     cats.categories.addAll([
-      CategoryProductAdmin(id: 1, name: 'П/Ф Бисквит', imageUrl: null, printerId: 1),
-      CategoryProductAdmin(id: 2, name: 'П/Ф Начинка', imageUrl: null, printerId: 1),
+      CategoryProductAdmin(
+          id: 1, name: 'П/Ф Бисквит', imageUrl: null, printerId: 1),
+      CategoryProductAdmin(
+          id: 2, name: 'П/Ф Начинка', imageUrl: null, printerId: 1),
     ]);
     products.products.addAll([
       _product(10, 'Бисквит Турецкий 18 см', 1, 'П/Ф Бисквит'),
@@ -74,148 +84,94 @@ void main() {
     ]);
   });
 
-  Future<void> size(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(497, 850);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+  Future<void> open(WidgetTester t, Widget page) async {
+    t.view.physicalSize = const Size(497, 850);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(_app(page, cats, products));
+    await t.pump(const Duration(milliseconds: 400));
+    expect(t.takeException(), isNull);
   }
 
-  testWidgets('constructor: button on a card opens the tech card', (t) async {
-    await size(t);
-    await t.pumpWidget(_app(const ShefConstructorPage(), cats, products));
-    await t.pump(const Duration(milliseconds: 400));
-    expect(t.takeException(), isNull);
-
-    // 2-qadam (nachinka) → kartadagi tugma → тех карта, 2 ta palitra bilan.
-    await t.tap(find.text('2'));
-    await t.pump(const Duration(milliseconds: 300));
-    expect(find.byType(TechCardOpenButton), findsOneWidget);
-    await t.tap(find.byType(TechCardOpenButton));
+  // Kartani ikki marta bosish (nomi ustida) va marshrut ochilguncha kutish.
+  Future<void> doubleTap(WidgetTester t, String name) async {
+    final target = find.text(name);
+    expect(target, findsOneWidget);
+    await t.tap(target);
+    await t.pump(const Duration(milliseconds: 80));
+    await t.tap(target);
     await t.pump(const Duration(milliseconds: 400));
     await t.pump();
     await t.pump(const Duration(milliseconds: 600));
     expect(t.takeException(), isNull);
+  }
+
+  testWidgets('section page: double tap opens the tech card; no book button',
+      (t) async {
+    await open(
+      t,
+      const ShefTechCardProductsPage(
+        categoryId: 2,
+        categoryName: 'П/Ф Начинка',
+        showFillingCake: true,
+      ),
+    );
+    expect(find.byIcon(Icons.menu_book_outlined), findsNothing);
+    await doubleTap(t, 'Начинка клубничная');
     expect(find.byType(TechCardEditorPage), findsOneWidget);
-    expect(find.textContaining('1-qatlam'), findsOneWidget);
-    expect(find.textContaining('2-qatlam'), findsOneWidget);
   });
 
-  testWidgets('constructor: step 3 opens the coating palette', (t) async {
-    await size(t);
-    await t.pumpWidget(_app(const ShefConstructorPage(), cats, products));
+  testWidgets('constructor step 2: double tap opens both filling palettes',
+      (t) async {
+    await open(t, const ShefConstructorPage());
+    expect(find.byIcon(Icons.menu_book_outlined), findsNothing);
+    await t.tap(find.text('2'));
     await t.pump(const Duration(milliseconds: 400));
+    await doubleTap(t, 'Начинка клубничная');
+    expect(find.byType(TechCardEditorPage), findsOneWidget);
+    expect(find.textContaining('1-qatlam (yuqori)'), findsOneWidget);
+    expect(find.textContaining('2-qatlam (pastki)'), findsOneWidget);
+  });
+
+  testWidgets('constructor step 3: double tap opens the coating palette',
+      (t) async {
+    await open(t, const ShefConstructorPage());
     await t.tap(find.text('3'));
-    await t.pump(const Duration(milliseconds: 300));
-    await t.tap(find.byType(TechCardOpenButton));
     await t.pump(const Duration(milliseconds: 400));
-    await t.pump();
-    await t.pump(const Duration(milliseconds: 600));
-    expect(t.takeException(), isNull);
+    await doubleTap(t, 'Начинка клубничная');
     expect(find.text('Покрытие rangi'), findsOneWidget);
   });
 
-  testWidgets('section page: button on a card opens the tech card', (t) async {
-    await size(t);
-    await t.pumpWidget(_app(
-      const ShefTechCardProductsPage(
-        categoryId: 2,
-        categoryName: 'П/Ф Начинка',
-        showFillingCake: true,
-      ),
-      cats,
-      products,
-    ));
-    await t.pump(const Duration(milliseconds: 400));
-    expect(t.takeException(), isNull);
-    await t.tap(find.byType(TechCardOpenButton));
-    await t.pump(const Duration(milliseconds: 400));
-    await t.pump();
-    await t.pump(const Duration(milliseconds: 600));
-    expect(t.takeException(), isNull);
-    expect(find.byType(TechCardEditorPage), findsOneWidget);
-  });
-
-  doubleTapTests(() => cats, () => products);
-  paletteAndLayerTests(() => cats, () => products);
-}
-
-void doubleTapTests(
-  CategoryProviderAdmin Function() cats,
-  ProductProviderAdmin Function() products,
-) {
-  testWidgets('section page: DOUBLE TAP on a card opens the tech card',
+  testWidgets('constructor step 1: double tap opens the biscuit colour palette',
       (t) async {
-    t.view.physicalSize = const Size(497, 850);
-    t.view.devicePixelRatio = 1;
-    addTearDown(t.view.reset);
-    await t.pumpWidget(_app(
-      const ShefTechCardProductsPage(
-        categoryId: 2,
-        categoryName: 'П/Ф Начинка',
-        showFillingCake: true,
-      ),
-      cats(),
-      products(),
-    ));
-    await t.pump(const Duration(milliseconds: 400));
-    final name = find.text('Начинка клубничная');
-    expect(name, findsOneWidget);
-    await t.tap(name);
-    await t.pump(const Duration(milliseconds: 80));
-    await t.tap(name);
-    await t.pump(const Duration(milliseconds: 400));
-    await t.pump();
-    await t.pump(const Duration(milliseconds: 600));
-    expect(t.takeException(), isNull);
-    expect(find.byType(TechCardEditorPage), findsOneWidget);
+    await open(t, const ShefConstructorPage());
+    await doubleTap(t, 'Бисквит Турецкий 18 см');
+    expect(find.text('Biskvit rangi'), findsOneWidget);
   });
-}
-
-// Palitra yig'iladigan: odatda bir qator rang, strelka hammasini ochadi.
-// Konstruktor (2-qadam): «+ Qatlam» yangi NACHINKA qatlamini qo'shadi, «×» olib
-// tashlaydi.
-void paletteAndLayerTests(
-  CategoryProviderAdmin Function() cats,
-  ProductProviderAdmin Function() products,
-) {
-  Finder swatches() => find.byWidgetPredicate((w) =>
-      w is Container &&
-      w.decoration is BoxDecoration &&
-      (w.decoration! as BoxDecoration).shape == BoxShape.circle &&
-      w.constraints?.maxWidth == 36);
 
   testWidgets('palette: collapsed by default, arrow expands and collapses',
       (t) async {
-    t.view.physicalSize = const Size(497, 850);
-    t.view.devicePixelRatio = 1;
-    addTearDown(t.view.reset);
-    await t.pumpWidget(_app(
+    await open(
+      t,
       TechCardEditorPage(
         product: _product(20, 'Начинка клубничная', 2, 'П/Ф Начинка'),
         canEditPrices: false,
         showCoatingColor: true,
       ),
-      cats(),
-      products(),
-    ));
-    await t.pump(const Duration(milliseconds: 400));
-    expect(swatches(), findsNWidgets(6));
+    );
+    expect(_swatches(), findsNWidgets(6));
     await t.tap(find.byIcon(Icons.expand_more));
     await t.pump(const Duration(milliseconds: 300));
     expect(t.takeException(), isNull);
-    expect(swatches(), findsNWidgets(kFillingPalette.length));
+    expect(_swatches(), findsNWidgets(kFillingPalette.length));
     await t.tap(find.byIcon(Icons.expand_less));
     await t.pump(const Duration(milliseconds: 300));
-    expect(swatches(), findsNWidgets(6));
+    expect(_swatches(), findsNWidgets(6));
   });
 
   testWidgets('constructor: «+ Qatlam» adds a FILLING layer, × removes it',
       (t) async {
-    t.view.physicalSize = const Size(497, 850);
-    t.view.devicePixelRatio = 1;
-    addTearDown(t.view.reset);
-    await t.pumpWidget(_app(const ShefConstructorPage(), cats(), products()));
-    await t.pump(const Duration(milliseconds: 400));
+    await open(t, const ShefConstructorPage());
     // «Biskvit + ... + ...» matni olib tashlangan; qatlam chiplari 1-qadamda
     // (biskvit) YO'Q — ular nachinka qadamida.
     expect(find.textContaining('  +  '), findsNothing);
@@ -249,5 +205,41 @@ void paletteAndLayerTests(
     expect(t.takeException(), isNull);
     expect(find.text('3-qatlam'), findsNothing);
     expect(find.text('2-qatlam'), findsOneWidget);
+  });
+
+  testWidgets('constructor: each filling layer has its own colour palette',
+      (t) async {
+    await open(t, const ShefConstructorPage());
+    await t.tap(find.text('2'));
+    await t.pump(const Duration(milliseconds: 400));
+
+    // Faol qatlam — 1-si: uning palitrasi, yig'ilgan (6 rang).
+    expect(find.text('1-qatlam rangi'), findsOneWidget);
+    expect(_swatches(), findsNWidgets(6));
+    expect(find.text('Rangsiz'), findsNothing);
+
+    // Rang tanlash → «Rangsiz» paydo bo'ladi (rang shu qatlamga yozildi).
+    await t.tap(_swatches().at(2));
+    await t.pump(const Duration(milliseconds: 300));
+    expect(t.takeException(), isNull);
+    expect(find.text('Rangsiz'), findsOneWidget);
+
+    // 2-qatlamga o'tish: o'z palitrasi, hali rangsiz — 1-qatlamniki
+    // aralashib ketmaydi.
+    await t.tap(find.text('2-qatlam'));
+    await t.pump(const Duration(milliseconds: 400));
+    expect(find.text('2-qatlam rangi'), findsOneWidget);
+    expect(find.text('Rangsiz'), findsNothing);
+
+    // 1-qatlamga qaytish — tanlangan rang saqlangan.
+    await t.tap(find.text('1-qatlam'));
+    await t.pump(const Duration(milliseconds: 400));
+    expect(find.text('Rangsiz'), findsOneWidget);
+
+    // Palitra to'liq ochilganda ham tartib buzilmaydi (suriladigan maydon).
+    await t.tap(find.byIcon(Icons.expand_more));
+    await t.pump(const Duration(milliseconds: 300));
+    expect(t.takeException(), isNull);
+    expect(_swatches(), findsNWidgets(kFillingPalette.length));
   });
 }

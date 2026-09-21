@@ -891,40 +891,6 @@ class _PinnedBoxDelegate extends SliverPersistentHeaderDelegate {
   bool shouldRebuild(_PinnedBoxDelegate old) => true;
 }
 
-// Karta rasmining o'ng yuqori burchagidagi «тех карта» tugmasi — KO'RINADIGAN
-// kirish: kartani ikki marta bosish ham ochadi, lekin buni bilmagan odam tex
-// kartaga (retsept, foto, rang palitralari) kira olmay qolardi. Bo'limlar
-// gridida ham, konstruktorda ham (shef_constructor_page.dart) ishlatiladi.
-class TechCardOpenButton extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const TechCardOpenButton({super.key, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white.withValues(alpha: 0.94),
-      shape: const CircleBorder(),
-      elevation: 1.5,
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: Tooltip(
-          message: 'Тех карта',
-          child: Padding(
-            padding: const EdgeInsets.all(6),
-            child: Icon(
-              Icons.menu_book_outlined,
-              size: 17,
-              color: Colors.brown.shade700,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // Grid kartasi («П/Ф Бисквит»): tepada rasm, ostida nom (+ ПФ belgisi),
 // тех карта holati va (berilsa) pishirish rejimi chipi. [selected] — hozir
 // 3D'da ko'rsatilayotgani (ramka ajralib turadi).
@@ -999,31 +965,20 @@ class _ProductGridCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: LayoutBuilder(
-                        builder: (context, box) => url != null
-                            ? AppNetworkImage(
-                                imageUrl: url,
-                                width: box.maxWidth,
-                                height: box.maxHeight,
-                                fit: BoxFit.cover,
-                                placeholder: (_) => placeholder,
-                                errorWidget: (_) => placeholder,
-                              )
-                            : SizedBox.expand(child: placeholder),
-                      ),
-                    ),
-                    // Ko'rinadigan kirish — ikki marta bosish bilan bir xil.
-                    Positioned(
-                      top: 4,
-                      right: 4,
-                      child: TechCardOpenButton(onTap: onDoubleTap),
-                    ),
-                  ],
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: LayoutBuilder(
+                    builder: (context, box) => url != null
+                        ? AppNetworkImage(
+                            imageUrl: url,
+                            width: box.maxWidth,
+                            height: box.maxHeight,
+                            fit: BoxFit.cover,
+                            placeholder: (_) => placeholder,
+                            errorWidget: (_) => placeholder,
+                          )
+                        : SizedBox.expand(child: placeholder),
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
