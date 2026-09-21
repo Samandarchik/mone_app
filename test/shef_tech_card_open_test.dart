@@ -172,7 +172,8 @@ void doubleTapTests(
 }
 
 // Palitra yig'iladigan: odatda bir qator rang, strelka hammasini ochadi.
-// Konstruktor: «+ Qatlam» yangi biskvit qatlamini qo'shadi, «×» olib tashlaydi.
+// Konstruktor (2-qadam): «+ Qatlam» yangi NACHINKA qatlamini qo'shadi, «×» olib
+// tashlaydi.
 void paletteAndLayerTests(
   CategoryProviderAdmin Function() cats,
   ProductProviderAdmin Function() products,
@@ -208,33 +209,45 @@ void paletteAndLayerTests(
     expect(swatches(), findsNWidgets(6));
   });
 
-  testWidgets('constructor: «+ Qatlam» adds a biscuit layer, × removes it',
+  testWidgets('constructor: «+ Qatlam» adds a FILLING layer, × removes it',
       (t) async {
     t.view.physicalSize = const Size(497, 850);
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.reset);
     await t.pumpWidget(_app(const ShefConstructorPage(), cats(), products()));
     await t.pump(const Duration(milliseconds: 400));
-    expect(find.text('1-qatlam'), findsOneWidget);
-    expect(find.text('2-qatlam'), findsNothing);
-    // «Biskvit + ... + ...» matni olib tashlangan.
+    // «Biskvit + ... + ...» matni olib tashlangan; qatlam chiplari 1-qadamda
+    // (biskvit) YO'Q — ular nachinka qadamida.
     expect(find.textContaining('  +  '), findsNothing);
+    expect(find.text('1-qatlam'), findsNothing);
+    expect(find.text('Qatlam'), findsNothing);
 
+    // 2-qadam: odatda 2 ta nachinka qatlami; «+ Qatlam» uchinchisini qo'shadi.
+    await t.tap(find.text('2'));
+    await t.pump(const Duration(milliseconds: 400));
+    expect(find.text('1-qatlam'), findsOneWidget);
+    expect(find.text('2-qatlam'), findsOneWidget);
+    expect(find.text('3-qatlam'), findsNothing);
     await t.tap(find.text('Qatlam'));
     await t.pump(const Duration(milliseconds: 400));
     expect(t.takeException(), isNull);
-    expect(find.text('2-qatlam'), findsOneWidget);
+    expect(find.text('3-qatlam'), findsOneWidget);
 
-    // Ko'p qatlam bilan 2- va 3-qadam ham xatosiz chiziladi.
-    for (final step in ['2', '3', '1']) {
+    // Ko'p qatlam bilan 3-qadam (qoplama) ham xatosiz chiziladi.
+    for (final step in ['3', '1', '2']) {
       await t.tap(find.text(step));
       await t.pump(const Duration(milliseconds: 400));
       expect(t.takeException(), isNull);
     }
 
+    // Qatlamlar qatori gorizontal suriladi — oxirgi «×» ekrandan tashqarida
+    // bo'lishi mumkin.
+    await t.ensureVisible(find.byIcon(Icons.close).last);
+    await t.pump(const Duration(milliseconds: 300));
     await t.tap(find.byIcon(Icons.close).last);
     await t.pump(const Duration(milliseconds: 400));
     expect(t.takeException(), isNull);
-    expect(find.text('2-qatlam'), findsNothing);
+    expect(find.text('3-qatlam'), findsNothing);
+    expect(find.text('2-qatlam'), findsOneWidget);
   });
 }

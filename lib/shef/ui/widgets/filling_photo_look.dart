@@ -558,3 +558,31 @@ class _FillingPhotoLookBuilderState extends State<FillingPhotoLookBuilder> {
   @override
   Widget build(BuildContext context) => widget.builder(context, _look);
 }
+
+// Bir nechta foto uchun (konstruktor: har nachinka qatlamining o'z mahsuloti
+// va o'z fotosi bo'lishi mumkin): [urls] dagi har URL tahlil qilinib,
+// builder'ga o'sha tartibda beriladi (yuklanmagan / foto yo'q / rang
+// topilmagan joyda null). Ichida FillingPhotoLookBuilder'lar ketma-ket
+// joylashtiriladi — kesh va qayta yuklash mantiqi o'shaniki.
+class FillingPhotoLooksBuilder extends StatelessWidget {
+  final List<String?> urls;
+  final Widget Function(BuildContext context, List<FillingLook?> looks)
+      builder;
+
+  const FillingPhotoLooksBuilder({
+    super.key,
+    required this.urls,
+    required this.builder,
+  });
+
+  Widget _level(BuildContext context, int i, List<FillingLook?> acc) {
+    if (i >= urls.length) return builder(context, acc);
+    return FillingPhotoLookBuilder(
+      url: urls[i],
+      builder: (context, look) => _level(context, i + 1, [...acc, look]),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => _level(context, 0, const []);
+}

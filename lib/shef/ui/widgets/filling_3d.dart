@@ -201,22 +201,6 @@ class FillingLook {
       );
 }
 
-// Konstruktordagi bitta YARUS: biskvit o'lchami va korj ranglari.
-@immutable
-class CakeTier {
-  final BiscuitDims dims;
-  final BiscuitPalette sponge;
-
-  const CakeTier(this.dims, this.sponge);
-
-  @override
-  bool operator ==(Object other) =>
-      other is CakeTier && other.dims == dims && other.sponge == sponge;
-
-  @override
-  int get hashCode => Object.hash(dims, sponge);
-}
-
 class Filling3DView extends StatelessWidget {
   // Тех карта nomi/tarkibidan olingan rang (foto yo'q yoki fotodan rang
   // topilmagan holat uchun).
@@ -233,10 +217,9 @@ class Filling3DView extends StatelessWidget {
   final BiscuitPalette sponge;
   // Konstruktor: tort o'lchami tanlangan biskvitniki (painter.dims).
   final BiscuitDims? dims;
-  // Konstruktor: ustma-ust yaruslar (painter.tiers) va «faqat biskvit»
-  // rejimi (painter.plain).
-  final List<CakeTier>? tiers;
-  final bool plain;
+  // Konstruktor: nachinka QATLAMLARI (tepadan pastga) — har biri o'z
+  // yo'llari bilan (painter.fillings). null — [look] dan 2 qatlam.
+  final List<List<FillingBand>>? fillings;
   final double height;
 
   const Filling3DView({
@@ -247,8 +230,7 @@ class Filling3DView extends StatelessWidget {
     this.coatCut = false,
     this.sponge = BiscuitPalette.classic,
     this.dims,
-    this.tiers,
-    this.plain = false,
+    this.fillings,
     this.height = 240,
   });
 
@@ -265,8 +247,7 @@ class Filling3DView extends StatelessWidget {
           coatCut: coatCut,
           sponge: sponge,
           dims: dims,
-          tiers: tiers,
-          plain: plain,
+          fillings: fillings,
           tilt: tilt,
           rotation: rotation,
         ),
@@ -361,14 +342,11 @@ class FillingCakePainter extends CustomPainter {
   // o'tganda tort kattalashib/kichrayib ketmaydi, nachinka qatlamlari shu
   // balandlik ichiga sig'diriladi. null — bo'limlardagi standart o'lcham.
   final BiscuitDims? dims;
-  // Konstruktor: YARUSLAR — pastdan tepaga ustma-ust qo'yilgan biskvitlar,
-  // har biri o'z o'lchami va rangida. Har yarus xuddi yakka tortdek
-  // chiziladi (3 korj + 2 nachinka / qoplama), hammasi bitta masshtabda va
-  // bitta burchakdan kesiladi. Berilsa [dims]/[sponge] o'rnida ishlaydi.
-  final List<CakeTier>? tiers;
-  // true — yaruslar FAQAT biskvit (nachinkasiz, kesilmagan): konstruktorning
-  // 1-qadami, bir nechta biskvit qatlami bo'lganda.
-  final bool plain;
+  // Konstruktor: nachinka QATLAMLARI (tepadan pastga), har biri o'z
+  // yo'llari (rang + ulush) bilan. N ta nachinka → N+1 ta korj, hammasi teng
+  // qalinlikda va tort balandligi ICHIGA sig'diriladi. null — [look] dan
+  // odatdagi 2 qatlam (bandsOf(0), bandsOf(1)).
+  final List<List<FillingBand>>? fillings;
   final bool slice;
   final double tilt;
   final double rotation;
@@ -379,15 +357,13 @@ class FillingCakePainter extends CustomPainter {
     this.coatCut = false,
     this.sponge = BiscuitPalette.classic,
     this.dims,
-    this.tiers,
-    this.plain = false,
+    this.fillings,
     this.slice = false,
     required this.tilt,
     required this.rotation,
   });
 
-  // Hozir chizilayotgan yarusning korj ranglari.
-  BiscuitPalette _sponge = BiscuitPalette.classic;
+  BiscuitPalette get _sponge => sponge;
   // Qoplama qalinligi: tort balandligi / radiusiga nisbatan ulush.
   static const double _coatPart = 0.075;
   // Kesib olingan bo'lak: markazi va kengligi (radian, tort o'qida).
@@ -395,14 +371,25 @@ class FillingCakePainter extends CustomPainter {
   // ikkala kesim yuzi ham ko'rinadi (kartadagi statik rasm shunday).
   static const double _wedgeCenter = 0;
   static const double _wedgeWidth = 1.05;
-  // Qatlamlar pastdan tepaga emas, TEPADAN pastga: (ulush, nachinkami).
-  static const List<(double, bool)> _layers = [
-    (0.20, false),
-    (0.20, true),
-    (0.20, false),
-    (0.20, true),
-    (0.20, false),
+  // Nachinka qatlamlari soni (odatda 2).
+  int get _fillCount => fillings?.length ?? 2;
+
+  // Qatlamlar TEPADAN pastga: (ulush, nachinkami) — korj, nachinka, korj ...
+  // N nachinka → 2N+1 ta teng qism.
+  late final List<(double, bool)> _layers = [
+    for (var i = 0; i < 2 * _fillCount + 1; i++)
+      (1 / (2 * _fillCount + 1), i.isOdd),
   ];
+
+  static bool _sameFillings(
+      List<List<FillingBand>>? a, List<List<FillingBand>>? b) {
+    if (a == null || b == null) return a == b;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (!listEquals(a[i], b[i])) return false;
+    }
+    return true;
+  }
 
   // Bitta bo'lak (slice): burilmagan holatda yoyi orqada, uchi tomoshabinga
   // qaragan — ikkala kesim yuzi ko'rinadi (biri keng, biri tor).
@@ -424,12 +411,6 @@ class FillingCakePainter extends CustomPainter {
     final plateRx = math.min(size.width * 0.42, areaH * 0.62);
     final plateRy = plateRx * tilt;
     final plateThick = plateRx * 0.05;
-    _sponge = sponge;
-    final tiers = this.tiers;
-    if (tiers != null && tiers.isNotEmpty) {
-      _paintTiers(canvas, tiers, midX, areaH, plateRx, plateRy, plateThick);
-      return;
-    }
     // Qoplangan tort («Покрытие») har doim BUTUN chiziladi — bo'lak yo'q.
     final asSlice = slice && coat == null;
     // Bo'lak yakka o'zi turadi — kattaroq chiziladi.
@@ -477,57 +458,12 @@ class FillingCakePainter extends CustomPainter {
     _paintBody(canvas);
   }
 
-  // Yaruslar: hammasi BITTA masshtabda (sm → px, eng keng yarus bo'yicha —
-  // BiscuitPainter bilan bir xil qoida); balandliklar yig'indisi rasmga
-  // sig'masa hammasi bir xil nisbatda kichraytiriladi. Pastdan tepaga
-  // chiziladi — yuqori yarus pastkisining tepasini to'sadi.
-  void _paintTiers(Canvas canvas, List<CakeTier> tiers, double midX,
-      double areaH, double plateRx, double plateRy, double plateThick) {
-    double halfOf(BiscuitDims d) =>
-        (d.rect ? math.max(d.widthCm, d.lengthCm) : d.diameterCm) / 2;
-    final maxHalf = tiers.map((t) => halfOf(t.dims)).reduce(math.max);
-    final sumH = tiers.fold<double>(0, (s, t) => s + t.dims.heightCm);
-    var pxPerCm = plateRx * 0.88 / math.max(maxHalf, 14);
-    final room = areaH * 0.96 - plateRy - plateThick;
-    final need = sumH * pxPerCm + maxHalf * pxPerCm * tilt;
-    if (need > room) pxPerCm *= room / need;
-
-    final total =
-        sumH * pxPerCm + maxHalf * pxPerCm * tilt + plateRy + plateThick;
-    final plateY = (areaH + total) / 2 - plateRy - plateThick;
-    paintPlate3D(canvas, Offset(midX, plateY), plateRx, plateRy, plateThick);
-
-    _cx = midX;
-    final baseR = halfOf(tiers.first.dims) * pxPerCm;
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(_cx, plateY + baseR * tilt * 0.12),
-        width: baseR * 2.1,
-        height: baseR * tilt * 2.2,
-      ),
-      Paint()
-        ..color = Colors.black.withValues(alpha: 0.13)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
-    );
-
-    var bottom = plateY;
-    for (final tier in tiers) {
-      _sponge = tier.sponge;
-      _r = halfOf(tier.dims) * pxPerCm;
-      _h = tier.dims.heightCm * pxPerCm;
-      _top = bottom - _h;
-      _paintBody(canvas);
-      bottom = _top;
-    }
-  }
-
   // Bitta tort tanasi (_cx, _r, _h, _top, _sponge o'rnatilgan holda).
   void _paintBody(Canvas canvas) {
-    // Faqat biskvit (konstruktor 1-qadami, ko'p qatlam): kesilmagan.
     // «Покрытие»: tort BUTUN — kesilmagan, bo'laksiz; faqat qoplangan devor
     // (oldingi yarim aylana to'liq) va qoplangan tepa. Konstruktorda
     // ([coatCut]) esa pastdagi umumiy yo'l bilan bo'lagi kesiladi.
-    if (plain || (coat != null && !coatCut)) {
+    if (coat != null && !coatCut) {
       _paintWall(canvas, -math.pi / 2, math.pi / 2);
       _paintTop(canvas, 0, 2 * math.pi);
       return;
@@ -627,7 +563,7 @@ class FillingCakePainter extends CustomPainter {
   // [k]-nachinka qatlamining yo'llari: (rang, boshi, oxiri) — [from..to]
   // oralig'ida tepadan pastga, ulushlariga mutanosib.
   List<(Color, double, double)> _stripes(int k, double from, double to) {
-    final bands = look.bandsOf(k);
+    final bands = fillings?[k] ?? look.bandsOf(k);
     final total = bands.fold<double>(0, (s, b) => s + b.part);
     final out = <(Color, double, double)>[];
     var y = from;
@@ -791,18 +727,14 @@ class FillingCakePainter extends CustomPainter {
     canvas.save();
     canvas.clipPath(whole);
     final coat = this.coat;
-    if (coat != null && !plain) {
+    if (coat != null) {
       _paintCoatedWall(canvas, whole, coat);
       canvas.restore();
       return;
     }
     var f = 0.0;
     var fillIdx = 0;
-    if (plain) {
-      // Faqat biskvit: devor butunlay korj rangida (nachinka yo'llarisiz).
-      canvas.drawPath(whole, Paint()..color = _sponge.sponge);
-    }
-    for (final (part, isFilling) in plain ? const <(double, bool)>[] : _layers) {
+    for (final (part, isFilling) in _layers) {
       final band = Path()
         ..addPolygon([
           ...arc(_top + f * _h),
@@ -840,7 +772,7 @@ class FillingCakePainter extends CustomPainter {
     final pore = Paint()..color = _sponge.pore.withValues(alpha: 0.55);
     for (var i = 0; i < 220; i++) {
       final a = rnd.nextDouble() * 2 * math.pi;
-      final layer = rnd.nextInt(3) * 2; // 0, 2, 4 — biskvit qatlamlari
+      final layer = rnd.nextInt(_fillCount + 1) * 2; // juft — korjlar
       final v = 0.15 + rnd.nextDouble() * 0.7;
       final size = 1.0 + rnd.nextDouble() * 1.6;
       final t = a + rotation;
@@ -850,7 +782,7 @@ class FillingCakePainter extends CustomPainter {
       for (var k = 0; k < layer; k++) {
         y += _layers[k].$1;
       }
-      y = plain ? v * _h : (y + v * _layers[layer].$1) * _h;
+      y = (y + v * _layers[layer].$1) * _h;
       canvas.drawOval(
         Rect.fromCenter(
           center: _rim(t, _top + y),
@@ -946,7 +878,7 @@ class FillingCakePainter extends CustomPainter {
       width: _r * 2,
       height: _r * 2 * tilt,
     );
-    final coat = plain ? null : this.coat;
+    final coat = this.coat;
     if (coat != null) {
       canvas.drawPath(
         sector,
@@ -1006,8 +938,7 @@ class FillingCakePainter extends CustomPainter {
       old.coatCut != coatCut ||
       old.sponge != sponge ||
       old.dims != dims ||
-      old.plain != plain ||
-      !listEquals(old.tiers, tiers) ||
+      !_sameFillings(old.fillings, fillings) ||
       old.slice != slice ||
       old.tilt != tilt ||
       old.rotation != rotation;
