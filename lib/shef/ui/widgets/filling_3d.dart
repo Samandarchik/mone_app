@@ -8,17 +8,37 @@
 // slivka/tvorog kabi neytral asos faqat boshqa hech narsa topilmasa olinadi.
 // Tex kartada FOTO bo'lsa (biscuit_photo_url — «Rasm qo'shish») nachinka
 // qatlamlari rangi shu fotodan olinadi va nom/tarkibdan USTUN turadi
-// (filling_photo_look.dart; 2 xil rang topilsa — ikki qatlam ikki rangda).
+// (filling_photo_look.dart): kesim fotosidan nachinka qatlamining yo'llari
+// (krem – jele – krem), ranglari va nisbati olinadi (FillingBand).
 // Fotoning o'zi, meva bo'laklari va boshqa bezak CHIZILMAYDI — faqat rang.
 // Filling3DView — Rotating3DView (cake_3d.dart) qo'lda rejimida;
 // FillingThumb — grid kartasi uchun kichik statik rasm.
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:uz_ai_dev/admin/model/tech_card.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/cake_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/filling_photo_look.dart';
+
+// Nachinka qatlami ichidagi bitta yo'l: rangi va qatlamdagi ulushi.
+// Masalan fotoda ikki korj orasi «krem – jele – krem» bo'lsa, nachinka
+// qatlami uch yo'ldan iborat (oq, qizil, oq).
+@immutable
+class FillingBand {
+  final Color color;
+  final double part;
+
+  const FillingBand(this.color, this.part);
+
+  @override
+  bool operator ==(Object other) =>
+      other is FillingBand && other.color == color && other.part == part;
+
+  @override
+  int get hashCode => Object.hash(color, part);
+}
 
 // Nachinka rangi (тех картадан; tex kartada foto bo'lsa — fotodan).
 class FillingLook {
@@ -27,8 +47,27 @@ class FillingLook {
   // Faqat FOTODAN olinganda to'ladi: masalan «kaymoq + shokolad» nachinkada
   // bir qatlam oqish, ikkinchisi jigarrang (filling_photo_look.dart).
   final Color? color2;
+  // Fotodagi kesimdan olingan yo'llar (tepadan pastga): 1-nachinka qatlami
+  // va (boshqacha bo'lsa) 2-si. null — qatlam bitta rangda ([color]).
+  final List<FillingBand>? bands1;
+  final List<FillingBand>? bands2;
 
-  const FillingLook(this.color, [this.color2]);
+  const FillingLook(this.color, [this.color2])
+      : bands1 = null,
+        bands2 = null;
+
+  // Fotodagi kesimdan: [color] — 1-qatlamning eng keng yo'li.
+  FillingLook.layered(List<FillingBand> first, [List<FillingBand>? second])
+      : color = first.reduce((a, b) => b.part > a.part ? b : a).color,
+        color2 = null,
+        bands1 = first,
+        bands2 = second;
+
+  // [k]-nachinka qatlami (tepadan: 0, 1) yo'llari.
+  List<FillingBand> bandsOf(int k) {
+    if (k == 0) return bands1 ?? [FillingBand(color, 1)];
+    return bands2 ?? bands1 ?? [FillingBand(color2 ?? color, 1)];
+  }
 
   // Hech narsa mos kelmasa — neytral qaymoqrang.
   static const FillingLook neutral = FillingLook(Color(0xFFF6E7C8));
@@ -119,10 +158,19 @@ class FillingLook {
 
   @override
   bool operator ==(Object other) =>
-      other is FillingLook && other.color == color && other.color2 == color2;
+      other is FillingLook &&
+      other.color == color &&
+      other.color2 == color2 &&
+      listEquals(other.bands1, bands1) &&
+      listEquals(other.bands2, bands2);
 
   @override
-  int get hashCode => Object.hash(color, color2);
+  int get hashCode => Object.hash(
+        color,
+        color2,
+        bands1 == null ? null : Object.hashAll(bands1!),
+        bands2 == null ? null : Object.hashAll(bands2!),
+      );
 }
 
 class Filling3DView extends StatelessWidget {
@@ -369,8 +417,20 @@ class FillingCakePainter extends CustomPainter {
     return a;
   }
 
-  // [k]-nachinka qatlami rangi (tepadan: 0, 1).
-  Color _fill(int k) => k == 0 ? look.color : (look.color2 ?? look.color);
+  // [k]-nachinka qatlamining yo'llari: (rang, boshi, oxiri) — [from..to]
+  // oralig'ida tepadan pastga, ulushlariga mutanosib.
+  List<(Color, double, double)> _stripes(int k, double from, double to) {
+    final bands = look.bandsOf(k);
+    final total = bands.fold<double>(0, (s, b) => s + b.part);
+    final out = <(Color, double, double)>[];
+    var y = from;
+    for (final b in bands) {
+      final next = y + (to - from) * b.part / total;
+      out.add((b.color, y, next));
+      y = next;
+    }
+    return out;
+  }
 
   // Nachinka va biskvit orasidagi chegara chizig'i — nachinkaning to'qroq
   // tusi: och (qaymoq) nachinka ham biskvitga «qo'shilib» ketmaydi.
@@ -408,13 +468,36 @@ class FillingCakePainter extends CustomPainter {
       if (isFilling) {
         // Nachinka — TOZA rangda (oqartiruvchi gradientsiz), biskvitdan
         // aniq chegara chiziqlari bilan ajratilgan.
-        final fill = _fill(fillIdx++);
-        canvas.drawPath(band, Paint()..color = fill);
-        final edge = Paint()
-          ..strokeWidth = math.max(1.0, _h * 0.014)
-          ..color = _edgeOf(fill);
-        canvas.drawLine(axis.translate(0, y0), rim.translate(0, y0), edge);
-        canvas.drawLine(axis.translate(0, y1), rim.translate(0, y1), edge);
+        // Fotodan olingan bo'lsa qatlam bir necha yo'ldan iborat (krem –
+        // jele – krem).
+        final stripes = _stripes(fillIdx++, y0, y1);
+        for (final (color, a, b) in stripes) {
+          canvas.drawPath(
+            Path()
+              ..addPolygon([
+                axis.translate(0, a),
+                rim.translate(0, a),
+                rim.translate(0, b),
+                axis.translate(0, b),
+              ], true),
+            Paint()..color = color,
+          );
+        }
+        final w = math.max(1.0, _h * 0.014);
+        canvas.drawLine(
+          axis.translate(0, y0),
+          rim.translate(0, y0),
+          Paint()
+            ..strokeWidth = w
+            ..color = _edgeOf(stripes.first.$1),
+        );
+        canvas.drawLine(
+          axis.translate(0, y1),
+          rim.translate(0, y1),
+          Paint()
+            ..strokeWidth = w
+            ..color = _edgeOf(stripes.last.$1),
+        );
       } else {
         canvas.drawPath(band, Paint()..color = _sponge.spongeLight);
         // Kesimdagi g'ovaklar.
@@ -473,17 +556,27 @@ class FillingCakePainter extends CustomPainter {
           ...arc(_top + (f + part) * _h).reversed,
         ], true);
       if (isFilling) {
-        final fill = _fill(fillIdx++);
-        canvas.drawPath(band, Paint()..color = fill);
+        final stripes =
+            _stripes(fillIdx++, _top + f * _h, _top + (f + part) * _h);
+        for (final (color, a, b) in stripes) {
+          canvas.drawPath(
+            Path()..addPolygon([...arc(a), ...arc(b).reversed], true),
+            Paint()..color = color,
+          );
+        }
         // Biskvit bilan aniq chegara (yuqori va pastki yoy bo'ylab).
-        final edge = Paint()
+        Paint edge(Color c) => Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = math.max(1.0, _h * 0.014)
-          ..color = _edgeOf(fill);
+          ..color = _edgeOf(c);
         canvas.drawPath(
-            Path()..addPolygon(arc(_top + f * _h), false), edge);
+          Path()..addPolygon(arc(_top + f * _h), false),
+          edge(stripes.first.$1),
+        );
         canvas.drawPath(
-            Path()..addPolygon(arc(_top + (f + part) * _h), false), edge);
+          Path()..addPolygon(arc(_top + (f + part) * _h), false),
+          edge(stripes.last.$1),
+        );
       } else {
         canvas.drawPath(band, Paint()..color = _sponge.sponge);
       }
