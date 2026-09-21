@@ -616,7 +616,7 @@ class FillingCakePainter extends CustomPainter {
     canvas.clipPath(whole);
     final coat = this.coat;
     if (coat != null) {
-      _paintCoatedWall(canvas, whole, arc, coat);
+      _paintCoatedWall(canvas, whole, coat);
       canvas.restore();
       return;
     }
@@ -715,22 +715,10 @@ class FillingCakePainter extends CustomPainter {
   }
 
   // Qoplangan tort devori: qatlamlar ko'rinmaydi — butun devor bir tekis
-  // qoplama rangida, shpatel izlari (ingichka gorizontal chiziqlar) bilan.
-  void _paintCoatedWall(Canvas canvas, Path whole,
-      List<Offset> Function(double y) arc, Color coat) {
+  // qoplama rangida va SILLIQ (chiziqsiz) — hajmni faqat soya beradi.
+  void _paintCoatedWall(Canvas canvas, Path whole, Color coat) {
+    // Devor SILLIQ — hech qanday chiziq/izsiz, faqat hajm soyasi.
     canvas.drawPath(whole, Paint()..color = coat);
-    // Shpatel izlari — navbatma-navbat ochroq / to'qroq.
-    for (var i = 1; i < 9; i++) {
-      final y = _top + _h * i / 9;
-      canvas.drawPath(
-        Path()..addPolygon(arc(y), false),
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = math.max(0.6, _h * 0.008)
-          ..color = (i.isEven ? Colors.white : Colors.black)
-              .withValues(alpha: i.isEven ? 0.16 : 0.07),
-      );
-    }
     final bottomOval = Rect.fromCenter(
       center: Offset(_cx, _top + _h),
       width: _r * 2,
