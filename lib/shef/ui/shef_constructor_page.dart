@@ -23,6 +23,7 @@ import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/admin/model/product_model.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
+import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:uz_ai_dev/shef/model/production_model.dart';
@@ -69,6 +70,25 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
       final shef = context.read<ShefProvider>();
       if (shef.pfStock.isEmpty) shef.fetchPfStock();
     });
+  }
+
+  // Mahsulotning тех картаси — bo'limlardagi bilan AYNAN bir xil rejimda
+  // (narxsiz), hozirgi qadamga mos bo'limlar bilan: biskvit — foto; nachinka
+  // — foto + 2 ta nachinka palitrasi; qoplama — «Покрытие rangi» palitrasi.
+  // Saqlangach provider xotirada yangilanadi va 3D o'zi qayta chiziladi.
+  void _openTechCard(ProductModelAdmin product) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TechCardEditorPage(
+          product: product,
+          canEditPrices: false,
+          showBiscuitPhoto: _step != 2,
+          showFillingColor: _step == 1,
+          showCoatingColor: _step == 2,
+        ),
+      ),
+    );
   }
 
   static ProductModelAdmin? _pick(List<ProductModelAdmin> list, int? id) {
@@ -183,6 +203,7 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
                                 _coatingId = p.id;
                               }
                             }),
+                            onOpenTechCard: () => _openTechCard(p),
                           );
                         },
                       ),
@@ -333,12 +354,15 @@ class _PickCard extends StatelessWidget {
   final int step;
   final bool selected;
   final VoidCallback onTap;
+  // Shu mahsulotning тех картаси (burchakdagi tugma yoki ikki marta bosish).
+  final VoidCallback onOpenTechCard;
 
   const _PickCard({
     required this.product,
     required this.step,
     required this.selected,
     required this.onTap,
+    required this.onOpenTechCard,
   });
 
   @override
@@ -372,6 +396,8 @@ class _PickCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
+        // Bo'limlardagidek: ikki marta bosish — тех карта.
+        onDoubleTap: onOpenTechCard,
         child: Container(
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
@@ -384,20 +410,31 @@ class _PickCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: LayoutBuilder(
-                    builder: (context, box) => url != null
-                        ? AppNetworkImage(
-                            imageUrl: url,
-                            width: box.maxWidth,
-                            height: box.maxHeight,
-                            fit: BoxFit.cover,
-                            placeholder: (_) => drawn,
-                            errorWidget: (_) => drawn,
-                          )
-                        : SizedBox.expand(child: drawn),
-                  ),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: LayoutBuilder(
+                        builder: (context, box) => url != null
+                            ? AppNetworkImage(
+                                imageUrl: url,
+                                width: box.maxWidth,
+                                height: box.maxHeight,
+                                fit: BoxFit.cover,
+                                placeholder: (_) => drawn,
+                                errorWidget: (_) => drawn,
+                              )
+                            : SizedBox.expand(child: drawn),
+                      ),
+                    ),
+                    // Ko'rinadigan kirish: тех карта (palitra, foto, retsept).
+                    Positioned(
+                      top: 3,
+                      right: 3,
+                      child: TechCardOpenButton(onTap: onOpenTechCard),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 5),
