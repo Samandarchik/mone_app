@@ -222,6 +222,9 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
       look: look,
       photoUrl: photoUrl,
       sponge: palette,
+      // Tort o'lchami 1-qadamdagi biskvitniki — qadam almashganda
+      // o'zgarmaydi; nachinka qatlamlari shu balandlikka sig'diriladi.
+      dims: BiscuitDims.fromTechCard(biscuit?.techCard),
       // 3-qadam: tashqaridan qoplangan, lekin bo'lagi kesilgan — ichidagi
       // nachinka ham ko'rinadi.
       coat: _step == 2

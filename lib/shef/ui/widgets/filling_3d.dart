@@ -135,9 +135,15 @@ class FillingLook {
   //     nachinka aynan shu rangda, foto tahlil QILINMAYDI (URL null);
   //  2) tex kartadagi foto — qatlamlar/ranglar fotodan (URL qaytadi);
   //  3) nom / blok / masalliqlardan (detect).
+  // Palitra IKKITA: filling_color — yuqori (1-) nachinka qatlami,
+  // filling_color2 — pastki (2-) qatlam. 2-si tanlanmasa u 1-si bilan bir
+  // xil; faqat 2-si tanlangan bo'lsa 1-qatlam nom/tarkibdan olinadi.
   static (FillingLook, String?) resolve(String name, TechCard? card) {
-    final picked = fillingColorFromHex(card?.fillingColor ?? '');
-    if (picked != null) return (FillingLook(picked), null);
+    final first = fillingColorFromHex(card?.fillingColor ?? '');
+    final second = fillingColorFromHex(card?.fillingColor2 ?? '');
+    if (first != null || second != null) {
+      return (FillingLook(first ?? detect(name, card).color, second), null);
+    }
     return (detect(name, card), biscuitPhotoUrlOf(card));
   }
 
@@ -209,6 +215,8 @@ class Filling3DView extends StatelessWidget {
   // korjlar tanlangan biskvit rangida (painter.sponge).
   final bool coatCut;
   final BiscuitPalette sponge;
+  // Konstruktor: tort o'lchami tanlangan biskvitniki (painter.dims).
+  final BiscuitDims? dims;
   final double height;
 
   const Filling3DView({
@@ -218,6 +226,7 @@ class Filling3DView extends StatelessWidget {
     this.coat,
     this.coatCut = false,
     this.sponge = BiscuitPalette.classic,
+    this.dims,
     this.height = 240,
   });
 
@@ -233,6 +242,7 @@ class Filling3DView extends StatelessWidget {
           coat: coat,
           coatCut: coatCut,
           sponge: sponge,
+          dims: dims,
           tilt: tilt,
           rotation: rotation,
         ),
@@ -322,6 +332,11 @@ class FillingCakePainter extends CustomPainter {
   // Biskvit (korj) ranglari — konstruktorda tanlangan biskvit turidan
   // (shokoladli, qizil baxmal ...). Bo'limlarda — klassik.
   final BiscuitPalette sponge;
+  // Konstruktor: tort o'lchami TANLANGAN BISKVITNIKI (diametr, balandlik —
+  // BiscuitPainter bilan AYNAN bir xil masshtab): 1-qadamdan 2/3-qadamga
+  // o'tganda tort kattalashib/kichrayib ketmaydi, nachinka qatlamlari shu
+  // balandlik ichiga sig'diriladi. null — bo'limlardagi standart o'lcham.
+  final BiscuitDims? dims;
   final bool slice;
   final double tilt;
   final double rotation;
@@ -331,6 +346,7 @@ class FillingCakePainter extends CustomPainter {
     this.coat,
     this.coatCut = false,
     this.sponge = BiscuitPalette.classic,
+    this.dims,
     this.slice = false,
     required this.tilt,
     required this.rotation,
@@ -378,6 +394,19 @@ class FillingCakePainter extends CustomPainter {
     // Bo'lak yakka o'zi turadi — kattaroq chiziladi.
     _r = plateRx * (asSlice ? 1.0 : 0.66);
     _h = math.min(plateRx * 0.56, areaH * 0.42);
+    final dims = this.dims;
+    if (dims != null && !asSlice) {
+      // BiscuitPainter'dagi masshtabning O'ZI (sm → px): eng katta yarim
+      // o'lcham patnisning ~88% iga sig'adi, 14 sm dan kichigi haqiqiy
+      // nisbatda kichikroq. To'rtburchak biskvit — uzun tomoni bo'yicha.
+      final halfCm = (dims.rect
+              ? math.max(dims.widthCm, dims.lengthCm)
+              : dims.diameterCm) /
+          2;
+      final pxPerCm = plateRx * 0.88 / math.max(halfCm, 14);
+      _r = halfCm * pxPerCm;
+      _h = math.min(dims.heightCm * pxPerCm, areaH * 0.34);
+    }
 
     final footprint = (asSlice ? plateRx * 0.5 : _r) * tilt;
     final total = _h + footprint + plateRy + plateThick;
@@ -881,6 +910,7 @@ class FillingCakePainter extends CustomPainter {
       old.coat != coat ||
       old.coatCut != coatCut ||
       old.sponge != sponge ||
+      old.dims != dims ||
       old.slice != slice ||
       old.tilt != tilt ||
       old.rotation != rotation;

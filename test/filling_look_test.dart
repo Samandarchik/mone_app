@@ -17,6 +17,7 @@ TechCard _card(List<TechItem> items, {String base = 'Основа'}) =>
 void main() {
   paletteTests();
   coatingTests();
+  twoLayerTests();
   test('nom eng ustun — masalliqlarga qaralmaydi', () {
     final card = _card(const [
       TechItem(name: 'Пюре клубника', unit: 'g', amount: 900),
@@ -140,5 +141,43 @@ void coatingTests() {
     expect(back.fillingColor, '#5A3420');
     expect(TechCard.fromJson(const {}).coatingColor, '');
     expect(card.copyWith(bakeTimeMin: 5).coatingColor, '#F8BBD0');
+  });
+}
+
+// Nachinka 2 qatlam — har biriga o'z palitrasi (filling_color / _color2).
+void twoLayerTests() {
+  const pink = Color(0xFFF8BBD0);
+
+  test('resolve: yuqori qatlam pushti, pastki shokolad', () {
+    const card = TechCard(fillingColor: '#F8BBD0', fillingColor2: '#5A3420');
+    final (look, photo) = FillingLook.resolve('Начинка №1', card);
+    expect(photo, isNull);
+    expect(look.bandsOf(0).single.color, pink);
+    expect(look.bandsOf(1).single.color, _chocolate);
+  });
+
+  test('resolve: 2-qatlam tanlanmagan — ikkala qatlam bir xil', () {
+    const card = TechCard(fillingColor: '#F8BBD0');
+    final (look, _) = FillingLook.resolve('Начинка №1', card);
+    expect(look.bandsOf(0).single.color, pink);
+    expect(look.bandsOf(1).single.color, pink);
+  });
+
+  test('resolve: faqat 2-qatlam tanlangan — 1-qatlam nom/tarkibdan', () {
+    const card = TechCard(fillingColor2: '#5A3420');
+    final (look, photo) = FillingLook.resolve('Начинка клубничная', card);
+    expect(photo, isNull);
+    expect(look.bandsOf(0).single.color, _strawberry);
+    expect(look.bandsOf(1).single.color, _chocolate);
+  });
+
+  test('TechCard: filling_color2 JSON\'da saqlanadi', () {
+    const card = TechCard(fillingColor: '#F8BBD0', fillingColor2: '#5A3420');
+    final back = TechCard.fromJson(card.toJson());
+    expect(card.toJson()['filling_color2'], '#5A3420');
+    expect(back.fillingColor2, '#5A3420');
+    expect(back.fillingColor, '#F8BBD0');
+    expect(TechCard.fromJson(const {}).fillingColor2, '');
+    expect(card.copyWith(bakeTimeMin: 5).fillingColor2, '#5A3420');
   });
 }

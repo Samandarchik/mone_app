@@ -291,6 +291,10 @@ class TechCard {
   // Shef «П/Ф Начинка» 3D rasmida nachinka shu rangda chiziladi — foto va
   // nom/tarkibdan USTUN (filling_3d.dart). JSON: filling_color.
   final String fillingColor;
+  // IKKINCHI (pastki) nachinka qatlami rangi: "#RRGGBB" yoki '' (yuqori
+  // qatlam bilan bir xil). Tortda nachinka 2 qatlam: fillingColor — yuqori,
+  // fillingColor2 — pastki (masalan pushti + shokolad). JSON: filling_color2.
+  final String fillingColor2;
   // «Покрытие» bo'limi uchun palitradan tanlangan rang: "#RRGGBB" yoki ''.
   // Shu mahsulot tortni TASHQARIDAN qoplaganda 3D'da qoplama shu rangda
   // chiziladi. fillingColor dan MUSTAQIL. JSON: coating_color.
@@ -319,6 +323,7 @@ class TechCard {
     this.bakeTempC = 0,
     this.biscuitPhotoUrl = '',
     this.fillingColor = '',
+    this.fillingColor2 = '',
     this.coatingColor = '',
   });
 
@@ -354,6 +359,7 @@ class TechCard {
       bakeTempC: _asInt(json['bake_temp_c']),
       biscuitPhotoUrl: json['biscuit_photo_url']?.toString() ?? '',
       fillingColor: json['filling_color']?.toString() ?? '',
+      fillingColor2: json['filling_color2']?.toString() ?? '',
       coatingColor: json['coating_color']?.toString() ?? '',
     );
   }
@@ -397,6 +403,7 @@ class TechCard {
         'bake_temp_c': bakeTempC,
         'biscuit_photo_url': biscuitPhotoUrl,
         'filling_color': fillingColor,
+        'filling_color2': fillingColor2,
         'coating_color': coatingColor,
       };
 
@@ -427,6 +434,7 @@ class TechCard {
     int? bakeTempC,
     String? biscuitPhotoUrl,
     String? fillingColor,
+    String? fillingColor2,
     String? coatingColor,
   }) {
     return TechCard(
@@ -452,6 +460,7 @@ class TechCard {
       bakeTempC: bakeTempC ?? this.bakeTempC,
       biscuitPhotoUrl: biscuitPhotoUrl ?? this.biscuitPhotoUrl,
       fillingColor: fillingColor ?? this.fillingColor,
+      fillingColor2: fillingColor2 ?? this.fillingColor2,
       coatingColor: coatingColor ?? this.coatingColor,
     );
   }
