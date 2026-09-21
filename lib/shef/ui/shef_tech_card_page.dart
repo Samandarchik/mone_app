@@ -842,16 +842,20 @@ class _ProductGridCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final url = product.imageUrl;
+    // Kartadagi rasm: AVVAL tex kartaga yuklangan biskvit fotosining O'ZI
+    // (to'liq, o'zgarishsiz), bo'lmasa mahsulot rasmi. Ikkalasi ham yo'q
+    // bo'lsagina biskvit chiziladi.
+    final productImage = product.imageUrl ?? '';
+    final url = biscuitPhotoUrlOf(product.techCard) ??
+        (productImage.isEmpty ? null : '${AppUrls.baseUrl}$productImage');
     final hasCard = _hasTechCard(product);
-    // Rasm yuklanmagan (yoki yuklanmay qolgan) biskvit — kulrang o'rniga
-    // uning O'Z rasmi: o'lchami va turi (shokoladli, qizil baxmal, ...)
-    // тех картадан chiziladi.
+    // Rasm yo'q (yoki yuklanmay qolgan) biskvit — kulrang o'rniga uning
+    // chizmasi: o'lchami va turi тех картадан. Foto bu yerda ISHLATILMAYDI:
+    // foto bor bo'lsa uning o'zi ko'rsatiladi, chizma fotodan bezalmaydi.
     final placeholder = BiscuitThumb(
       dims: BiscuitDims.fromTechCard(product.techCard),
       palette: BiscuitPalette.detect(product.name, product.techCard),
       fruits: BiscuitFruit.detect(product.name),
-      photoUrl: biscuitPhotoUrlOf(product.techCard),
     );
     return Material(
       color: Colors.white,
@@ -875,9 +879,9 @@ class _ProductGridCard extends StatelessWidget {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
                   child: LayoutBuilder(
-                    builder: (context, box) => (url != null && url.isNotEmpty)
+                    builder: (context, box) => url != null
                         ? AppNetworkImage(
-                            imageUrl: '${AppUrls.baseUrl}$url',
+                            imageUrl: url,
                             width: box.maxWidth,
                             height: box.maxHeight,
                             fit: BoxFit.cover,
