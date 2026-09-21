@@ -6,7 +6,10 @@
 // Masalliqlarda miqdori (g/ml) ENG KO'P bo'lgan rang beruvchi masalliq
 // tanlanadi (masalan 300 g qulupnay pyuresi + 50 g shokolad → qulupnay);
 // slivka/tvorog kabi neytral asos faqat boshqa hech narsa topilmasa olinadi.
-// Foto, meva bo'laklari va boshqa bezak CHIZILMAYDI — faqat rang.
+// Tex kartada FOTO bo'lsa (biscuit_photo_url — «Rasm qo'shish») nachinka
+// qatlamlari rangi shu fotodan olinadi va nom/tarkibdan USTUN turadi
+// (filling_photo_look.dart; 2 xil rang topilsa — ikki qatlam ikki rangda).
+// Fotoning o'zi, meva bo'laklari va boshqa bezak CHIZILMAYDI — faqat rang.
 // Filling3DView — Rotating3DView (cake_3d.dart) qo'lda rejimida;
 // FillingThumb — grid kartasi uchun kichik statik rasm.
 import 'dart:math' as math;
@@ -15,12 +18,17 @@ import 'package:flutter/material.dart';
 import 'package:uz_ai_dev/admin/model/tech_card.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/cake_3d.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/filling_photo_look.dart';
 
-// Nachinka rangi (тех картадан).
+// Nachinka rangi (тех картадан; tex kartada foto bo'lsa — fotodan).
 class FillingLook {
   final Color color;
+  // Ikkinchi nachinka qatlami rangi (null — birinchisi bilan bir xil).
+  // Faqat FOTODAN olinganda to'ladi: masalan «kaymoq + shokolad» nachinkada
+  // bir qatlam oqish, ikkinchisi jigarrang (filling_photo_look.dart).
+  final Color? color2;
 
-  const FillingLook(this.color);
+  const FillingLook(this.color, [this.color2]);
 
   // Hech narsa mos kelmasa — neytral qaymoqrang.
   static const FillingLook neutral = FillingLook(Color(0xFFF6E7C8));
@@ -111,29 +119,42 @@ class FillingLook {
 
   @override
   bool operator ==(Object other) =>
-      other is FillingLook && other.color == color;
+      other is FillingLook && other.color == color && other.color2 == color2;
 
   @override
-  int get hashCode => color.hashCode;
+  int get hashCode => Object.hash(color, color2);
 }
 
 class Filling3DView extends StatelessWidget {
+  // Тех карта nomi/tarkibidan olingan rang (foto yo'q yoki fotodan rang
+  // topilmagan holat uchun).
   final FillingLook look;
+  // Tex kartadagi foto (to'liq URL): berilsa nachinka qatlamlari rangi
+  // FOTODAN olinadi (FillingPhotoLook) va [look] dan ustun turadi. Tex karta
+  // saqlangach 3D o'zi yangilanadi.
+  final String? photoUrl;
   final double height;
 
   const Filling3DView({
     super.key,
     this.look = FillingLook.neutral,
+    this.photoUrl,
     this.height = 240,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Rotating3DView(
-      height: height,
-      manual: true,
-      painter: (tilt, rotation) =>
-          FillingCakePainter(look: look, tilt: tilt, rotation: rotation),
+    return FillingPhotoLookBuilder(
+      url: photoUrl,
+      builder: (context, photoLook) => Rotating3DView(
+        height: height,
+        manual: true,
+        painter: (tilt, rotation) => FillingCakePainter(
+          look: photoLook ?? look,
+          tilt: tilt,
+          rotation: rotation,
+        ),
+      ),
     );
   }
 }
@@ -143,8 +164,10 @@ class Filling3DView extends StatelessWidget {
 // tepadagi katta 3D'da o'sha nachinkali butun (kesilgan) tort chiqadi.
 class FillingThumb extends StatelessWidget {
   final FillingLook look;
+  // Tex kartadagi foto — nachinka rangi shundan (Filling3DView kabi).
+  final String? photoUrl;
 
-  const FillingThumb({super.key, required this.look});
+  const FillingThumb({super.key, required this.look, this.photoUrl});
 
   @override
   Widget build(BuildContext context) {
@@ -156,14 +179,17 @@ class FillingThumb extends StatelessWidget {
           colors: [Color(0xFFFFFFFF), Color(0xFFEDE6F6)],
         ),
       ),
-      child: RepaintBoundary(
-        child: CustomPaint(
-          size: Size.infinite,
-          painter: FillingCakePainter(
-            look: look,
-            slice: true,
-            tilt: 0.36,
-            rotation: 0,
+      child: FillingPhotoLookBuilder(
+        url: photoUrl,
+        builder: (context, photoLook) => RepaintBoundary(
+          child: CustomPaint(
+            size: Size.infinite,
+            painter: FillingCakePainter(
+              look: photoLook ?? look,
+              slice: true,
+              tilt: 0.36,
+              rotation: 0,
+            ),
           ),
         ),
       ),
@@ -343,9 +369,8 @@ class FillingCakePainter extends CustomPainter {
     return a;
   }
 
-  Color get _fill => look.color;
-  Color get _fillLight => Color.lerp(look.color, Colors.white, 0.22)!;
-  Color get _fillShade => Color.lerp(look.color, Colors.black, 0.16)!;
+  // [k]-nachinka qatlami rangi (tepadan: 0, 1).
+  Color _fill(int k) => k == 0 ? look.color : (look.color2 ?? look.color);
 
   // Kesim yuzi: o'qdan chetgacha vertikal to'rtburchak, qatlamlar bo'yicha
   // bo'yalgan. [nx] — normalning ekran-x tashkil etuvchisi (yorug'lik uchun).
@@ -363,6 +388,7 @@ class FillingCakePainter extends CustomPainter {
     canvas.save();
     canvas.clipPath(face);
     var f = 0.0;
+    var fillIdx = 0;
     final rnd = math.Random(7 + (t * 10).round());
     final pore = Paint()..color = _sponge.pore.withValues(alpha: 0.5);
     for (final (part, isFilling) in _layers) {
@@ -375,13 +401,18 @@ class FillingCakePainter extends CustomPainter {
           axis.translate(0, y1),
         ], true);
       if (isFilling) {
+        final fill = _fill(fillIdx++);
         canvas.drawPath(
           band,
           Paint()
             ..shader = LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [_fillLight, _fill, _fillShade],
+              colors: [
+                Color.lerp(fill, Colors.white, 0.22)!,
+                fill,
+                Color.lerp(fill, Colors.black, 0.16)!,
+              ],
             ).createShader(band.getBounds()),
         );
       } else {
@@ -434,6 +465,7 @@ class FillingCakePainter extends CustomPainter {
     canvas.save();
     canvas.clipPath(whole);
     var f = 0.0;
+    var fillIdx = 0;
     for (final (part, isFilling) in _layers) {
       final band = Path()
         ..addPolygon([
@@ -441,7 +473,9 @@ class FillingCakePainter extends CustomPainter {
           ...arc(_top + (f + part) * _h).reversed,
         ], true);
       canvas.drawPath(
-          band, Paint()..color = isFilling ? _fill : _sponge.sponge);
+        band,
+        Paint()..color = isFilling ? _fill(fillIdx++) : _sponge.sponge,
+      );
       f += part;
     }
     // Biskvit qatlamlaridagi g'ovaklar — tort bilan birga aylanadi.

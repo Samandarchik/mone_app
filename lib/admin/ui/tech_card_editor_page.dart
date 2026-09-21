@@ -173,9 +173,9 @@ class TechCardEditorPage extends StatefulWidget {
   /// narxi sheet'i ochilmaydi. Retseptning qolgan qismi to'liq ishlaydi.
   final bool canEditPrices;
 
-  /// true — «Biskvit fotosi» bo'limi: tayyor biskvit fotosini qo'shish,
+  /// true — «Rasm qo'shish» bo'limi: tayyor biskvit / nachinka fotosini qo'shish,
   /// almashtirish, o'chirish (tech_card.biscuit_photo_url). Faqat shef
-  /// «П/Ф Бисквит» oynasidan ochganda.
+  /// «П/Ф Бисквит» va «П/Ф Начинка» oynalaridan ochganda.
   final bool showBiscuitPhoto;
 
   const TechCardEditorPage({

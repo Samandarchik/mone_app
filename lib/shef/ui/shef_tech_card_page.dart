@@ -347,8 +347,12 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
         builder: (_) => TechCardEditorPage(
           product: product,
           canEditPrices: false,
-          // «П/Ф Бисквит»: tex kartada «Biskvit fotosi» bo'limi.
-          showBiscuitPhoto: widget.showCakeConstructor,
+          // «П/Ф Бисквит» va «П/Ф Начинка»: tex kartada «Rasm qo'shish»
+          // bo'limi (ikkalasida ham tech_card.biscuit_photo_url). Saqlangach
+          // 3D o'zi yangilanadi: biskvitda foto yon tomonga o'raladi,
+          // nachinkada qatlamlar RANGI fotodan olinadi.
+          showBiscuitPhoto:
+              widget.showCakeConstructor || widget.showFillingCake,
         ),
       ),
     );
@@ -593,6 +597,9 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                               ? FillingLook.neutral
                               : FillingLook.detect(
                                   selected.name, selected.techCard),
+                          // Tex kartada foto bo'lsa — nachinka rangi fotodan
+                          // (nom/tarkibdan ustun).
+                          photoUrl: biscuitPhotoUrlOf(selected?.techCard),
                         )
                       : Biscuit3DView(
                           height: _biscuitViewH,
@@ -886,6 +893,7 @@ class _ProductGridCard extends StatelessWidget {
     final Widget placeholder = filling
         ? FillingThumb(
             look: FillingLook.detect(product.name, product.techCard),
+            photoUrl: biscuitPhotoUrlOf(product.techCard),
           )
         : BiscuitThumb(
             dims: BiscuitDims.fromTechCard(product.techCard),
