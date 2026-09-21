@@ -586,8 +586,8 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                     fruits: selected == null
                         ? const []
                         : BiscuitFruit.detect(selected.name),
-                    // Tex kartaga foto saqlangan bo'lsa — rang/mevalar fotodan
-                    // ham (saqlangach 3D o'zi yangilanadi).
+                    // Tex kartaga foto saqlangan bo'lsa — yon tomonga shu
+                    // fotoning o'zi o'raladi (saqlangach 3D o'zi yangilanadi).
                     photoUrl: biscuitPhotoUrlOf(selected?.techCard),
                   ),
                 ),
@@ -842,20 +842,19 @@ class _ProductGridCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Kartadagi rasm: AVVAL tex kartaga yuklangan biskvit fotosining O'ZI
-    // (to'liq, o'zgarishsiz), bo'lmasa mahsulot rasmi. Ikkalasi ham yo'q
-    // bo'lsagina biskvit chiziladi.
     final productImage = product.imageUrl ?? '';
-    final url = biscuitPhotoUrlOf(product.techCard) ??
-        (productImage.isEmpty ? null : '${AppUrls.baseUrl}$productImage');
+    final url =
+        productImage.isEmpty ? null : '${AppUrls.baseUrl}$productImage';
     final hasCard = _hasTechCard(product);
-    // Rasm yo'q (yoki yuklanmay qolgan) biskvit — kulrang o'rniga uning
-    // chizmasi: o'lchami va turi тех картадан. Foto bu yerda ISHLATILMAYDI:
-    // foto bor bo'lsa uning o'zi ko'rsatiladi, chizma fotodan bezalmaydi.
+    // Rasm yuklanmagan (yoki yuklanmay qolgan) biskvit — kulrang o'rniga
+    // uning 3D chizmasi: o'lchami va turi тех картадан. Tex kartada biskvit
+    // fotosi bo'lsa — chizmaning YON TOMONIGA shu fotoning o'zi o'raladi
+    // (chizilgan mevalar o'rniga); karta to'liq foto bilan to'ldirilmaydi.
     final placeholder = BiscuitThumb(
       dims: BiscuitDims.fromTechCard(product.techCard),
       palette: BiscuitPalette.detect(product.name, product.techCard),
       fruits: BiscuitFruit.detect(product.name),
+      photoUrl: biscuitPhotoUrlOf(product.techCard),
     );
     return Material(
       color: Colors.white,

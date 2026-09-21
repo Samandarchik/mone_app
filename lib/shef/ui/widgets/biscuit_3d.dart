@@ -13,14 +13,18 @@
 // tomonga — burish, tepaga/pastga — qarash burchagi. Yozuv/nuqtalar yo'q.
 // Mevalar (BiscuitFruit.detect — вишня, клубника, малина, банан, киви ...)
 // biskvit NOMIDAN; FAQAT yon tomonda (kesimda) chiziladi, tepada bezak yo'q.
+// Tex kartada biskvit FOTOSI bo'lsa (biscuit_photo_url) — yon tomonga shu
+// fotoning O'ZI o'raladi (biscuit_side_photo.dart yuklaydi): g'ovak/meva
+// chizilmaydi, fotodan rang/meva «taxmin qilinmaydi». Tepa — oddiy qobiq.
 // BiscuitThumb — grid kartasi uchun kichik statik rasm.
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:uz_ai_dev/admin/model/tech_card.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
-import 'package:uz_ai_dev/shef/ui/widgets/biscuit_photo_look.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/biscuit_side_photo.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/cake_3d.dart';
 
 // Biskvit o'lchami (sm).
@@ -349,8 +353,9 @@ class Biscuit3DView extends StatelessWidget {
   final BiscuitPalette palette;
   // Yon tomondagi mevalar (biskvit nomidan).
   final List<BiscuitFruit> fruits;
-  // Tex kartadagi foto: berilsa — biskvit rangi va mevalari fotodan ham
-  // olinadi (BiscuitPhotoLook). Foto saqlangach 3D o'zi yangilanadi.
+  // Tex kartadagi foto: berilsa — yon tomonga (mevalar chiziladigan tasma
+  // o'rniga) shu FOTONING O'ZI o'raladi; chizilgan meva/g'ovak bo'lmaydi.
+  // Foto saqlangach 3D o'zi yangilanadi.
   final String? photoUrl;
   final double height;
 
@@ -365,28 +370,27 @@ class Biscuit3DView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BiscuitPhotoLookBuilder(
+    return BiscuitSidePhotoBuilder(
       url: photoUrl,
-      builder: (context, look) {
-        final (p, f) = look?.mergeWith(palette, fruits) ?? (palette, fruits);
-        return Rotating3DView(
-          height: height,
-          manual: true,
-          painter: (tilt, rotation) => BiscuitPainter(
-            dims: dims,
-            palette: p,
-            fruits: f,
-            tilt: tilt,
-            rotation: rotation,
-          ),
-        );
-      },
+      displayWidth: 600,
+      builder: (context, photo) => Rotating3DView(
+        height: height,
+        manual: true,
+        painter: (tilt, rotation) => BiscuitPainter(
+          dims: dims,
+          palette: palette,
+          fruits: fruits,
+          sidePhoto: photo,
+          tilt: tilt,
+          rotation: rotation,
+        ),
+      ),
     );
   }
 }
 
 // Kartadagi kichik statik rasm: shu biskvitning o'zi (o'lchami, turi,
-// mevalari; foto bo'lsa — fotodan ham), yumshoq fon ustida.
+// mevalari; foto bo'lsa — yon tomoni fotoning o'zi), yumshoq fon ustida.
 class BiscuitThumb extends StatelessWidget {
   final BiscuitDims dims;
   final BiscuitPalette palette;
@@ -411,23 +415,22 @@ class BiscuitThumb extends StatelessWidget {
           colors: [Color(0xFFFFFFFF), Color(0xFFEDE6F6)],
         ),
       ),
-      child: BiscuitPhotoLookBuilder(
+      child: BiscuitSidePhotoBuilder(
         url: photoUrl,
-        builder: (context, look) {
-          final (p, f) = look?.mergeWith(palette, fruits) ?? (palette, fruits);
-          return RepaintBoundary(
-            child: CustomPaint(
-              size: Size.infinite,
-              painter: BiscuitPainter(
-                dims: dims,
-                palette: p,
-                fruits: f,
-                tilt: 0.36,
-                rotation: 0.5,
-              ),
+        displayWidth: 240,
+        builder: (context, photo) => RepaintBoundary(
+          child: CustomPaint(
+            size: Size.infinite,
+            painter: BiscuitPainter(
+              dims: dims,
+              palette: palette,
+              fruits: fruits,
+              sidePhoto: photo,
+              tilt: 0.36,
+              rotation: 0.5,
             ),
-          );
-        },
+          ),
+        ),
       ),
     );
   }
@@ -438,6 +441,9 @@ class BiscuitPainter extends CustomPainter {
   final BiscuitPalette palette;
   // Yon tomondagi mevalar (bo'sh — mevasiz).
   final List<BiscuitFruit> fruits;
+  // Tex kartadagi foto: berilsa yon tomon shu fotoning o'zi bilan o'raladi
+  // (g'ovak/meva CHIZILMAYDI); tepa — oddiy pishgan qobiq.
+  final ui.Image? sidePhoto;
   final double tilt;
   final double rotation;
 
@@ -445,6 +451,7 @@ class BiscuitPainter extends CustomPainter {
     required this.dims,
     this.palette = BiscuitPalette.classic,
     this.fruits = const [],
+    this.sidePhoto,
     required this.tilt,
     required this.rotation,
   });
@@ -531,6 +538,26 @@ class BiscuitPainter extends CustomPainter {
 
     canvas.save();
     canvas.clipPath(side);
+    if (sidePhoto != null) {
+      _textureRound(canvas, sidePhoto!, r, top, bottom, h);
+      // Hajm soyasi: chetlari qoramtirroq — silindr ko'rinishi uchun.
+      canvas.drawRect(
+        Rect.fromLTRB(_cx - r, top - r * tilt, _cx + r, bottom + r * tilt),
+        Paint()
+          ..shader = LinearGradient(
+            colors: [
+              Colors.black.withValues(alpha: 0.30),
+              Colors.black.withValues(alpha: 0),
+              Colors.black.withValues(alpha: 0),
+              Colors.black.withValues(alpha: 0.30),
+            ],
+            stops: const [0, 0.3, 0.7, 1],
+          ).createShader(bottomOval),
+      );
+      canvas.restore();
+      _paintRoundTop(canvas, r, bottomOval, h);
+      return;
+    }
     // Pastki qizargan chiziq.
     canvas.drawArc(
       bottomOval,
@@ -563,6 +590,86 @@ class BiscuitPainter extends CustomPainter {
     _fruitsRound(canvas, r, top, h, pxPerCm);
     canvas.restore();
     _paintRoundTop(canvas, r, bottomOval, h);
+  }
+
+  // Fotodan yon tomonga tushadigan qism: o'rtadagi gorizontal tasma,
+  // nisbati yuzaning o'ziniki ([aspect] = uzunlik / balandlik) — rasm
+  // cho'zilib/ezilib ketmaydi (BoxFit.cover kabi).
+  static Rect _photoBand(ui.Image img, double aspect) {
+    final w = img.width.toDouble(), hgt = img.height.toDouble();
+    final bandH = math.min(hgt, w / math.max(aspect, 0.01));
+    final bandW = math.min(w, bandH * aspect);
+    return Rect.fromCenter(
+        center: Offset(w / 2, hgt / 2), width: bandW, height: bandH);
+  }
+
+  // Yumaloq biskvit yon tomoniga fotoni «o'rash»: old yarim aylana ingichka
+  // vertikal bo'laklarga bo'linadi, har biriga tasmaning mos qismi chiziladi.
+  // Tasma yarim aylanaga teng; ikkinchi yarmida ko'zgu (chok ko'rinmasin).
+  // Biskvit burilganda foto ham birga buriladi.
+  void _textureRound(Canvas canvas, ui.Image img, double r, double top,
+      double bottom, double h) {
+    final band = _photoBand(img, math.pi * r / math.max(h, 1));
+    final paint = Paint()..filterQuality = FilterQuality.medium;
+    double u(double t) {
+      var a = (t - rotation) % (2 * math.pi);
+      if (a < 0) a += 2 * math.pi;
+      return a < math.pi ? a / math.pi : 2 - a / math.pi;
+    }
+
+    const n = 72;
+    for (var j = 0; j < n; j++) {
+      final t0 = -math.pi / 2 + math.pi * j / n;
+      final t1 = -math.pi / 2 + math.pi * (j + 1) / n;
+      final yOff = r * tilt * math.cos((t0 + t1) / 2);
+      final ua = u(t0);
+      final ub = u(t1);
+      final lo = math.min(ua, ub);
+      final hi = math.max(math.max(ua, ub), lo + 0.002);
+      final src = Rect.fromLTRB(band.left + lo * band.width, band.top,
+          band.left + math.min(hi, 1) * band.width, band.bottom);
+      final dst = Rect.fromLTRB(_cx + r * math.sin(t0) - 0.4, top + yOff,
+          _cx + r * math.sin(t1) + 0.4, bottom + yOff);
+      if (ua <= ub) {
+        canvas.drawImageRect(img, src, dst, paint);
+      } else {
+        // Ko'zgu qismi — bo'lak ichidagi rasm ham teskari chiziladi,
+        // aks holda rasm «maydalanib» ko'rinadi.
+        canvas.save();
+        canvas.translate(dst.center.dx, 0);
+        canvas.scale(-1, 1);
+        canvas.translate(-dst.center.dx, 0);
+        canvas.drawImageRect(img, src, dst, paint);
+        canvas.restore();
+      }
+    }
+  }
+
+  // To'rtburchak biskvitning bitta yon yuziga foto (yuz bo'ylab to'liq,
+  // ekranda chapdan o'ngga — rasm teskari chiqmaydi). [lenPx] — yuzning
+  // haqiqiy uzunligi (burilishdan qat'i nazar), tasma nisbati uchun.
+  void _textureFace(Canvas canvas, ui.Image img, Offset a, Offset b,
+      double h, double lenPx) {
+    if (a.dx > b.dx) {
+      final t = a;
+      a = b;
+      b = t;
+    }
+    final band = _photoBand(img, lenPx / math.max(h, 1));
+    final paint = Paint()..filterQuality = FilterQuality.medium;
+    const n = 32;
+    for (var j = 0; j < n; j++) {
+      final p0 = Offset.lerp(a, b, j / n)!;
+      final p1 = Offset.lerp(a, b, (j + 1) / n)!;
+      final y = (p0.dy + p1.dy) / 2;
+      canvas.drawImageRect(
+        img,
+        Rect.fromLTRB(band.left + band.width * j / n, band.top,
+            band.left + band.width * (j + 1) / n, band.bottom),
+        Rect.fromLTRB(p0.dx - 0.4, y - 1, p1.dx + 0.4, y + h + 1),
+        paint,
+      );
+    }
   }
 
   // Meva o'lchami (radius, sm) — haqiqiy kattalikka yaqin.
@@ -794,27 +901,35 @@ class BiscuitPainter extends CustomPainter {
 
       canvas.save();
       canvas.clipPath(face);
-      canvas.drawLine(
-        bottoms[k],
-        bottoms[k1],
-        Paint()
-          ..strokeWidth = h * 0.22
-          ..color = palette.baked.withValues(alpha: 0.75),
-      );
-      final edgeLen = (tops[k1] - tops[k]).distance;
-      final n = (edgeLen / pxPerCm * 2.2).round().clamp(8, 90);
-      for (var i = 0; i < n; i++) {
-        final u = rnd.nextDouble();
-        final v = 0.14 + rnd.nextDouble() * 0.72;
-        final s = pxPerCm * (0.12 + rnd.nextDouble() * 0.2);
-        final p = Offset.lerp(tops[k], tops[k1], u)!.translate(0, v * h);
-        canvas.drawOval(
-          Rect.fromCenter(
-              center: p, width: s * (0.4 + 0.6 * npz) + 0.6, height: s * 0.8),
-          palette.speck != null && i % 3 == 0 ? speck : pore,
+      if (sidePhoto != null) {
+        // Foto bor — yuzga fotoning o'zi; g'ovak/meva chizilmaydi.
+        _textureFace(canvas, sidePhoto!, tops[k], tops[k1], h,
+            k.isEven ? hw * 2 : hl * 2);
+      } else {
+        canvas.drawLine(
+          bottoms[k],
+          bottoms[k1],
+          Paint()
+            ..strokeWidth = h * 0.22
+            ..color = palette.baked.withValues(alpha: 0.75),
         );
+        final edgeLen = (tops[k1] - tops[k]).distance;
+        final n = (edgeLen / pxPerCm * 2.2).round().clamp(8, 90);
+        for (var i = 0; i < n; i++) {
+          final u = rnd.nextDouble();
+          final v = 0.14 + rnd.nextDouble() * 0.72;
+          final s = pxPerCm * (0.12 + rnd.nextDouble() * 0.2);
+          final p = Offset.lerp(tops[k], tops[k1], u)!.translate(0, v * h);
+          canvas.drawOval(
+            Rect.fromCenter(
+                center: p,
+                width: s * (0.4 + 0.6 * npz) + 0.6,
+                height: s * 0.8),
+            palette.speck != null && i % 3 == 0 ? speck : pore,
+          );
+        }
+        _fruitsFace(canvas, tops[k], tops[k1], h, pxPerCm, npz, k);
       }
-      _fruitsFace(canvas, tops[k], tops[k1], h, pxPerCm, npz, k);
       // Yon yuzning yorug'lik soyasi (mevalar ham soyada qoladi).
       canvas.drawPath(
         face,
@@ -857,6 +972,7 @@ class BiscuitPainter extends CustomPainter {
       old.dims != dims ||
       old.palette != palette ||
       !listEquals(old.fruits, fruits) ||
+      old.sidePhoto != sidePhoto ||
       old.tilt != tilt ||
       old.rotation != rotation;
 }
