@@ -2,10 +2,16 @@
 // 3D ko'rinishni moslash (BiscuitPhotoLook): foto kichraytirib yuklanadi,
 // markaziy qismi (fon/patnis chetlari tashlab) ranglar bo'yicha tahlil
 // qilinadi:
-//  - biskvit rangi: och/oltin (o'z rangidan palitra), to'q jigarrang →
-//    shokoladli, qizil massa → qizil baxmal;
-//  - mevalar (yon tomonda chiziladi): to'q qizil dog'lar → olcha, yorqin
-//    qizil → qulupnay, to'q ko'k → chernika, yashil → kivi.
+//  - biskvit rangi: fotodagi ENG KO'P uchragan rang klasteri — qaysi tus
+//    bo'lishidan qat'i nazar (qulupnayli pushti, fisitashli yashil, oqish
+//    vanil, sariq-oltin ...); shu rangdan butun palitra yasaladi (qobiq ham
+//    o'sha rangning pishgani). To'q jigarrang → shokoladli, to'yingan qizil
+//    massa → qizil baxmal tayyor palitralari olinadi;
+//  - mevalar (yon kesimda chiziladi): biskvitning O'Z rangidan AJRALIB
+//    turadigan dog'lar — to'q qizil → olcha, yorqin qizil → qulupnay,
+//    to'q ko'k → chernika, yashil → kivi. Shuning uchun pushti biskvitning
+//    o'zi «qulupnay bo'lagi» deb sanalmaydi, ustidagi haqiqiy bo'laklar esa
+//    (to'yingroq/to'qroq) sanaladi.
 // Bu RANG tahlili (sun'iy intellekt emas): aniq ko'rinadigan rezavorlarni va
 // biskvit rangini ushlaydi, lekin masalan qizil likopcha xato beradi.
 // Natija URL bo'yicha keshlanadi — karta va katta 3D qayta hisoblamaydi.
@@ -27,75 +33,141 @@ class BiscuitPhotoLook {
 
   static BiscuitPhotoLook? cached(String url) => _cache[url];
 
-  // Foto piksellaridan (RGBA, w×h) ko'rinish.
+  // Rang doirasi shuncha savatga bo'linadi (har biri 15°) — biskvit tanasi
+  // rangini topish uchun.
+  static const int _hueBins = 24;
+
+  // Foto piksellaridan (RGBA, w×h) ko'rinish. Ikki o'tish: avval biskvit
+  // TANASI rangi (eng ko'p uchragan rang), keyin shu rangdan ajralib
+  // turadigan meva dog'lari.
   static BiscuitPhotoLook analyze(ByteData rgba, int w, int h) {
     // Markaziy 70% — fon va likopcha chetlari kamroq tushadi.
     final x0 = (w * 0.15).floor(), x1 = (w * 0.85).ceil();
     final y0 = (h * 0.15).floor(), y1 = (h * 0.85).ceil();
-    var total = 0;
-    var cherry = 0, straw = 0, blue = 0, kiwi = 0, choc = 0, red = 0;
-    var sponge = 0;
-    double sr = 0, sg = 0, sb = 0;
+
+    final binN = List<int>.filled(_hueBins, 0);
+    final binR = List<double>.filled(_hueBins, 0);
+    final binG = List<double>.filled(_hueBins, 0);
+    final binB = List<double>.filled(_hueBins, 0);
+    // Rangsiz-ochlar: oqish vanil biskvit, tvorog qatlami va h.k.
+    var paleN = 0;
+    double paleR = 0, paleG = 0, paleB = 0;
+    // Biskvit bo'lishi mumkin bo'lgan piksellar (fon va soya tashlangach).
+    var body = 0;
+
     for (var y = y0; y < y1; y++) {
       for (var x = x0; x < x1; x++) {
         final i = (y * w + x) * 4;
         final r = rgba.getUint8(i), g = rgba.getUint8(i + 1);
         final b = rgba.getUint8(i + 2), a = rgba.getUint8(i + 3);
         if (a < 128) continue;
-        total++;
+        final hsv = HSVColor.fromColor(Color.fromARGB(255, r, g, b));
+        final s = hsv.saturation, v = hsv.value;
+        // Qop-qora soya va yorqin oq fon (patnis, dasturxon) — biskvit emas.
+        if (v < 0.13 || (s < 0.12 && v > 0.86)) continue;
+        body++;
+        if (s < 0.12) {
+          paleN++;
+          paleR += r;
+          paleG += g;
+          paleB += b;
+          continue;
+        }
+        final bin = (hsv.hue / 360 * _hueBins).floor() % _hueBins;
+        binN[bin]++;
+        binR[bin] += r;
+        binG[bin] += g;
+        binB[bin] += b;
+      }
+    }
+    if (body == 0) return const BiscuitPhotoLook();
+
+    // Eng ko'p uchragan tus + ikkala qo'shnisi = biskvit tanasi klasteri
+    // (bir rangning ochrog'i/to'qrog'i qo'shni savatga tushib ketadi).
+    var top = 0;
+    for (var i = 1; i < _hueBins; i++) {
+      if (binN[i] > binN[top]) top = i;
+    }
+    final lo = (top + _hueBins - 1) % _hueBins;
+    final hi = (top + 1) % _hueBins;
+    final huedN = binN[lo] + binN[top] + binN[hi];
+
+    // Rangli klaster ham, oqish qism ham maydonning kamida 12% ini
+    // egallamasa — fotodan rang olinmaydi (nom/tarkib palitrasi qoladi).
+    Color? sponge;
+    if (huedN >= paleN && huedN / body > 0.12) {
+      sponge = Color.fromARGB(
+        255,
+        ((binR[lo] + binR[top] + binR[hi]) / huedN).round(),
+        ((binG[lo] + binG[top] + binG[hi]) / huedN).round(),
+        ((binB[lo] + binB[top] + binB[hi]) / huedN).round(),
+      );
+    } else if (paleN > huedN && paleN / body > 0.12) {
+      sponge = Color.fromARGB(
+        255,
+        (paleR / paleN).round(),
+        (paleG / paleN).round(),
+        (paleB / paleN).round(),
+      );
+    }
+
+    BiscuitPalette? palette;
+    // Biskvitning o'z tusi/to'yinganligi — meva dog'larini undan ajratish
+    // uchun (-1 — rang aniqlanmadi, hamma dog'lar sanaladi).
+    var spongeHue = -1.0, spongeSat = 0.0;
+    if (sponge != null) {
+      final hsv = HSVColor.fromColor(sponge);
+      spongeHue = hsv.hue;
+      spongeSat = hsv.saturation;
+      final isRedHue = hsv.hue >= 335 || hsv.hue <= 8;
+      if (hsv.hue > 8 && hsv.hue <= 45 && hsv.saturation > 0.2 &&
+          hsv.value < 0.42) {
+        palette = BiscuitPalette.chocolate;
+      } else if (isRedHue && hsv.saturation > 0.45 && hsv.value < 0.75) {
+        palette = BiscuitPalette.redVelvet;
+      } else {
+        palette = _fromSponge(sponge);
+      }
+    }
+
+    // 2-o'tish: meva dog'lari. Biskvitning O'Z rangiga yaqin piksellar
+    // sanalmaydi — dog' tus bo'yicha ajralib turishi yoki ancha to'yingroq
+    // bo'lishi kerak (pushti biskvit ustidagi to'q qulupnay bo'laklari).
+    var cherry = 0, straw = 0, blue = 0, kiwi = 0;
+    for (var y = y0; y < y1; y++) {
+      for (var x = x0; x < x1; x++) {
+        final i = (y * w + x) * 4;
+        final r = rgba.getUint8(i), g = rgba.getUint8(i + 1);
+        final b = rgba.getUint8(i + 2), a = rgba.getUint8(i + 3);
+        if (a < 128) continue;
         final hsv = HSVColor.fromColor(Color.fromARGB(255, r, g, b));
         final hue = hsv.hue, s = hsv.saturation, v = hsv.value;
+        if (v < 0.13 || (s < 0.12 && v > 0.86)) continue;
+        if (spongeHue >= 0) {
+          var d = (hue - spongeHue).abs();
+          if (d > 180) d = 360 - d;
+          if (d < 28 && s < spongeSat + 0.18) continue;
+        }
         final isRedHue = hue >= 335 || hue <= 8;
         if (isRedHue && s > 0.55 && v >= 0.18 && v < 0.6) {
           cherry++;
-          red++;
         } else if (isRedHue && s > 0.5 && v >= 0.6) {
           straw++;
-          red++;
         } else if (hue >= 200 && hue <= 290 && s > 0.25 && v < 0.55) {
           blue++;
         } else if (hue >= 70 && hue <= 150 && s > 0.35 && v > 0.3) {
           kiwi++;
-        } else if (hue > 8 && hue <= 40 && s > 0.25 && v < 0.42) {
-          choc++;
-        } else if (hue >= 22 && hue <= 55 && s >= 0.15 && s <= 0.75 &&
-            v >= 0.55) {
-          sponge++;
-          sr += r;
-          sg += g;
-          sb += b;
         }
       }
     }
-    if (total == 0) return const BiscuitPhotoLook();
-    double part(int n) => n / total;
 
-    BiscuitPalette? palette;
-    var redIsSponge = false;
-    if (part(choc) > 0.3) {
-      palette = BiscuitPalette.chocolate;
-    } else if (part(red) > 0.3) {
-      // Qizil — biskvitning o'zi (qizil baxmal), meva emas.
-      palette = BiscuitPalette.redVelvet;
-      redIsSponge = true;
-    } else if (part(sponge) > 0.15) {
-      palette = _fromSponge(
-        Color.fromARGB(
-          255,
-          (sr / sponge).round(),
-          (sg / sponge).round(),
-          (sb / sponge).round(),
-        ),
-      );
-    }
-
-    // Meva — kamida 2.5% maydon (tasodifiy nuqtalar hisobga olinmaydi),
+    // Meva — kamida 2% maydon (tasodifiy nuqtalar hisobga olinmaydi),
     // ko'p ko'ringani oldin.
     final fruits = <(int, BiscuitFruit)>[
-      if (!redIsSponge && part(cherry) > 0.025) (cherry, BiscuitFruit.cherry),
-      if (!redIsSponge && part(straw) > 0.025) (straw, BiscuitFruit.strawberry),
-      if (part(blue) > 0.025) (blue, BiscuitFruit.blueberry),
-      if (part(kiwi) > 0.025) (kiwi, BiscuitFruit.kiwi),
+      if (cherry / body > 0.02) (cherry, BiscuitFruit.cherry),
+      if (straw / body > 0.02) (straw, BiscuitFruit.strawberry),
+      if (blue / body > 0.02) (blue, BiscuitFruit.blueberry),
+      if (kiwi / body > 0.02) (kiwi, BiscuitFruit.kiwi),
     ]..sort((a, b) => b.$1.compareTo(a.$1));
     return BiscuitPhotoLook(
       palette: palette,
@@ -103,19 +175,24 @@ class BiscuitPhotoLook {
     );
   }
 
-  // Fotodagi biskvit rangidan palitra (qobiq — klassik pishgan).
+  // Fotodagi biskvit rangidan butun palitra. Qobiq ham SHU rangdan
+  // yasaladi (jigarrangga tortilgan pishgan tusi) — shuning uchun pushti
+  // yoki yashil biskvitda ham chetlari tabiiy ko'rinadi, oltin qobiq
+  // yopishib qolmaydi.
   static BiscuitPalette _fromSponge(Color s) {
-    const c = BiscuitPalette.classic;
+    // Pishgan qobiqning umumiy jigarrangi — har qanday tus shunga tortiladi.
+    const baked = Color(0xFF8A5A2E);
+    final crust = Color.lerp(Color.lerp(s, baked, 0.45)!, Colors.black, 0.08)!;
     return BiscuitPalette(
       sponge: s,
       spongeShade: Color.lerp(s, Colors.black, 0.14)!,
       spongeLight: Color.lerp(s, Colors.white, 0.35)!,
-      crustLight: c.crustLight,
-      crust: c.crust,
-      crustDark: c.crustDark,
+      crustLight: Color.lerp(crust, Colors.white, 0.18)!,
+      crust: crust,
+      crustDark: Color.lerp(crust, Colors.black, 0.18)!,
       pore: Color.lerp(s, Colors.black, 0.25)!,
-      baked: c.baked,
-      rim: c.rim,
+      baked: Color.lerp(crust, Colors.black, 0.12)!,
+      rim: Color.lerp(crust, Colors.black, 0.28)!,
     );
   }
 
