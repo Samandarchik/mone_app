@@ -13,6 +13,10 @@
 // «Biskvit» bo'limiga bog'langan kategoriyalar (BiskvitLinks) bu ro'yxatda
 // ko'rinmaydi — ular bosh menyudagi «Biskvit» bo'limida (biskvit_page.dart).
 // Shef bosh ekraniga «+» bilan qo'shilganlar (ShefHomeLinks) ham shunday.
+// 3D sahifa ko'rinishi (tepada pinned 3D + grid): «П/Ф Бисквит»
+// (showCakeConstructor — biskvitning o'zi, biscuit_3d.dart) va «П/Ф Начинка»
+// (showFillingCake — bo'lagi kesilgan tort, kesimda nachinka; rangi har
+// mahsulotning тех картасидан, filling_3d.dart).
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -27,6 +31,7 @@ import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:uz_ai_dev/shef/ui/biskvit_page.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
 
 // Shef ekranlarining umumiy ranglari (shef_home_ui / pf_stock_page bilan bir xil).
 const Color _bgColor = Color(0xFFFAF6F1);
@@ -283,6 +288,10 @@ class ShefTechCardProductsPage extends StatefulWidget {
   // true — ro'yxat tepasida 3D tort va «Tort konstruktori» tugmasi.
   // Faqat shef bosh ekranidagi «П/Ф Бисквит» kartasidan (shef_home_ui.dart).
   final bool showCakeConstructor;
+  // true — «П/Ф Начинка»: o'sha sahifa ko'rinishi (tepada 3D + grid), lekin
+  // biskvit o'rniga bo'lagi kesilgan tort — kesimda nachinka, rangi har
+  // mahsulotning тех картасидан (filling_3d.dart). isNachinkaCategory.
+  final bool showFillingCake;
 
   const ShefTechCardProductsPage({
     super.key,
@@ -291,6 +300,7 @@ class ShefTechCardProductsPage extends StatefulWidget {
     this.canAddProducts = false,
     this.showBaking = false,
     this.showCakeConstructor = false,
+    this.showFillingCake = false,
   });
 
   @override
@@ -406,7 +416,7 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
             label: const Text('Qo\'shish'),
           )
         : null;
-    if (widget.showCakeConstructor) {
+    if (widget.showCakeConstructor || widget.showFillingCake) {
       return Scaffold(
         backgroundColor: _bgColor,
         floatingActionButton: fab,
@@ -574,22 +584,33 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                 child: Container(
                   color: _bgColor,
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-                  child: Biscuit3DView(
-                    height: _biscuitViewH,
-                    dims: BiscuitDims.fromTechCard(selected?.techCard),
-                    palette: selected == null
-                        ? BiscuitPalette.classic
-                        : BiscuitPalette.detect(
-                            selected.name, selected.techCard),
-                    // Mevalar (вишня, клубника ...) biskvit nomidan —
-                    // faqat yon tomonda chiziladi, tepada bezak yo'q.
-                    fruits: selected == null
-                        ? const []
-                        : BiscuitFruit.detect(selected.name),
-                    // Tex kartaga foto saqlangan bo'lsa — yon tomonga shu
-                    // fotoning o'zi o'raladi (saqlangach 3D o'zi yangilanadi).
-                    photoUrl: biscuitPhotoUrlOf(selected?.techCard),
-                  ),
+                  child: widget.showFillingCake
+                      // «П/Ф Начинка»: kesilgan tort, nachinka rangi
+                      // tanlangan mahsulot тех картасидан.
+                      ? Filling3DView(
+                          height: _biscuitViewH,
+                          look: selected == null
+                              ? FillingLook.neutral
+                              : FillingLook.detect(
+                                  selected.name, selected.techCard),
+                        )
+                      : Biscuit3DView(
+                          height: _biscuitViewH,
+                          dims: BiscuitDims.fromTechCard(selected?.techCard),
+                          palette: selected == null
+                              ? BiscuitPalette.classic
+                              : BiscuitPalette.detect(
+                                  selected.name, selected.techCard),
+                          // Mevalar (вишня, клубника ...) biskvit nomidan —
+                          // faqat yon tomonda chiziladi, tepada bezak yo'q.
+                          fruits: selected == null
+                              ? const []
+                              : BiscuitFruit.detect(selected.name),
+                          // Tex kartaga foto saqlangan bo'lsa — yon tomonga
+                          // shu fotoning o'zi o'raladi (saqlangach 3D o'zi
+                          // yangilanadi).
+                          photoUrl: biscuitPhotoUrlOf(selected?.techCard),
+                        ),
                 ),
               ),
             ),
@@ -623,6 +644,7 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                       final p = rows[index];
                       return _ProductGridCard(
                         product: p,
+                        filling: widget.showFillingCake,
                         selected: p.id == selected?.id,
                         onTap: () => setState(() => _selectedId = p.id),
                         onDoubleTap: () => _openTechCard(p),
@@ -704,6 +726,13 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
 bool isBiskvitCategory(String name) {
   final n = name.toLowerCase();
   return n.contains('бисквит') || n.contains('biskvit');
+}
+
+// «Начинка» kategoriyasimi (nomi bo'yicha) — mahsulotlari kesilgan tort
+// ichidagi nachinka bo'lib ko'rsatiladi (showFillingCake).
+bool isNachinkaCategory(String name) {
+  final n = name.toLowerCase();
+  return n.contains('начинк') || n.contains('nachink');
 }
 
 // Mahsulot qatori: rasm + nom (+ ПФ belgisi) + тех карта bor/yo'q belgisi.
@@ -827,6 +856,9 @@ class _PinnedBoxDelegate extends SliverPersistentHeaderDelegate {
 // 3D'da ko'rsatilayotgani (ramka ajralib turadi).
 class _ProductGridCard extends StatelessWidget {
   final ProductModelAdmin product;
+  // true — «П/Ф Начинка»: rasm o'rniga kesilgan tort (nachinka rangi тех
+  // картадан); false — biskvitning o'zi.
+  final bool filling;
   final bool selected;
   final VoidCallback onTap;
   final VoidCallback onDoubleTap;
@@ -834,6 +866,7 @@ class _ProductGridCard extends StatelessWidget {
 
   const _ProductGridCard({
     required this.product,
+    this.filling = false,
     required this.selected,
     required this.onTap,
     required this.onDoubleTap,
@@ -850,12 +883,16 @@ class _ProductGridCard extends StatelessWidget {
     // uning 3D chizmasi: o'lchami va turi тех картадан. Tex kartada biskvit
     // fotosi bo'lsa — chizmaning YON TOMONIGA shu fotoning o'zi o'raladi
     // (chizilgan mevalar o'rniga); karta to'liq foto bilan to'ldirilmaydi.
-    final placeholder = BiscuitThumb(
-      dims: BiscuitDims.fromTechCard(product.techCard),
-      palette: BiscuitPalette.detect(product.name, product.techCard),
-      fruits: BiscuitFruit.detect(product.name),
-      photoUrl: biscuitPhotoUrlOf(product.techCard),
-    );
+    final Widget placeholder = filling
+        ? FillingThumb(
+            look: FillingLook.detect(product.name, product.techCard),
+          )
+        : BiscuitThumb(
+            dims: BiscuitDims.fromTechCard(product.techCard),
+            palette: BiscuitPalette.detect(product.name, product.techCard),
+            fruits: BiscuitFruit.detect(product.name),
+            photoUrl: biscuitPhotoUrlOf(product.techCard),
+          );
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(16),
