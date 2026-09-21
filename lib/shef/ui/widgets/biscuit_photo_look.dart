@@ -4,9 +4,11 @@
 // qilinadi:
 //  - biskvit rangi: fotodagi ENG KO'P uchragan rang klasteri — qaysi tus
 //    bo'lishidan qat'i nazar (qulupnayli pushti, fisitashli yashil, oqish
-//    vanil, sariq-oltin ...); shu rangdan butun palitra yasaladi (qobiq ham
-//    o'sha rangning pishgani). To'q jigarrang → shokoladli, to'yingan qizil
-//    massa → qizil baxmal tayyor palitralari olinadi;
+//    vanil, sariq-oltin ...). Butun palitra AYNAN shu rangdan yasaladi:
+//    qobiq ham, g'ovak ham o'sha rang, faqat hajm ko'rinishi uchun ozroq
+//    ochroq/to'qroq. Tayyor palitralarga (shokolad, qizil baxmal ...)
+//    almashtirish YO'Q — 3D fotodagi rangdan qoramtir/boshqacha bo'lib
+//    qolmasligi kerak;
 //  - mevalar (yon kesimda chiziladi): biskvitning O'Z rangidan AJRALIB
 //    turadigan dog'lar — to'q qizil → olcha, yorqin qizil → qulupnay,
 //    to'q ko'k → chernika, yashil → kivi. Shuning uchun pushti biskvitning
@@ -66,6 +68,9 @@ class BiscuitPhotoLook {
         // Qop-qora soya va yorqin oq fon (patnis, dasturxon) — biskvit emas.
         if (v < 0.13 || (s < 0.12 && v > 0.86)) continue;
         body++;
+        // Soyada qolgan joylar o'rtacha rangni qoraytirib yuboradi —
+        // ular faqat maydon sifatida sanaladi, rangga qo'shilmaydi.
+        if (v < 0.3) continue;
         if (s < 0.12) {
           paleN++;
           paleR += r;
@@ -111,23 +116,16 @@ class BiscuitPhotoLook {
       );
     }
 
-    BiscuitPalette? palette;
+    // Palitra AYNAN fotodagi rangdan — tayyor palitraga almashtirilmaydi.
     // Biskvitning o'z tusi/to'yinganligi — meva dog'larini undan ajratish
     // uchun (-1 — rang aniqlanmadi, hamma dog'lar sanaladi).
+    BiscuitPalette? palette;
     var spongeHue = -1.0, spongeSat = 0.0;
     if (sponge != null) {
       final hsv = HSVColor.fromColor(sponge);
       spongeHue = hsv.hue;
       spongeSat = hsv.saturation;
-      final isRedHue = hsv.hue >= 335 || hsv.hue <= 8;
-      if (hsv.hue > 8 && hsv.hue <= 45 && hsv.saturation > 0.2 &&
-          hsv.value < 0.42) {
-        palette = BiscuitPalette.chocolate;
-      } else if (isRedHue && hsv.saturation > 0.45 && hsv.value < 0.75) {
-        palette = BiscuitPalette.redVelvet;
-      } else {
-        palette = _fromSponge(sponge);
-      }
+      palette = _fromSponge(sponge);
     }
 
     // 2-o'tish: meva dog'lari. Biskvitning O'Z rangiga yaqin piksellar
@@ -175,24 +173,22 @@ class BiscuitPhotoLook {
     );
   }
 
-  // Fotodagi biskvit rangidan butun palitra. Qobiq ham SHU rangdan
-  // yasaladi (jigarrangga tortilgan pishgan tusi) — shuning uchun pushti
-  // yoki yashil biskvitda ham chetlari tabiiy ko'rinadi, oltin qobiq
-  // yopishib qolmaydi.
+  // Fotodagi biskvit rangidan butun palitra. Hamma qism — SHU rangning
+  // o'zi: qobiq, g'ovak, chet chizig'i faqat hajm ko'rinishi uchun ozroq
+  // ochroq/to'qroq qilinadi. Hech qanday boshqa tus (jigarrang qobiq va h.k.)
+  // qo'shilmaydi — 3D fotodagi biskvit rangida qoladi.
   static BiscuitPalette _fromSponge(Color s) {
-    // Pishgan qobiqning umumiy jigarrangi — har qanday tus shunga tortiladi.
-    const baked = Color(0xFF8A5A2E);
-    final crust = Color.lerp(Color.lerp(s, baked, 0.45)!, Colors.black, 0.08)!;
+    Color dark(double k) => Color.lerp(s, Colors.black, k)!;
     return BiscuitPalette(
       sponge: s,
-      spongeShade: Color.lerp(s, Colors.black, 0.14)!,
-      spongeLight: Color.lerp(s, Colors.white, 0.35)!,
-      crustLight: Color.lerp(crust, Colors.white, 0.18)!,
-      crust: crust,
-      crustDark: Color.lerp(crust, Colors.black, 0.18)!,
-      pore: Color.lerp(s, Colors.black, 0.25)!,
-      baked: Color.lerp(crust, Colors.black, 0.12)!,
-      rim: Color.lerp(crust, Colors.black, 0.28)!,
+      spongeShade: dark(0.12),
+      spongeLight: Color.lerp(s, Colors.white, 0.28)!,
+      crustLight: Color.lerp(s, Colors.white, 0.06)!,
+      crust: dark(0.08),
+      crustDark: dark(0.16),
+      pore: dark(0.18),
+      baked: dark(0.14),
+      rim: dark(0.22),
     );
   }
 
