@@ -240,7 +240,7 @@ class FillingThumb extends StatelessWidget {
   final FillingLook look;
   // Tex kartadagi foto — nachinka rangi shundan (Filling3DView kabi).
   final String? photoUrl;
-  // «Покрытие»: bo'lak tepasi va tashqi devori shu rangda qoplangan.
+  // «Покрытие»: shu rangda to'liq qoplangan BUTUN tort (bo'lak emas).
   final Color? coat;
   // true — bo'lak emas, BUTUN (kesilgan) tort: bo'lim kartasi rasmi uchun.
   final bool whole;
@@ -273,9 +273,7 @@ class FillingThumb extends StatelessWidget {
               coat: coat,
               slice: !whole,
               tilt: 0.36,
-              // Qoplangan bo'lak tashqi (qoplangan) devori bilan tomoshabinga
-              // qaratiladi; oddiy bo'lakda kesim yuzlari ko'rinadi.
-              rotation: coat != null && !whole ? -2.74 : 0,
+              rotation: 0,
             ),
           ),
         ),
@@ -285,7 +283,7 @@ class FillingThumb extends StatelessWidget {
 }
 
 // «Покрытие» bo'limi kartasi rasmi (shef bosh ekrani / Biskvit bo'limi):
-// pushti krem bilan to'liq qoplangan, bo'lagi kesilgan butun tort.
+// pushti krem bilan to'liq qoplangan butun tort.
 class CoatingSectionThumb extends StatelessWidget {
   const CoatingSectionThumb({super.key});
 
@@ -305,8 +303,9 @@ class FillingCakePainter extends CustomPainter {
   final FillingLook look;
   // «Покрытие»: berilsa tort TASHQARIDAN shu rangdagi krem bilan to'liq
   // qoplangan — devor va tepa bir tekis qoplama rangida (qatlamlar
-  // ko'rinmaydi), kesimda esa qoplama biskvitni o'rab turgan qatlam bo'lib
-  // ko'rinadi. null — «yalang'och» tort (nachinka bo'limi).
+  // ko'rinmaydi). Qoplangan tort har doim BUTUN chiziladi: kesilmaydi va
+  // bo'lak rejimi ([slice]) unga ta'sir qilmaydi. null — «yalang'och»,
+  // bo'lagi kesilgan tort (nachinka bo'limi).
   final Color? coat;
   final bool slice;
   final double tilt;
@@ -321,8 +320,6 @@ class FillingCakePainter extends CustomPainter {
   });
 
   static const BiscuitPalette _sponge = BiscuitPalette.classic;
-  // Qoplama qalinligi: tort balandligi / radiusiga nisbatan ulush.
-  static const double _coatPart = 0.075;
   // Kesib olingan bo'lak: markazi va kengligi (radian, tort o'qida).
   // Markaz 0 — burilmagan holatda kesim tomoshabinga qarab ochiladi va
   // ikkala kesim yuzi ham ko'rinadi (kartadagi statik rasm shunday).
@@ -357,18 +354,20 @@ class FillingCakePainter extends CustomPainter {
     final plateRx = math.min(size.width * 0.42, areaH * 0.62);
     final plateRy = plateRx * tilt;
     final plateThick = plateRx * 0.05;
+    // Qoplangan tort («Покрытие») har doim BUTUN chiziladi — bo'lak yo'q.
+    final asSlice = slice && coat == null;
     // Bo'lak yakka o'zi turadi — kattaroq chiziladi.
-    _r = plateRx * (slice ? 1.0 : 0.66);
+    _r = plateRx * (asSlice ? 1.0 : 0.66);
     _h = math.min(plateRx * 0.56, areaH * 0.42);
 
-    final footprint = (slice ? plateRx * 0.5 : _r) * tilt;
+    final footprint = (asSlice ? plateRx * 0.5 : _r) * tilt;
     final total = _h + footprint + plateRy + plateThick;
     final plateY = (areaH + total) / 2 - plateRy - plateThick;
     final bottom = plateY;
 
     paintPlate3D(canvas, Offset(midX, plateY), plateRx, plateRy, plateThick);
 
-    if (slice) {
+    if (asSlice) {
       _paintSlice(canvas, midX, bottom);
       return;
     }
@@ -385,6 +384,14 @@ class FillingCakePainter extends CustomPainter {
         ..color = Colors.black.withValues(alpha: 0.13)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
     );
+
+    // «Покрытие»: tort BUTUN — kesilmagan, bo'laksiz; faqat qoplangan devor
+    // (oldingi yarim aylana to'liq) va qoplangan tepa.
+    if (coat != null) {
+      _paintWall(canvas, -math.pi / 2, math.pi / 2);
+      _paintTop(canvas, 0, 2 * math.pi);
+      return;
+    }
 
     final w0 = _wedgeCenter - _wedgeWidth / 2 + rotation;
     final w1 = _wedgeCenter + _wedgeWidth / 2 + rotation;
@@ -579,41 +586,6 @@ class FillingCakePainter extends CustomPainter {
       f += part;
     }
     // Yuzning yorug'lik soyasi: chapga qaragani ochroq, o'ngga — to'qroq.
-    // Qoplama: kesimda u biskvitni TASHQARIDAN o'rab turgan qatlam bo'lib
-    // ko'rinadi — tepada gorizontal, chetda (tort devori tomonda) vertikal.
-    final coat = this.coat;
-    if (coat != null) {
-      final inward = (axis - rim) * _coatPart;
-      final paint = Paint()..color = coat;
-      canvas.drawPath(
-        Path()
-          ..addPolygon([
-            axis,
-            rim,
-            rim.translate(0, _h * _coatPart),
-            axis.translate(0, _h * _coatPart),
-          ], true),
-        paint,
-      );
-      canvas.drawPath(
-        Path()
-          ..addPolygon([
-            rim,
-            rim + inward,
-            (rim + inward).translate(0, _h),
-            rim.translate(0, _h),
-          ], true),
-        paint,
-      );
-      // Qoplama va biskvit orasidagi ingichka chegara.
-      final edge = Paint()
-        ..strokeWidth = math.max(0.8, _h * 0.01)
-        ..color = _edgeOf(coat);
-      canvas.drawLine(axis.translate(0, _h * _coatPart),
-          (rim + inward).translate(0, _h * _coatPart), edge);
-      canvas.drawLine((rim + inward).translate(0, _h * _coatPart),
-          (rim + inward).translate(0, _h), edge);
-    }
     canvas.drawPath(
       face,
       Paint()

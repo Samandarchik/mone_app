@@ -897,7 +897,7 @@ class _ProductGridCard extends StatelessWidget {
   // true — «П/Ф Начинка»: rasm o'rniga kesilgan tort (nachinka rangi тех
   // картадан); false — biskvitning o'zi.
   final bool filling;
-  // true — «Покрытие»: shu mahsulot bilan tashqaridan qoplangan tort bo'lagi
+  // true — «Покрытие»: shu mahsulot bilan tashqaridan qoplangan BUTUN tort
   // (rang — «Покрытие rangi» palitrasidan). Mahsulotning o'z rasmi bu yerda
   // ko'rsatilmaydi: u nachinkaning rasmi, qoplangan tortniki emas.
   final bool coating;
