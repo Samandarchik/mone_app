@@ -53,6 +53,9 @@ class TechCardController {
   // «Покрытие» uchun palitradan tanlangan rang ("#RRGGBB" yoki '').
   String coatingColor;
 
+  // Biskvitning o'z rangi, palitradan ("#RRGGBB" yoki '').
+  String biscuitColor;
+
   TechCardController([TechCard? initial])
       : batchQty = (initial?.batchQty ?? 1) < 1 ? 1 : (initial?.batchQty ?? 1),
         batchUnit = initial?.batchUnit == 'g' ? 'g' : '',
@@ -75,7 +78,8 @@ class TechCardController {
         biscuitPhotoUrl = initial?.biscuitPhotoUrl ?? '',
         fillingColor = initial?.fillingColor ?? '',
         fillingColor2 = initial?.fillingColor2 ?? '',
-        coatingColor = initial?.coatingColor ?? '';
+        coatingColor = initial?.coatingColor ?? '',
+        biscuitColor = initial?.biscuitColor ?? '';
 
   // Partiya JAMI donasi = bitta list donasi (batchQty) × list soni (listQty).
   // Barcha «1 dona» / «за N штук» hisob-ko'rsatishlar shu songa tayanadi.
@@ -106,6 +110,7 @@ class TechCardController {
         fillingColor: fillingColor,
         fillingColor2: fillingColor2,
         coatingColor: coatingColor,
+        biscuitColor: biscuitColor,
       );
 
   // «Состав» uchun showInSostav=true bo'lgan nomlar.

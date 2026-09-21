@@ -4,8 +4,10 @@
 // Начинка» sahifasidagi 3D tortda nachinka AYNAN shu rangda chiziladi —
 // foto va nom/tarkibdan ustun. Xuddi shu palitra «Покрытие» bo'limida
 // qoplama rangi uchun ham ishlatiladi (tech_card.coating_color, [title]).
-// Tanlangan rangni yana bosish yoki «Rangsiz»
-// — tanlovni olib tashlaydi (rang yana foto / tex kartadan aniqlanadi).
+// «Biskvit rangi» (biscuit_color) uchun ham shu. Palitra odatda YIG'ILGAN
+// (bir qator rang) — sarlavhadagi strelka hamma ranglarni ochadi/yig'adi.
+// Tanlangan rangni yana bosish yoki «Rangsiz» — tanlovni olib tashlaydi
+// (rang yana foto / tex kartadan aniqlanadi).
 // fillingColorFromHex / fillingColorToHex — saqlash formati bilan o'girish.
 import 'package:flutter/material.dart';
 
@@ -59,11 +61,15 @@ const List<Color> kFillingPalette = [
   Color(0xFF9E9E9E),
 ];
 
-class FillingColorPalette extends StatelessWidget {
+
+// Yig'ilgan holatda ko'rinadigan ranglar soni (bir qator).
+const int _kCollapsedCount = 6;
+
+class FillingColorPalette extends StatefulWidget {
   // Tanlangan rang ("#RRGGBB") yoki '' — tanlanmagan.
   final String value;
   final ValueChanged<String> onChanged;
-  // Sarlavha: «Nachinka rangi» (П/Ф Начинка) yoki «Покрытие rangi».
+  // Sarlavha: «Nachinka rangi», «Покрытие rangi», «Biskvit rangi» ...
   final String title;
 
   const FillingColorPalette({
@@ -74,11 +80,37 @@ class FillingColorPalette extends StatelessWidget {
   });
 
   @override
+  State<FillingColorPalette> createState() => _FillingColorPaletteState();
+}
+
+class _FillingColorPaletteState extends State<FillingColorPalette> {
+  // Palitra tex kartada ko'p joy egallamasin: odatda YIG'ILGAN — faqat bir
+  // qator rang (tanlangani har doim ko'rinadi); sarlavhadagi strelka bosilsa
+  // hamma ranglar ochiladi, yana bosilsa yig'iladi.
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
-    final selected = fillingColorFromHex(value);
+    final selected = fillingColorFromHex(widget.value);
+    final selectedHex = selected == null ? null : fillingColorToHex(selected);
+
+    // Yig'ilganda: birinchi bir nechta rang; tanlangan rang ular orasida
+    // bo'lmasa — eng boshiga qo'yiladi (nima tanlangani ko'rinib tursin).
+    final List<Color> shown;
+    if (_expanded) {
+      shown = kFillingPalette;
+    } else {
+      final first = kFillingPalette.take(_kCollapsedCount).toList();
+      final inFirst = selectedHex == null ||
+          first.any((c) => fillingColorToHex(c) == selectedHex);
+      shown = inFirst
+          ? first
+          : [selected!, ...first.take(_kCollapsedCount - 1)];
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      padding: const EdgeInsets.fromLTRB(12, 4, 4, 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -87,46 +119,60 @@ class FillingColorPalette extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.palette_outlined, size: 18),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 14),
-                ),
-              ),
-              if (selected != null)
-                TextButton.icon(
-                  onPressed: () => onChanged(''),
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    foregroundColor: Colors.red,
+          // Sarlavha qatori butunlay bosiladi — strelka ochadi/yig'adi.
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: BorderRadius.circular(8),
+            child: Row(
+              children: [
+                const Icon(Icons.palette_outlined, size: 18),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    widget.title,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 14),
                   ),
-                  icon: const Icon(Icons.format_color_reset_outlined, size: 16),
-                  label: const Text('Rangsiz'),
                 ),
-            ],
+                if (selected != null)
+                  TextButton.icon(
+                    onPressed: () => widget.onChanged(''),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      foregroundColor: Colors.red,
+                    ),
+                    icon: const Icon(Icons.format_color_reset_outlined,
+                        size: 16),
+                    label: const Text('Rangsiz'),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Icon(
+                    _expanded ? Icons.expand_less : Icons.expand_more,
+                    color: Colors.brown.shade700,
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final c in kFillingPalette)
-                _Swatch(
-                  color: c,
-                  selected: selected != null &&
-                      fillingColorToHex(selected) == fillingColorToHex(c),
-                  onTap: () {
-                    final hex = fillingColorToHex(c);
-                    // Tanlanganini yana bosish — tanlovni olib tashlash.
-                    onChanged(hex == value.trim().toUpperCase() ? '' : hex);
-                  },
-                ),
-            ],
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final c in shown)
+                  _Swatch(
+                    color: c,
+                    selected: selectedHex == fillingColorToHex(c),
+                    onTap: () {
+                      final hex = fillingColorToHex(c);
+                      // Tanlanganini yana bosish — tanlovni olib tashlash.
+                      widget.onChanged(hex == selectedHex ? '' : hex);
+                    },
+                  ),
+              ],
+            ),
           ),
         ],
       ),

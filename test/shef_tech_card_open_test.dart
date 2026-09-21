@@ -14,6 +14,7 @@ import 'package:uz_ai_dev/admin/model/tech_card.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
+import 'package:uz_ai_dev/admin/ui/widgets/filling_color_palette.dart';
 import 'package:uz_ai_dev/shef/provider/shef_provider.dart';
 import 'package:uz_ai_dev/shef/ui/shef_constructor_page.dart';
 import 'package:uz_ai_dev/shef/ui/shef_tech_card_page.dart';
@@ -135,6 +136,7 @@ void main() {
   });
 
   doubleTapTests(() => cats, () => products);
+  paletteAndLayerTests(() => cats, () => products);
 }
 
 void doubleTapTests(
@@ -166,5 +168,73 @@ void doubleTapTests(
     await t.pump(const Duration(milliseconds: 600));
     expect(t.takeException(), isNull);
     expect(find.byType(TechCardEditorPage), findsOneWidget);
+  });
+}
+
+// Palitra yig'iladigan: odatda bir qator rang, strelka hammasini ochadi.
+// Konstruktor: «+ Qatlam» yangi biskvit qatlamini qo'shadi, «×» olib tashlaydi.
+void paletteAndLayerTests(
+  CategoryProviderAdmin Function() cats,
+  ProductProviderAdmin Function() products,
+) {
+  Finder swatches() => find.byWidgetPredicate((w) =>
+      w is Container &&
+      w.decoration is BoxDecoration &&
+      (w.decoration! as BoxDecoration).shape == BoxShape.circle &&
+      w.constraints?.maxWidth == 36);
+
+  testWidgets('palette: collapsed by default, arrow expands and collapses',
+      (t) async {
+    t.view.physicalSize = const Size(497, 850);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(_app(
+      TechCardEditorPage(
+        product: _product(20, 'Начинка клубничная', 2, 'П/Ф Начинка'),
+        canEditPrices: false,
+        showCoatingColor: true,
+      ),
+      cats(),
+      products(),
+    ));
+    await t.pump(const Duration(milliseconds: 400));
+    expect(swatches(), findsNWidgets(6));
+    await t.tap(find.byIcon(Icons.expand_more));
+    await t.pump(const Duration(milliseconds: 300));
+    expect(t.takeException(), isNull);
+    expect(swatches(), findsNWidgets(kFillingPalette.length));
+    await t.tap(find.byIcon(Icons.expand_less));
+    await t.pump(const Duration(milliseconds: 300));
+    expect(swatches(), findsNWidgets(6));
+  });
+
+  testWidgets('constructor: «+ Qatlam» adds a biscuit layer, × removes it',
+      (t) async {
+    t.view.physicalSize = const Size(497, 850);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(_app(const ShefConstructorPage(), cats(), products()));
+    await t.pump(const Duration(milliseconds: 400));
+    expect(find.text('1-qatlam'), findsOneWidget);
+    expect(find.text('2-qatlam'), findsNothing);
+    // «Biskvit + ... + ...» matni olib tashlangan.
+    expect(find.textContaining('  +  '), findsNothing);
+
+    await t.tap(find.text('Qatlam'));
+    await t.pump(const Duration(milliseconds: 400));
+    expect(t.takeException(), isNull);
+    expect(find.text('2-qatlam'), findsOneWidget);
+
+    // Ko'p qatlam bilan 2- va 3-qadam ham xatosiz chiziladi.
+    for (final step in ['2', '3', '1']) {
+      await t.tap(find.text(step));
+      await t.pump(const Duration(milliseconds: 400));
+      expect(t.takeException(), isNull);
+    }
+
+    await t.tap(find.byIcon(Icons.close).last);
+    await t.pump(const Duration(milliseconds: 400));
+    expect(t.takeException(), isNull);
+    expect(find.text('2-qatlam'), findsNothing);
   });
 }

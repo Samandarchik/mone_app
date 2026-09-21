@@ -23,6 +23,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:uz_ai_dev/admin/model/tech_card.dart';
+import 'package:uz_ai_dev/admin/ui/widgets/filling_color_palette.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/biscuit_side_photo.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/cake_3d.dart';
@@ -272,6 +273,31 @@ class BiscuitPalette {
       }
     }
     return null;
+  }
+
+  // Biskvit ranglari — ustuvorlik bilan: tex kartadagi «Biskvit rangi»
+  // palitrasidan tanlangan rang (biscuit_color) → nom/tarkibdan (detect).
+  static BiscuitPalette of(String name, TechCard? card) {
+    final picked = fillingColorFromHex(card?.biscuitColor ?? '');
+    return picked != null ? fromColor(picked) : detect(name, card);
+  }
+
+  // Bitta rangdan butun palitra: [c] — biskvit (yon tomon) rangi; qobiq,
+  // g'ovak va chet chiziqlari — o'sha rangning to'qroq tuslari (pishgan
+  // tepa yon tomondan to'qroq bo'ladi), hech qanday begona tus qo'shilmaydi.
+  static BiscuitPalette fromColor(Color c) {
+    Color dark(double k) => Color.lerp(c, Colors.black, k)!;
+    return BiscuitPalette(
+      sponge: c,
+      spongeShade: dark(0.12),
+      spongeLight: Color.lerp(c, Colors.white, 0.28)!,
+      crustLight: dark(0.10),
+      crust: dark(0.22),
+      crustDark: dark(0.34),
+      pore: dark(0.22),
+      baked: dark(0.30),
+      rim: dark(0.40),
+    );
   }
 
   // Turi тех картадан: AVVAL mahsulot nomi (eng ishonchli), keyin blok

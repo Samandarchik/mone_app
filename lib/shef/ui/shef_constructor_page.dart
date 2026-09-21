@@ -5,7 +5,11 @@
 // tugmasi (1 · 2 · 3), undan pastda shu qadamning mahsulotlari (grid) —
 // bosilsa tanlanadi va 3D darhol o'zgaradi.
 //   1 — Biskvit: faqat biskvitning o'zi (П/Ф Бисквит sahifasidagidek:
-//       o'lchami/turi tex kartadan, foto bo'lsa yon tomonda).
+//       o'lchami/turi tex kartadan, foto bo'lsa yon tomonda). «+ Qatlam» —
+//       ustiga yana biskvit qatlami (5 tagacha): har qatlamga griddan o'z
+//       biskviti tanlanadi, «×» olib tashlaydi. Ko'p qatlamda biskvitlar
+//       ustma-ust (yarus) chiziladi, 2/3-qadamda HAR qatlam o'z mini-torti
+//       (3 korj + 2 nachinka), o'lchami va rangi o'z tex kartasidan.
 //   2 — Nachinka: O'SHA biskvit (korj rangi tanlangan biskvitdan) ichida
 //       tanlangan nachinka bilan — bo'lagi kesilgan, kesimda nachinka.
 //   3 — Покрытие: o'sha tort tanlangan krem bilan tashqaridan TO'LIQ
@@ -53,10 +57,17 @@ class ShefConstructorPage extends StatefulWidget {
 
 class _ShefConstructorPageState extends State<ShefConstructorPage> {
   int _step = 0;
+  // Biskvit QATLAMLARI (pastdan tepaga) — har biri o'z biskvit mahsuloti
+  // (id; null — ro'yxatdagi birinchisi). «+» yangi qatlamni eng tepaga
+  // qo'shadi; 2- va 3-qadamda har qatlam o'z mini-torti bo'lib chiziladi.
+  final List<int?> _biscuitIds = [null];
+  // Hozir biskvit tanlanayotgan qatlam (_biscuitIds indeksi).
+  int _activeLayer = 0;
   // Tanlanganlar (null — ro'yxatdagi birinchisi).
-  int? _biscuitId;
   int? _fillingId;
   int? _coatingId;
+
+  static const int _maxLayers = 5;
 
   @override
   void initState() {
@@ -84,6 +95,7 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
           product: product,
           canEditPrices: false,
           showBiscuitPhoto: _step != 2,
+          showBiscuitColor: _step == 0,
           showFillingColor: _step == 1,
           showCoatingColor: _step == 2,
         ),
@@ -131,19 +143,22 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
               fillings.add(p);
             }
           }
-          final biscuit = _pick(biscuits, _biscuitId);
+          // Har qatlamning biskviti (pastdan tepaga).
+          final layers = [
+            for (final id in _biscuitIds) _pick(biscuits, id),
+          ];
           final filling = _pick(fillings, _fillingId);
           final coating = _pick(fillings, _coatingId);
 
           final items = _step == 0 ? biscuits : fillings;
           final selectedId =
-              [biscuit?.id, filling?.id, coating?.id][_step];
+              [layers[_activeLayer]?.id, filling?.id, coating?.id][_step];
 
           return Column(
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                child: _hero(biscuit, filling, coating),
+                child: _hero(layers, filling, coating),
               ),
               // Qadam tugmalari — rasmning OSTIDA, bir qatorda.
               Padding(
@@ -161,7 +176,6 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
                   ],
                 ),
               ),
-              _summary(biscuit, filling, coating),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
                 child: Align(
@@ -175,6 +189,9 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
                   ),
                 ),
               ),
+              // 1-qadam: biskvit qatlamlari — qaysi qatlamga tanlanayotgani
+              // va «+ Qatlam» (ustiga yana biskvit qo'shish).
+              if (_step == 0 && biscuits.isNotEmpty) _layerBar(layers),
               Expanded(
                 child: items.isEmpty
                     ? _EmptyHint(biscuit: _step == 0)
@@ -196,7 +213,7 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
                             selected: p.id == selectedId,
                             onTap: () => setState(() {
                               if (_step == 0) {
-                                _biscuitId = p.id;
+                                _biscuitIds[_activeLayer] = p.id;
                               } else if (_step == 1) {
                                 _fillingId = p.id;
                               } else {
@@ -215,25 +232,41 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
     );
   }
 
-  // Katta 3D: qadamga qarab biskvit / nachinkali / qoplangan tort.
+  // Katta 3D: qadamga qarab biskvit(lar) / nachinkali / qoplangan tort.
+  // [layers] — biskvit qatlamlari pastdan tepaga.
   Widget _hero(
-    ProductModelAdmin? biscuit,
+    List<ProductModelAdmin?> layers,
     ProductModelAdmin? filling,
     ProductModelAdmin? coating,
   ) {
-    final palette = biscuit == null
+    BiscuitPalette paletteOf(ProductModelAdmin? b) => b == null
         ? BiscuitPalette.classic
-        : BiscuitPalette.detect(biscuit.name, biscuit.techCard);
-    if (_step == 0) {
+        : BiscuitPalette.of(b.name, b.techCard);
+
+    // Bitta qatlam, 1-qadam — biskvitning o'zi (П/Ф Бисквит sahifasidagidek:
+    // foto yon tomonda, mevalar, to'rtburchak shakl ham).
+    if (_step == 0 && layers.length == 1) {
+      final biscuit = layers.single;
       return Biscuit3DView(
         height: _heroH,
         dims: BiscuitDims.fromTechCard(biscuit?.techCard),
-        palette: palette,
+        palette: paletteOf(biscuit),
         fruits: biscuit == null
             ? const []
             : BiscuitFruit.detect(biscuit.name),
         photoUrl: biscuitPhotoUrlOf(biscuit?.techCard),
       );
+    }
+
+    // Yaruslar: har qatlam o'z o'lchami (tex kartadan) va rangida — tort
+    // o'lchami qadam almashganda o'zgarmaydi.
+    final tiers = [
+      for (final b in layers)
+        CakeTier(BiscuitDims.fromTechCard(b?.techCard), paletteOf(b)),
+    ];
+    if (_step == 0) {
+      // Ko'p qatlam, 1-qadam: faqat biskvitlar ustma-ust.
+      return Filling3DView(height: _heroH, tiers: tiers, plain: true);
     }
     final (look, photoUrl) = filling == null
         ? (FillingLook.neutral, null)
@@ -242,10 +275,7 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
       height: _heroH,
       look: look,
       photoUrl: photoUrl,
-      sponge: palette,
-      // Tort o'lchami 1-qadamdagi biskvitniki — qadam almashganda
-      // o'zgarmaydi; nachinka qatlamlari shu balandlikka sig'diriladi.
-      dims: BiscuitDims.fromTechCard(biscuit?.techCard),
+      tiers: tiers,
       // 3-qadam: tashqaridan qoplangan, lekin bo'lagi kesilgan — ichidagi
       // nachinka ham ko'rinadi.
       coat: _step == 2
@@ -257,28 +287,57 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
     );
   }
 
-  // Hozirgi tanlov: «Biskvit · Nachinka · Покрытие» (yetib kelingan qadamgacha).
-  Widget _summary(
-    ProductModelAdmin? biscuit,
-    ProductModelAdmin? filling,
-    ProductModelAdmin? coating,
-  ) {
-    final parts = [
-      biscuit?.name,
-      if (_step >= 1) filling?.name,
-      if (_step >= 2) coating?.name,
-    ].whereType<String>().toList();
-    if (parts.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          parts.join('  +  '),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(fontSize: 12.5, color: Colors.brown.shade700),
-        ),
+  // Biskvit qatlamlari qatori: «1-qatlam», «2-qatlam» ... (pastdan tepaga) —
+  // bosilsa shu qatlam faol bo'ladi (grid tanlovi unga yoziladi); «×» —
+  // qatlamni olib tashlash; oxirida «+ Qatlam».
+  Widget _layerBar(List<ProductModelAdmin?> layers) {
+    return SizedBox(
+      height: 40,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        children: [
+          for (var i = 0; i < layers.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: InputChip(
+                label: Text('${i + 1}-qatlam'),
+                selected: _activeLayer == i,
+                showCheckmark: false,
+                selectedColor: _accentColor.withValues(alpha: 0.35),
+                backgroundColor: Colors.white,
+                side: BorderSide(
+                  color: _activeLayer == i
+                      ? _accentColor
+                      : Colors.grey.shade300,
+                ),
+                onPressed: () => setState(() => _activeLayer = i),
+                deleteIcon: const Icon(Icons.close, size: 16),
+                // Yagona qatlamni olib tashlab bo'lmaydi.
+                onDeleted: layers.length < 2
+                    ? null
+                    : () => setState(() {
+                          _biscuitIds.removeAt(i);
+                          if (_activeLayer >= _biscuitIds.length) {
+                            _activeLayer = _biscuitIds.length - 1;
+                          }
+                        }),
+              ),
+            ),
+          if (layers.length < _maxLayers)
+            ActionChip(
+              avatar: const Icon(Icons.add, size: 18),
+              label: const Text('Qatlam'),
+              backgroundColor: Colors.white,
+              side: const BorderSide(color: _accentColor),
+              // Yangi qatlam eng TEPAGA qo'shiladi va faol bo'ladi; boshlanishiga
+              // ostidagi qatlamning biskviti — keyin griddan almashtiriladi.
+              onPressed: () => setState(() {
+                _biscuitIds.add(layers.last?.id);
+                _activeLayer = _biscuitIds.length - 1;
+              }),
+            ),
+        ],
       ),
     );
   }
@@ -371,7 +430,7 @@ class _PickCard extends StatelessWidget {
     if (step == 0) {
       drawn = BiscuitThumb(
         dims: BiscuitDims.fromTechCard(product.techCard),
-        palette: BiscuitPalette.detect(product.name, product.techCard),
+        palette: BiscuitPalette.of(product.name, product.techCard),
         fruits: BiscuitFruit.detect(product.name),
         photoUrl: biscuitPhotoUrlOf(product.techCard),
       );

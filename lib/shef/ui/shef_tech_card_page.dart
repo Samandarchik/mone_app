@@ -368,6 +368,8 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
           // «Покрытие»: alohida palitra — qoplama rangi (nachinkadan
           // mustaqil, tech_card.coating_color).
           showCoatingColor: widget.showCoating,
+          // «П/Ф Бисквит»: biskvitning o'z rangi (biscuit_color).
+          showBiscuitColor: widget.showCakeConstructor,
         ),
       ),
     );
@@ -636,7 +638,7 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                           dims: BiscuitDims.fromTechCard(selected?.techCard),
                           palette: selected == null
                               ? BiscuitPalette.classic
-                              : BiscuitPalette.detect(
+                              : BiscuitPalette.of(
                                   selected.name, selected.techCard),
                           // Mevalar (вишня, клубника ...) biskvit nomidan —
                           // faqat yon tomonda chiziladi, tepada bezak yo'q.
@@ -974,7 +976,7 @@ class _ProductGridCard extends StatelessWidget {
         ? FillingThumb(look: fillingLook, photoUrl: fillingPhoto)
         : BiscuitThumb(
             dims: BiscuitDims.fromTechCard(product.techCard),
-            palette: BiscuitPalette.detect(product.name, product.techCard),
+            palette: BiscuitPalette.of(product.name, product.techCard),
             fruits: BiscuitFruit.detect(product.name),
             photoUrl: biscuitPhotoUrlOf(product.techCard),
           );

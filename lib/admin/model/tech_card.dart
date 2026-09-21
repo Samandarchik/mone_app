@@ -299,6 +299,10 @@ class TechCard {
   // Shu mahsulot tortni TASHQARIDAN qoplaganda 3D'da qoplama shu rangda
   // chiziladi. fillingColor dan MUSTAQIL. JSON: coating_color.
   final String coatingColor;
+  // BISKVITNING o'z rangi, palitradan: "#RRGGBB" yoki '' (rang nom/tarkibdan
+  // aniqlanadi — BiscuitPalette.detect). Shef «П/Ф Бисквит» 3D rasmi va tort
+  // konstruktoridagi biskvit qatlamlari shu rangda. JSON: biscuit_color.
+  final String biscuitColor;
 
   const TechCard({
     this.batchQty = 1,
@@ -325,6 +329,7 @@ class TechCard {
     this.fillingColor = '',
     this.fillingColor2 = '',
     this.coatingColor = '',
+    this.biscuitColor = '',
   });
 
   factory TechCard.fromJson(Map<String, dynamic> json) {
@@ -361,6 +366,7 @@ class TechCard {
       fillingColor: json['filling_color']?.toString() ?? '',
       fillingColor2: json['filling_color2']?.toString() ?? '',
       coatingColor: json['coating_color']?.toString() ?? '',
+      biscuitColor: json['biscuit_color']?.toString() ?? '',
     );
   }
 
@@ -405,6 +411,7 @@ class TechCard {
         'filling_color': fillingColor,
         'filling_color2': fillingColor2,
         'coating_color': coatingColor,
+        'biscuit_color': biscuitColor,
       };
 
   TechCard copyWith({
@@ -436,6 +443,7 @@ class TechCard {
     String? fillingColor,
     String? fillingColor2,
     String? coatingColor,
+    String? biscuitColor,
   }) {
     return TechCard(
       batchQty: batchQty ?? this.batchQty,
@@ -462,6 +470,7 @@ class TechCard {
       fillingColor: fillingColor ?? this.fillingColor,
       fillingColor2: fillingColor2 ?? this.fillingColor2,
       coatingColor: coatingColor ?? this.coatingColor,
+      biscuitColor: biscuitColor ?? this.biscuitColor,
     );
   }
 

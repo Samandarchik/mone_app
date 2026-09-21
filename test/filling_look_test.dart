@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uz_ai_dev/admin/model/tech_card.dart';
 import 'package:uz_ai_dev/admin/ui/widgets/filling_color_palette.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
 
 const _strawberry = Color(0xFFD9364A);
@@ -18,6 +19,7 @@ void main() {
   paletteTests();
   coatingTests();
   twoLayerTests();
+  biscuitColorTests();
   test('nom eng ustun — masalliqlarga qaralmaydi', () {
     final card = _card(const [
       TechItem(name: 'Пюре клубника', unit: 'g', amount: 900),
@@ -179,5 +181,30 @@ void twoLayerTests() {
     expect(back.fillingColor, '#F8BBD0');
     expect(TechCard.fromJson(const {}).fillingColor2, '');
     expect(card.copyWith(bakeTimeMin: 5).fillingColor2, '#5A3420');
+  });
+}
+
+// Biskvit rangi — tex kartadagi «Biskvit rangi» palitrasi (biscuit_color).
+void biscuitColorTests() {
+  test('BiscuitPalette.of: palitra rangi nom/tarkibdan ustun', () {
+    const card = TechCard(biscuitColor: '#F8BBD0');
+    final p = BiscuitPalette.of('Бисквит шоколадный', card);
+    expect(p.sponge, const Color(0xFFF8BBD0));
+    // Qobiq — o'sha rangning to'qrog'i, begona tus emas.
+    expect(p.crust, Color.lerp(const Color(0xFFF8BBD0), Colors.black, 0.22));
+  });
+
+  test('BiscuitPalette.of: rang tanlanmagan — nom/tarkibdan', () {
+    expect(BiscuitPalette.of('Бисквит шоколадный', const TechCard()),
+        BiscuitPalette.chocolate);
+    expect(BiscuitPalette.of('Бисквит', null), BiscuitPalette.classic);
+  });
+
+  test('TechCard: biscuit_color JSON\'da saqlanadi', () {
+    const card = TechCard(biscuitColor: '#6B4029');
+    expect(card.toJson()['biscuit_color'], '#6B4029');
+    expect(TechCard.fromJson(card.toJson()).biscuitColor, '#6B4029');
+    expect(TechCard.fromJson(const {}).biscuitColor, '');
+    expect(card.copyWith(bakeTimeMin: 5).biscuitColor, '#6B4029');
   });
 }

@@ -189,6 +189,11 @@ class TechCardEditorPage extends StatefulWidget {
   /// ochganda; nachinka rangidan mustaqil.
   final bool showCoatingColor;
 
+  /// true — «Biskvit rangi» palitrasi (tech_card.biscuit_color): biskvitning
+  /// o'z rangi — shef «П/Ф Бисквит» 3D rasmi va tort konstruktoridagi biskvit
+  /// qatlamlari shu rangda. Tanlanmasa rang nom/tarkibdan aniqlanadi.
+  final bool showBiscuitColor;
+
   const TechCardEditorPage({
     super.key,
     required this.product,
@@ -196,6 +201,7 @@ class TechCardEditorPage extends StatefulWidget {
     this.showBiscuitPhoto = false,
     this.showFillingColor = false,
     this.showCoatingColor = false,
+    this.showBiscuitColor = false,
   });
 
   @override
@@ -1783,6 +1789,13 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
                           setState(() => c.fillingColor2 = hex),
                     ),
                   ],
+                  if (widget.showBiscuitColor)
+                    FillingColorPalette(
+                      title: 'Biskvit rangi',
+                      value: c.biscuitColor,
+                      onChanged: (hex) =>
+                          setState(() => c.biscuitColor = hex),
+                    ),
                   if (widget.showCoatingColor)
                     FillingColorPalette(
                       title: 'Покрытие rangi',
