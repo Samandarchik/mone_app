@@ -141,6 +141,14 @@ class FillingLook {
     return (detect(name, card), biscuitPhotoUrlOf(card));
   }
 
+  // «Покрытие» bo'limi: shu mahsulot tortni TASHQARIDAN qoplagandagi rang.
+  // Tex kartadagi «Покрытие» palitrasi (coating_color) ustun; tanlanmagan
+  // bo'lsa — nom/tarkibdan (detect). Nachinka rangi (filling_color) va foto
+  // bu yerga ta'sir QILMAYDI: ichki nachinka va tashqi qoplama mustaqil.
+  static Color coatOf(String name, TechCard? card) =>
+      fillingColorFromHex(card?.coatingColor ?? '') ??
+      detect(name, card).color;
+
   static FillingLook detect(String name, TechCard? card) {
     final byName = _ruleOf(name);
     if (byName != null) return FillingLook(_rules[byName].$2);
@@ -195,12 +203,15 @@ class Filling3DView extends StatelessWidget {
   // FOTODAN olinadi (FillingPhotoLook) va [look] dan ustun turadi. Tex karta
   // saqlangach 3D o'zi yangilanadi.
   final String? photoUrl;
+  // «Покрытие» bo'limi: tort shu rangda tashqaridan qoplangan (painter.coat).
+  final Color? coat;
   final double height;
 
   const Filling3DView({
     super.key,
     this.look = FillingLook.neutral,
     this.photoUrl,
+    this.coat,
     this.height = 240,
   });
 
@@ -213,6 +224,7 @@ class Filling3DView extends StatelessWidget {
         manual: true,
         painter: (tilt, rotation) => FillingCakePainter(
           look: photoLook ?? look,
+          coat: coat,
           tilt: tilt,
           rotation: rotation,
         ),
@@ -228,8 +240,18 @@ class FillingThumb extends StatelessWidget {
   final FillingLook look;
   // Tex kartadagi foto — nachinka rangi shundan (Filling3DView kabi).
   final String? photoUrl;
+  // «Покрытие»: bo'lak tepasi va tashqi devori shu rangda qoplangan.
+  final Color? coat;
+  // true — bo'lak emas, BUTUN (kesilgan) tort: bo'lim kartasi rasmi uchun.
+  final bool whole;
 
-  const FillingThumb({super.key, required this.look, this.photoUrl});
+  const FillingThumb({
+    super.key,
+    required this.look,
+    this.photoUrl,
+    this.coat,
+    this.whole = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -248,9 +270,12 @@ class FillingThumb extends StatelessWidget {
             size: Size.infinite,
             painter: FillingCakePainter(
               look: photoLook ?? look,
-              slice: true,
+              coat: coat,
+              slice: !whole,
               tilt: 0.36,
-              rotation: 0,
+              // Qoplangan bo'lak tashqi (qoplangan) devori bilan tomoshabinga
+              // qaratiladi; oddiy bo'lakda kesim yuzlari ko'rinadi.
+              rotation: coat != null && !whole ? -2.74 : 0,
             ),
           ),
         ),
@@ -259,24 +284,45 @@ class FillingThumb extends StatelessWidget {
   }
 }
 
+// «Покрытие» bo'limi kartasi rasmi (shef bosh ekrani / Biskvit bo'limi):
+// pushti krem bilan to'liq qoplangan, bo'lagi kesilgan butun tort.
+class CoatingSectionThumb extends StatelessWidget {
+  const CoatingSectionThumb({super.key});
+
+  @override
+  Widget build(BuildContext context) => const FillingThumb(
+        look: FillingLook.neutral,
+        coat: Color(0xFFF8BBD0),
+        whole: true,
+      );
+}
+
 // Bo'lagi kesib olingan yumaloq tort ([slice] = false) yoki o'sha tortning
 // BITTA BO'LAGI ([slice] = true — grid kartalari uchun). Burchak t: ekranda
 // x = o'q + r·sin t, chuqurlik cos t (> 0 — tomoshabin tomonda). Chizish
 // tartibi orqadan oldinga: patnis → (kesim yuzlari / yon devor) → tepa.
 class FillingCakePainter extends CustomPainter {
   final FillingLook look;
+  // «Покрытие»: berilsa tort TASHQARIDAN shu rangdagi krem bilan to'liq
+  // qoplangan — devor va tepa bir tekis qoplama rangida (qatlamlar
+  // ko'rinmaydi), kesimda esa qoplama biskvitni o'rab turgan qatlam bo'lib
+  // ko'rinadi. null — «yalang'och» tort (nachinka bo'limi).
+  final Color? coat;
   final bool slice;
   final double tilt;
   final double rotation;
 
   FillingCakePainter({
     required this.look,
+    this.coat,
     this.slice = false,
     required this.tilt,
     required this.rotation,
   });
 
   static const BiscuitPalette _sponge = BiscuitPalette.classic;
+  // Qoplama qalinligi: tort balandligi / radiusiga nisbatan ulush.
+  static const double _coatPart = 0.075;
   // Kesib olingan bo'lak: markazi va kengligi (radian, tort o'qida).
   // Markaz 0 — burilmagan holatda kesim tomoshabinga qarab ochiladi va
   // ikkala kesim yuzi ham ko'rinadi (kartadagi statik rasm shunday).
@@ -533,6 +579,41 @@ class FillingCakePainter extends CustomPainter {
       f += part;
     }
     // Yuzning yorug'lik soyasi: chapga qaragani ochroq, o'ngga — to'qroq.
+    // Qoplama: kesimda u biskvitni TASHQARIDAN o'rab turgan qatlam bo'lib
+    // ko'rinadi — tepada gorizontal, chetda (tort devori tomonda) vertikal.
+    final coat = this.coat;
+    if (coat != null) {
+      final inward = (axis - rim) * _coatPart;
+      final paint = Paint()..color = coat;
+      canvas.drawPath(
+        Path()
+          ..addPolygon([
+            axis,
+            rim,
+            rim.translate(0, _h * _coatPart),
+            axis.translate(0, _h * _coatPart),
+          ], true),
+        paint,
+      );
+      canvas.drawPath(
+        Path()
+          ..addPolygon([
+            rim,
+            rim + inward,
+            (rim + inward).translate(0, _h),
+            rim.translate(0, _h),
+          ], true),
+        paint,
+      );
+      // Qoplama va biskvit orasidagi ingichka chegara.
+      final edge = Paint()
+        ..strokeWidth = math.max(0.8, _h * 0.01)
+        ..color = _edgeOf(coat);
+      canvas.drawLine(axis.translate(0, _h * _coatPart),
+          (rim + inward).translate(0, _h * _coatPart), edge);
+      canvas.drawLine((rim + inward).translate(0, _h * _coatPart),
+          (rim + inward).translate(0, _h), edge);
+    }
     canvas.drawPath(
       face,
       Paint()
@@ -561,6 +642,12 @@ class FillingCakePainter extends CustomPainter {
       ..addPolygon([...arc(_top), ...arc(_top + _h).reversed], true);
     canvas.save();
     canvas.clipPath(whole);
+    final coat = this.coat;
+    if (coat != null) {
+      _paintCoatedWall(canvas, whole, arc, coat);
+      canvas.restore();
+      return;
+    }
     var f = 0.0;
     var fillIdx = 0;
     for (final (part, isFilling) in _layers) {
@@ -655,7 +742,59 @@ class FillingCakePainter extends CustomPainter {
     canvas.restore();
   }
 
-  // Tepa — pishgan biskvit qobig'i, kesilgan bo'laksiz sektor [from, to].
+  // Qoplangan tort devori: qatlamlar ko'rinmaydi — butun devor bir tekis
+  // qoplama rangida, shpatel izlari (ingichka gorizontal chiziqlar) bilan.
+  void _paintCoatedWall(Canvas canvas, Path whole,
+      List<Offset> Function(double y) arc, Color coat) {
+    canvas.drawPath(whole, Paint()..color = coat);
+    // Shpatel izlari — navbatma-navbat ochroq / to'qroq.
+    for (var i = 1; i < 9; i++) {
+      final y = _top + _h * i / 9;
+      canvas.drawPath(
+        Path()..addPolygon(arc(y), false),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = math.max(0.6, _h * 0.008)
+          ..color = (i.isEven ? Colors.white : Colors.black)
+              .withValues(alpha: i.isEven ? 0.16 : 0.07),
+      );
+    }
+    final bottomOval = Rect.fromCenter(
+      center: Offset(_cx, _top + _h),
+      width: _r * 2,
+      height: _r * 2 * tilt,
+    );
+    // Pastki chetdagi yengil soya (tort patnisga tegib turgan joy).
+    canvas.drawArc(
+      bottomOval,
+      0,
+      math.pi,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = _h * 0.05
+        ..color = Colors.black.withValues(alpha: 0.12),
+    );
+    // Silindr hajm soyasi.
+    canvas.drawRect(
+      Rect.fromLTRB(_cx - _r, _top - _r * tilt, _cx + _r,
+          _top + _h + _r * tilt),
+      Paint()
+        ..shader = LinearGradient(
+          colors: [
+            Colors.black.withValues(alpha: 0.22),
+            Colors.black.withValues(alpha: 0),
+            Colors.white.withValues(alpha: 0.18),
+            Colors.black.withValues(alpha: 0),
+            Colors.black.withValues(alpha: 0.22),
+          ],
+          stops: const [0, 0.3, 0.42, 0.62, 1],
+        ).createShader(bottomOval),
+    );
+  }
+
+  // Tepa — pishgan biskvit qobig'i (qoplangan tortda — qoplama), kesilgan
+  // bo'laksiz sektor [from, to].
   void _paintTop(Canvas canvas, double from, double to) {
     const n = 72;
     final arc = [
@@ -667,6 +806,40 @@ class FillingCakePainter extends CustomPainter {
       width: _r * 2,
       height: _r * 2 * tilt,
     );
+    final coat = this.coat;
+    if (coat != null) {
+      canvas.drawPath(
+        sector,
+        Paint()
+          ..shader = RadialGradient(
+            center: const Alignment(-0.2, -0.3),
+            radius: 0.9,
+            colors: [
+              Color.lerp(coat, Colors.white, 0.28)!,
+              coat,
+              Color.lerp(coat, Colors.black, 0.10)!,
+            ],
+            stops: const [0, 0.6, 1],
+          ).createShader(topOval),
+      );
+      // Tepa chetidagi yumaloqlangan qirra — ochroq hoshiya.
+      canvas.drawPath(
+        Path()..addPolygon(arc, false),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = math.max(1.2, _h * 0.03)
+          ..strokeCap = StrokeCap.round
+          ..color = Color.lerp(coat, Colors.white, 0.35)!,
+      );
+      canvas.drawPath(
+        Path()..addPolygon(arc, false),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.8
+          ..color = _edgeOf(coat).withValues(alpha: 0.35),
+      );
+      return;
+    }
     canvas.drawPath(
       sector,
       Paint()
@@ -689,6 +862,7 @@ class FillingCakePainter extends CustomPainter {
   @override
   bool shouldRepaint(FillingCakePainter old) =>
       old.look != look ||
+      old.coat != coat ||
       old.slice != slice ||
       old.tilt != tilt ||
       old.rotation != rotation;

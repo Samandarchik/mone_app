@@ -24,6 +24,7 @@ import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:uz_ai_dev/shef/model/production_model.dart';
 import 'package:uz_ai_dev/shef/provider/shef_provider.dart';
 import 'package:uz_ai_dev/shef/ui/shef_tech_card_page.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
 
 const Color _bgColor = Color(0xFFFAF6F1);
 const Color _accentColor = Color(0xFFC5A97B);
@@ -463,13 +464,34 @@ class _BiskvitPageState extends State<BiskvitPage> {
                 mainAxisSpacing: 12,
                 childAspectRatio: 0.9,
                 children: [
-                  for (final c in linked)
+                  for (final c in linked) ...[
                     _CategoryTile(
                       category: c,
                       count: counts[c.id] ?? 0,
                       onTap: () => _openCategory(c),
                       onLongPress: () => _removeCategory(c),
                     ),
+                    // «Покрытие» — «Начинка»ning O'SHA mahsulotlari, tortni
+                    // tashqaridan qoplagan krem sifatida (shef_home_ui.dart
+                    // dagi karta bilan bir xil).
+                    if (isNachinkaCategory(c.name))
+                      _CategoryTile(
+                        category: c,
+                        count: counts[c.id] ?? 0,
+                        title: 'Покрытие',
+                        thumb: const CoatingSectionThumb(),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ShefTechCardProductsPage(
+                              categoryId: c.id,
+                              categoryName: 'Покрытие',
+                              showCoating: true,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ],
               );
             },
@@ -560,13 +582,18 @@ class _CategoryTile extends StatelessWidget {
   final CategoryProductAdmin category;
   final int count;
   final VoidCallback onTap;
-  final VoidCallback onLongPress;
+  final VoidCallback? onLongPress;
+  // Berilsa kategoriya nomi/rasmi o'rniga shular («Покрытие» kartasi).
+  final String? title;
+  final Widget? thumb;
 
   const _CategoryTile({
     required this.category,
     required this.count,
     required this.onTap,
-    required this.onLongPress,
+    this.onLongPress,
+    this.title,
+    this.thumb,
   });
 
   @override
@@ -588,17 +615,22 @@ class _CategoryTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: LayoutBuilder(
-                  builder: (context, box) => CategoryThumb(
-                    category: category,
-                    size: box.maxHeight,
-                    width: box.maxWidth,
-                  ),
-                ),
+                child: thumb != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: SizedBox.expand(child: thumb),
+                      )
+                    : LayoutBuilder(
+                        builder: (context, box) => CategoryThumb(
+                          category: category,
+                          size: box.maxHeight,
+                          width: box.maxWidth,
+                        ),
+                      ),
               ),
               const SizedBox(height: 8),
               Text(
-                category.name,
+                title ?? category.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(

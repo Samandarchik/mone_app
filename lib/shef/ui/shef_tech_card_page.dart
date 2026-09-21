@@ -16,7 +16,9 @@
 // 3D sahifa ko'rinishi (tepada pinned 3D + grid): «П/Ф Бисквит»
 // (showCakeConstructor — biskvitning o'zi, biscuit_3d.dart) va «П/Ф Начинка»
 // (showFillingCake — bo'lagi kesilgan tort, kesimda nachinka; rangi har
-// mahsulotning тех картасидан, filling_3d.dart).
+// mahsulotning тех картасидан, filling_3d.dart) va «Покрытие» (showCoating —
+// nachinka kategoriyasining O'SHA mahsulotlari, lekin tortni tashqaridan
+// qoplagan krem sifatida; rang — tex kartadagi «Покрытие rangi» palitrasi).
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -292,6 +294,12 @@ class ShefTechCardProductsPage extends StatefulWidget {
   // biskvit o'rniga bo'lagi kesilgan tort — kesimda nachinka, rangi har
   // mahsulotning тех картасидан (filling_3d.dart). isNachinkaCategory.
   final bool showFillingCake;
+  // true — «Покрытие» bo'limi: «Начинка» kategoriyasining O'SHA mahsulotlari
+  // (categoryId — nachinka kategoriyasi), lekin ular tortni TASHQARIDAN
+  // qoplagan krem sifatida ko'rsatiladi: tort devori va tepasi bir tekis
+  // qoplama rangida. Rang — tex kartadagi «Покрытие rangi» palitrasidan
+  // (coating_color), tanlanmagan bo'lsa nom/tarkibdan (FillingLook.coatOf).
+  final bool showCoating;
 
   const ShefTechCardProductsPage({
     super.key,
@@ -301,6 +309,7 @@ class ShefTechCardProductsPage extends StatefulWidget {
     this.showBaking = false,
     this.showCakeConstructor = false,
     this.showFillingCake = false,
+    this.showCoating = false,
   });
 
   @override
@@ -356,6 +365,9 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
           // «П/Ф Начинка»: rang palitrasi — tanlangan rang saqlangach 3D
           // tortda nachinka shu rangda chiziladi (foto/tarkibdan ustun).
           showFillingColor: widget.showFillingCake,
+          // «Покрытие»: alohida palitra — qoplama rangi (nachinkadan
+          // mustaqil, tech_card.coating_color).
+          showCoatingColor: widget.showCoating,
         ),
       ),
     );
@@ -423,7 +435,9 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
             label: const Text('Qo\'shish'),
           )
         : null;
-    if (widget.showCakeConstructor || widget.showFillingCake) {
+    if (widget.showCakeConstructor ||
+        widget.showFillingCake ||
+        widget.showCoating) {
       return Scaffold(
         backgroundColor: _bgColor,
         floatingActionButton: fab,
@@ -591,7 +605,18 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                 child: Container(
                   color: _bgColor,
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-                  child: widget.showFillingCake
+                  child: widget.showCoating
+                      // «Покрытие»: tort tanlangan mahsulot bilan
+                      // TASHQARIDAN qoplangan; rang tex kartadagi «Покрытие
+                      // rangi» palitrasidan (bo'lmasa nom/tarkibdan).
+                      ? Filling3DView(
+                          height: _biscuitViewH,
+                          coat: selected == null
+                              ? FillingLook.neutral.color
+                              : FillingLook.coatOf(
+                                  selected.name, selected.techCard),
+                        )
+                      : widget.showFillingCake
                       // «П/Ф Начинка»: kesilgan tort. Nachinka ko'rinishi
                       // tanlangan mahsulot тех картасидан, ustuvorlik:
                       // palitra rangi → foto → nom/tarkib (resolve).
@@ -657,6 +682,7 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                       return _ProductGridCard(
                         product: p,
                         filling: widget.showFillingCake,
+                        coating: widget.showCoating,
                         selected: p.id == selected?.id,
                         onTap: () => setState(() => _selectedId = p.id),
                         onDoubleTap: () => _openTechCard(p),
@@ -871,6 +897,10 @@ class _ProductGridCard extends StatelessWidget {
   // true — «П/Ф Начинка»: rasm o'rniga kesilgan tort (nachinka rangi тех
   // картадан); false — biskvitning o'zi.
   final bool filling;
+  // true — «Покрытие»: shu mahsulot bilan tashqaridan qoplangan tort bo'lagi
+  // (rang — «Покрытие rangi» palitrasidan). Mahsulotning o'z rasmi bu yerda
+  // ko'rsatilmaydi: u nachinkaning rasmi, qoplangan tortniki emas.
+  final bool coating;
   final bool selected;
   final VoidCallback onTap;
   final VoidCallback onDoubleTap;
@@ -879,6 +909,7 @@ class _ProductGridCard extends StatelessWidget {
   const _ProductGridCard({
     required this.product,
     this.filling = false,
+    this.coating = false,
     required this.selected,
     required this.onTap,
     required this.onDoubleTap,
@@ -888,8 +919,9 @@ class _ProductGridCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final productImage = product.imageUrl ?? '';
-    final url =
-        productImage.isEmpty ? null : '${AppUrls.baseUrl}$productImage';
+    final url = (coating || productImage.isEmpty)
+        ? null
+        : '${AppUrls.baseUrl}$productImage';
     final hasCard = _hasTechCard(product);
     // Rasm yuklanmagan (yoki yuklanmay qolgan) biskvit — kulrang o'rniga
     // uning 3D chizmasi: o'lchami va turi тех картадан. Tex kartada biskvit
@@ -899,7 +931,12 @@ class _ProductGridCard extends StatelessWidget {
     final (fillingLook, fillingPhoto) = filling
         ? FillingLook.resolve(product.name, product.techCard)
         : (FillingLook.neutral, null);
-    final Widget placeholder = filling
+    final Widget placeholder = coating
+        ? FillingThumb(
+            look: FillingLook.neutral,
+            coat: FillingLook.coatOf(product.name, product.techCard),
+          )
+        : filling
         ? FillingThumb(look: fillingLook, photoUrl: fillingPhoto)
         : BiscuitThumb(
             dims: BiscuitDims.fromTechCard(product.techCard),

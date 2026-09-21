@@ -184,12 +184,18 @@ class TechCardEditorPage extends StatefulWidget {
   /// chiziladi. Faqat «П/Ф Начинка» oynasidan ochganda.
   final bool showFillingColor;
 
+  /// true — «Покрытие rangi» palitrasi (tech_card.coating_color): shu mahsulot
+  /// tortni TASHQARIDAN qoplagandagi rang. Faqat shef «Покрытие» bo'limidan
+  /// ochganda; nachinka rangidan mustaqil.
+  final bool showCoatingColor;
+
   const TechCardEditorPage({
     super.key,
     required this.product,
     this.canEditPrices = true,
     this.showBiscuitPhoto = false,
     this.showFillingColor = false,
+    this.showCoatingColor = false,
   });
 
   @override
@@ -1765,6 +1771,13 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
                       value: c.fillingColor,
                       onChanged: (hex) =>
                           setState(() => c.fillingColor = hex),
+                    ),
+                  if (widget.showCoatingColor)
+                    FillingColorPalette(
+                      title: 'Покрытие rangi',
+                      value: c.coatingColor,
+                      onChanged: (hex) =>
+                          setState(() => c.coatingColor = hex),
                     ),
                   _headerTables(wide),
                   _stagesRow(),

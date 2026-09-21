@@ -16,6 +16,7 @@ TechCard _card(List<TechItem> items, {String base = 'Основа'}) =>
 
 void main() {
   paletteTests();
+  coatingTests();
   test('nom eng ustun — masalliqlarga qaralmaydi', () {
     final card = _card(const [
       TechItem(name: 'Пюре клубника', unit: 'g', amount: 900),
@@ -102,5 +103,42 @@ void paletteTests() {
     expect(TechCard.fromJson(card.toJson()).fillingColor, '#D9364A');
     expect(TechCard.fromJson(const {}).fillingColor, '');
     expect(card.copyWith(bakeTimeMin: 5).fillingColor, '#D9364A');
+  });
+}
+
+// «Покрытие» — qoplama rangi nachinka rangidan mustaqil.
+void coatingTests() {
+  test('coatOf: «Покрытие» palitrasi ustun, nachinka rangi ta\'sir qilmaydi',
+      () {
+    const card = TechCard(fillingColor: '#5A3420', coatingColor: '#F8BBD0');
+    expect(FillingLook.coatOf('Начинка шоколадная', card),
+        const Color(0xFFF8BBD0));
+    // Nachinka tomoni o'z rangida qoladi.
+    expect(FillingLook.resolve('Начинка шоколадная', card).$1,
+        const FillingLook(Color(0xFF5A3420)));
+  });
+
+  test('coatOf: rang tanlanmagan — nom/tarkibdan', () {
+    expect(FillingLook.coatOf('Начинка шоколадная', const TechCard()),
+        _chocolate);
+    expect(FillingLook.coatOf('Начинка №9', null), FillingLook.neutral.color);
+    // Faqat nachinka rangi tanlangan — qoplamaga o'tmaydi.
+    expect(
+      FillingLook.coatOf(
+          'Начинка клубничная', const TechCard(fillingColor: '#8BC34A')),
+      _strawberry,
+    );
+  });
+
+  test('TechCard: coating_color JSON\'da saqlanadi', () {
+    const card = TechCard(coatingColor: '#F8BBD0', fillingColor: '#5A3420');
+    final json = card.toJson();
+    expect(json['coating_color'], '#F8BBD0');
+    expect(json['filling_color'], '#5A3420');
+    final back = TechCard.fromJson(json);
+    expect(back.coatingColor, '#F8BBD0');
+    expect(back.fillingColor, '#5A3420');
+    expect(TechCard.fromJson(const {}).coatingColor, '');
+    expect(card.copyWith(bakeTimeMin: 5).coatingColor, '#F8BBD0');
   });
 }

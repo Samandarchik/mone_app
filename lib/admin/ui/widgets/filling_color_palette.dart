@@ -2,7 +2,9 @@
 // (FillingColorPalette): tayyor ranglar doirachalari. Tanlangan rang tex
 // kartada saqlanadi (tech_card.filling_color, "#RRGGBB") va shef «П/Ф
 // Начинка» sahifasidagi 3D tortda nachinka AYNAN shu rangda chiziladi —
-// foto va nom/tarkibdan ustun. Tanlangan rangni yana bosish yoki «Rangsiz»
+// foto va nom/tarkibdan ustun. Xuddi shu palitra «Покрытие» bo'limida
+// qoplama rangi uchun ham ishlatiladi (tech_card.coating_color, [title]).
+// Tanlangan rangni yana bosish yoki «Rangsiz»
 // — tanlovni olib tashlaydi (rang yana foto / tex kartadan aniqlanadi).
 // fillingColorFromHex / fillingColorToHex — saqlash formati bilan o'girish.
 import 'package:flutter/material.dart';
@@ -61,11 +63,14 @@ class FillingColorPalette extends StatelessWidget {
   // Tanlangan rang ("#RRGGBB") yoki '' — tanlanmagan.
   final String value;
   final ValueChanged<String> onChanged;
+  // Sarlavha: «Nachinka rangi» (П/Ф Начинка) yoki «Покрытие rangi».
+  final String title;
 
   const FillingColorPalette({
     super.key,
     required this.value,
     required this.onChanged,
+    this.title = 'Nachinka rangi',
   });
 
   @override
@@ -86,10 +91,11 @@ class FillingColorPalette extends StatelessWidget {
             children: [
               const Icon(Icons.palette_outlined, size: 18),
               const SizedBox(width: 6),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Nachinka rangi',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  title,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 14),
                 ),
               ),
               if (selected != null)

@@ -21,6 +21,7 @@ import 'package:uz_ai_dev/shef/ui/pf_stock_page.dart';
 import 'package:uz_ai_dev/shef/ui/shef_create_order_ui.dart';
 import 'package:uz_ai_dev/shef/ui/shef_order_detail_ui.dart';
 import 'package:uz_ai_dev/shef/ui/shef_tech_card_page.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
 
 const Color _bgColor = Color(0xFFFAF6F1);
 const Color _accentColor = Color(0xFFC5A97B);
@@ -222,7 +223,7 @@ class _ShefHomeUiState extends State<ShefHomeUi> {
           onTap: () => _open(context, const ShefTechCardCategoriesPage()),
         ),
         // «+» bilan qo'shilgan kategoriyalar — rasmi, nomi va soni bilan.
-        for (final c in linked)
+        for (final c in linked) ...[
           _MenuCard(
             icon: Icons.category_outlined,
             thumb: LayoutBuilder(
@@ -237,6 +238,29 @@ class _ShefHomeUiState extends State<ShefHomeUi> {
             onTap: () => _openCategory(c),
             onLongPress: () => _removeCategory(c),
           ),
+          // «Покрытие» — «Начинка» kategoriyasining O'SHA mahsulotlari, lekin
+          // tortni tashqaridan qoplagan krem sifatida. Alohida kategoriya
+          // emas: nachinka kartasi yonida o'zi chiqadi (u olib tashlansa —
+          // bu ham yo'qoladi).
+          if (isNachinkaCategory(c.name))
+            _MenuCard(
+              icon: Icons.cake_outlined,
+              thumb: const ClipRRect(
+                borderRadius: BorderRadius.all(Radius.circular(10)),
+                child: CoatingSectionThumb(),
+              ),
+              title: 'Покрытие',
+              subtitle: '${counts[c.id] ?? 0} ta mahsulot',
+              onTap: () => _open(
+                context,
+                ShefTechCardProductsPage(
+                  categoryId: c.id,
+                  categoryName: 'Покрытие',
+                  showCoating: true,
+                ),
+              ),
+            ),
+        ],
       ],
     );
   }
