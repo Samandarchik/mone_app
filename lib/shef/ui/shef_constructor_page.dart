@@ -1,8 +1,9 @@
 // shef/ui/shef_constructor_page.dart — shef KONSTRUKTORI (ShefConstructorPage):
 // shef bosh ekranining o'ng pastki burchagidagi «Konstruktor» tugmasidan
 // ochiladi. Tort HAQIQIY mahsulotlardan yig'iladi (tex kartalari bilan):
-// tepada katta aylanadigan 3D rasm, uning yonida 3 ta qadam tugmasi, pastda
-// shu qadamning mahsulotlari (grid) — bosilsa tanlanadi va 3D darhol o'zgaradi.
+// tepada katta aylanadigan 3D rasm, uning OSTIDA bir qatorda 3 ta qadam
+// tugmasi (1 · 2 · 3), undan pastda shu qadamning mahsulotlari (grid) —
+// bosilsa tanlanadi va 3D darhol o'zgaradi.
 //   1 — Biskvit: faqat biskvitning o'zi (П/Ф Бисквит sahifasidagidek:
 //       o'lchami/turi tex kartadan, foto bo'lsa yon tomonda).
 //   2 — Nachinka: O'SHA biskvit (korj rangi tanlangan biskvitdan) ichida
@@ -33,7 +34,7 @@ import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
 
 const Color _bgColor = Color(0xFFFAF6F1);
 const Color _accentColor = Color(0xFFC5A97B);
-const double _heroH = 220;
+const double _heroH = 205;
 
 // Qadamlar: (tugma yozuvi, grid sarlavhasi).
 const List<(String, String)> _steps = [
@@ -121,28 +122,22 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
           return Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                child: _hero(biscuit, filling, coating),
+              ),
+              // Qadam tugmalari — rasmning OSTIDA, bir qatorda.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    Expanded(child: _hero(biscuit, filling, coating)),
-                    const SizedBox(width: 10),
-                    // Rasm YONIDAGI qadam tugmalari.
-                    SizedBox(
-                      height: _heroH,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          for (var i = 0; i < _steps.length; i++)
-                            _StepButton(
-                              number: i + 1,
-                              label: _steps[i].$1,
-                              selected: _step == i,
-                              onTap: () => setState(() => _step = i),
-                            ),
-                        ],
+                    for (var i = 0; i < _steps.length; i++)
+                      _StepButton(
+                        number: i + 1,
+                        label: _steps[i].$1,
+                        selected: _step == i,
+                        onTap: () => setState(() => _step = i),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -265,7 +260,7 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
   }
 }
 
-// Rasm yonidagi qadam tugmasi: raqamli doira + ostida yozuv.
+// Rasm ostidagi qadam tugmasi: raqamli doira + ostida yozuv.
 class _StepButton extends StatelessWidget {
   final int number;
   final String label;
