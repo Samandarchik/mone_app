@@ -15,8 +15,8 @@
 // Shef bosh ekraniga «+» bilan qo'shilganlar (ShefHomeLinks) ham shunday.
 // 3D sahifa ko'rinishi (tepada pinned 3D + grid): «П/Ф Бисквит»
 // (showCakeConstructor — biskvitning o'zi, biscuit_3d.dart) va «П/Ф Начинка»
-// (showFillingCake — bo'lagi kesilgan tort, kesimda nachinka; rangi har
-// mahsulotning тех картасидан, filling_3d.dart).
+// (showFillingCake — kosadagi nachinka/kremning o'zi: tex kartada foto bo'lsa
+// shu fotodan, bo'lmasa rangi тех картадан — filling_3d.dart).
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -289,8 +289,8 @@ class ShefTechCardProductsPage extends StatefulWidget {
   // Faqat shef bosh ekranidagi «П/Ф Бисквит» kartasidan (shef_home_ui.dart).
   final bool showCakeConstructor;
   // true — «П/Ф Начинка»: o'sha sahifa ko'rinishi (tepada 3D + grid), lekin
-  // biskvit o'rniga bo'lagi kesilgan tort — kesimda nachinka, rangi har
-  // mahsulotning тех картасидан (filling_3d.dart). isNachinkaCategory.
+  // biskvit o'rniga kosadagi nachinka/kremning o'zi — tex kartadagi fotodan,
+  // foto yo'q bo'lsa rangi тех картадан (filling_3d.dart). isNachinkaCategory.
   final bool showFillingCake;
 
   const ShefTechCardProductsPage({
@@ -347,8 +347,11 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
         builder: (_) => TechCardEditorPage(
           product: product,
           canEditPrices: false,
-          // «П/Ф Бисквит»: tex kartada «Biskvit fotosi» bo'limi.
-          showBiscuitPhoto: widget.showCakeConstructor,
+          // «П/Ф Бисквит» va «П/Ф Начинка»: tex kartada «Rasm qo'shish»
+          // bo'limi (ikkalasida ham tech_card.biscuit_photo_url) — foto
+          // saqlangach 3D shu fotodan chiziladi.
+          showBiscuitPhoto:
+              widget.showCakeConstructor || widget.showFillingCake,
         ),
       ),
     );
@@ -585,14 +588,16 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                   color: _bgColor,
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
                   child: widget.showFillingCake
-                      // «П/Ф Начинка»: kesilgan tort, nachinka rangi
-                      // tanlangan mahsulot тех картасидан.
+                      // «П/Ф Начинка»: kosadagi kremning o'zi. Tex kartada
+                      // foto bo'lsa — krem shu FOTODAN (tarkibga
+                      // qaralmaydi), bo'lmasa rangi тех картадан.
                       ? Filling3DView(
                           height: _biscuitViewH,
                           look: selected == null
                               ? FillingLook.neutral
                               : FillingLook.detect(
                                   selected.name, selected.techCard),
+                          photoUrl: biscuitPhotoUrlOf(selected?.techCard),
                         )
                       : Biscuit3DView(
                           height: _biscuitViewH,
@@ -728,8 +733,8 @@ bool isBiskvitCategory(String name) {
   return n.contains('бисквит') || n.contains('biskvit');
 }
 
-// «Начинка» kategoriyasimi (nomi bo'yicha) — mahsulotlari kesilgan tort
-// ichidagi nachinka bo'lib ko'rsatiladi (showFillingCake).
+// «Начинка» kategoriyasimi (nomi bo'yicha) — mahsulotlari kosadagi krem
+// bo'lib ko'rsatiladi va tex kartada «Rasm qo'shish» chiqadi (showFillingCake).
 bool isNachinkaCategory(String name) {
   final n = name.toLowerCase();
   return n.contains('начинк') || n.contains('nachink');
@@ -856,8 +861,8 @@ class _PinnedBoxDelegate extends SliverPersistentHeaderDelegate {
 // 3D'da ko'rsatilayotgani (ramka ajralib turadi).
 class _ProductGridCard extends StatelessWidget {
   final ProductModelAdmin product;
-  // true — «П/Ф Начинка»: rasm o'rniga kesilgan tort (nachinka rangi тех
-  // картадан); false — biskvitning o'zi.
+  // true — «П/Ф Начинка»: rasm o'rniga kosadagi krem (tex karta fotosidan
+  // yoki rangi тех картадан); false — biskvitning o'zi.
   final bool filling;
   final bool selected;
   final VoidCallback onTap;
@@ -886,6 +891,7 @@ class _ProductGridCard extends StatelessWidget {
     final Widget placeholder = filling
         ? FillingThumb(
             look: FillingLook.detect(product.name, product.techCard),
+            photoUrl: biscuitPhotoUrlOf(product.techCard),
           )
         : BiscuitThumb(
             dims: BiscuitDims.fromTechCard(product.techCard),

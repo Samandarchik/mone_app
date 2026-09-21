@@ -1,19 +1,23 @@
 // shef/ui/widgets/filling_3d.dart — «П/Ф Начинка» uchun 3D ko'rinish:
-// bo'lagi kesib olingan yumaloq tort — 3 ta biskvit qatlami va ular orasida
-// 2 ta NACHINKA qatlami. Kesimda (va «yalang'och» yon tomonda) nachinka
-// ko'rinadi; uning rangi FAQAT тех картадан (FillingLook.detect):
-//   1) mahsulot nomi → 2) blok nomlari → 3) masalliqlar.
-// Masalliqlarda miqdori (g/ml) ENG KO'P bo'lgan rang beruvchi masalliq
-// tanlanadi (masalan 300 g qulupnay pyuresi + 50 g shokolad → qulupnay);
-// slivka/tvorog kabi neytral asos faqat boshqa hech narsa topilmasa olinadi.
-// Foto, meva bo'laklari va boshqa bezak CHIZILMAYDI — faqat rang.
+// nachinka/kremning O'ZI (biskvitsiz, tortsiz) — patnis ustidagi oq sopol
+// kosa, ichida krem. Ikki holat:
+//  1) Tex kartada FOTO bor (biscuit_photo_url — «Rasm qo'shish» bo'limi):
+//     kosadagi krem yuzasi shu FOTONING O'ZI (doira qilib qirqilgan, kosa
+//     bilan birga aylanadi). Tarkib/nomga QARALMAYDI.
+//  2) Foto yo'q: krem uyumi va uning burama izi (konditer qopidan
+//     siqilgandek) chiziladi; rangi тех картадан (FillingLook.detect):
+//     mahsulot nomi → blok nomlari → masalliqlar. Masalliqlarda miqdori
+//     (g/ml) ENG KO'P rang beruvchi masalliq tanlanadi (300 g qulupnay
+//     pyuresi + 50 g shokolad → qulupnay); slivka/tvorog kabi neytral asos
+//     faqat boshqa hech narsa topilmasa olinadi.
 // Filling3DView — Rotating3DView (cake_3d.dart) qo'lda rejimida;
-// FillingThumb — grid kartasi uchun kichik statik rasm.
+// FillingThumb — grid kartasi uchun kichik statik rasm (o'sha kosa).
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:uz_ai_dev/admin/model/tech_card.dart';
-import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/biscuit_side_photo.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/cake_3d.dart';
 
 // Nachinka rangi (тех картадан).
@@ -119,32 +123,43 @@ class FillingLook {
 
 class Filling3DView extends StatelessWidget {
   final FillingLook look;
+  // Tex kartadagi foto (to'liq URL): berilsa krem yuzasi shu fotoning o'zi,
+  // [look] ishlatilmaydi. Foto saqlangach 3D o'zi yangilanadi.
+  final String? photoUrl;
   final double height;
 
   const Filling3DView({
     super.key,
     this.look = FillingLook.neutral,
+    this.photoUrl,
     this.height = 240,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Rotating3DView(
-      height: height,
-      manual: true,
-      painter: (tilt, rotation) =>
-          FillingCakePainter(look: look, tilt: tilt, rotation: rotation),
+    return BiscuitSidePhotoBuilder(
+      url: photoUrl,
+      displayWidth: 600,
+      builder: (context, photo) => Rotating3DView(
+        height: height,
+        manual: true,
+        painter: (tilt, rotation) => FillingBowlPainter(
+          look: look,
+          photo: photo,
+          tilt: tilt,
+          rotation: rotation,
+        ),
+      ),
     );
   }
 }
 
-// Kartadagi kichik statik rasm: shu nachinkali tortning BITTA BO'LAGI
-// (butun tort emas) — kesim yuzlarida nachinka ko'rinadi. Karta tanlansa
-// tepadagi katta 3D'da o'sha nachinkali butun (kesilgan) tort chiqadi.
+// Kartadagi kichik statik rasm: shu nachinkali kosa (foto bo'lsa — fotodan).
 class FillingThumb extends StatelessWidget {
   final FillingLook look;
+  final String? photoUrl;
 
-  const FillingThumb({super.key, required this.look});
+  const FillingThumb({super.key, required this.look, this.photoUrl});
 
   @override
   Widget build(BuildContext context) {
@@ -156,14 +171,19 @@ class FillingThumb extends StatelessWidget {
           colors: [Color(0xFFFFFFFF), Color(0xFFEDE6F6)],
         ),
       ),
-      child: RepaintBoundary(
-        child: CustomPaint(
-          size: Size.infinite,
-          painter: FillingCakePainter(
-            look: look,
-            slice: true,
-            tilt: 0.36,
-            rotation: 0,
+      child: BiscuitSidePhotoBuilder(
+        url: photoUrl,
+        displayWidth: 240,
+        builder: (context, photo) => RepaintBoundary(
+          child: CustomPaint(
+            size: Size.infinite,
+            // Tepadanroq qaraladi — krem yuzasi yaxshi ko'rinsin.
+            painter: FillingBowlPainter(
+              look: look,
+              photo: photo,
+              tilt: 0.46,
+              rotation: 0.5,
+            ),
           ),
         ),
       ),
@@ -171,373 +191,242 @@ class FillingThumb extends StatelessWidget {
   }
 }
 
-// Bo'lagi kesib olingan yumaloq tort ([slice] = false) yoki o'sha tortning
-// BITTA BO'LAGI ([slice] = true — grid kartalari uchun). Burchak t: ekranda
-// x = o'q + r·sin t, chuqurlik cos t (> 0 — tomoshabin tomonda). Chizish
-// tartibi orqadan oldinga: patnis → (kesim yuzlari / yon devor) → tepa.
-class FillingCakePainter extends CustomPainter {
+// Patnis ustidagi sopol kosa va ichidagi krem. Krem yuzasi — kosa og'zidagi
+// tekis doira: ekranda ellips (balandligi [tilt] ga ko'paytirilgan) va
+// [rotation] ga burilgan; foto ham, burama iz ham shu doirada chiziladi.
+class FillingBowlPainter extends CustomPainter {
   final FillingLook look;
-  final bool slice;
+  final ui.Image? photo;
   final double tilt;
   final double rotation;
 
-  FillingCakePainter({
+  FillingBowlPainter({
     required this.look,
-    this.slice = false,
+    this.photo,
     required this.tilt,
     required this.rotation,
   });
 
-  static const BiscuitPalette _sponge = BiscuitPalette.classic;
-  // Kesib olingan bo'lak: markazi va kengligi (radian, tort o'qida).
-  // Markaz 0 — burilmagan holatda kesim tomoshabinga qarab ochiladi va
-  // ikkala kesim yuzi ham ko'rinadi (kartadagi statik rasm shunday).
-  static const double _wedgeCenter = 0;
-  static const double _wedgeWidth = 1.05;
-  // Qatlamlar pastdan tepaga emas, TEPADAN pastga: (ulush, nachinkami).
-  static const List<(double, bool)> _layers = [
-    (0.22, false),
-    (0.17, true),
-    (0.22, false),
-    (0.17, true),
-    (0.22, false),
-  ];
-
-  // Bitta bo'lak (slice): burilmagan holatda yoyi orqada, uchi tomoshabinga
-  // qaragan — ikkala kesim yuzi ko'rinadi (biri keng, biri tor).
-  static const double _sliceCenter = math.pi + 0.35;
-
-  // Tort o'qining ekrandagi x'i (bo'lakda markazdan suriladi).
-  late double _cx;
-  late double _r;
-  late double _top;
-  late double _h;
-
-  Offset _rim(double t, double y) =>
-      Offset(_cx + _r * math.sin(t), y + _r * tilt * math.cos(t));
-
   @override
   void paint(Canvas canvas, Size size) {
-    final midX = size.width / 2;
+    final cx = size.width / 2;
     final areaH = size.height;
     final plateRx = math.min(size.width * 0.42, areaH * 0.62);
     final plateRy = plateRx * tilt;
     final plateThick = plateRx * 0.05;
-    // Bo'lak yakka o'zi turadi — kattaroq chiziladi.
-    _r = plateRx * (slice ? 1.0 : 0.66);
-    _h = math.min(plateRx * 0.56, areaH * 0.42);
 
-    final footprint = (slice ? plateRx * 0.5 : _r) * tilt;
-    final total = _h + footprint + plateRy + plateThick;
+    final rim = plateRx * 0.64; // kosa og'zi radiusi
+    final base = rim * 0.5; // tag radiusi
+    final bowlH = math.min(rim * 0.62, areaH * 0.32);
+    // Foto yo'q — krem kosadan uyum bo'lib chiqib turadi.
+    final mound = photo == null ? rim * 0.42 : 0.0;
+
+    final total = mound + rim * tilt + bowlH + plateRy + plateThick;
     final plateY = (areaH + total) / 2 - plateRy - plateThick;
-    final bottom = plateY;
+    final rimY = plateY - bowlH;
 
-    paintPlate3D(canvas, Offset(midX, plateY), plateRx, plateRy, plateThick);
-
-    if (slice) {
-      _paintSlice(canvas, midX, bottom);
-      return;
-    }
-
-    _cx = midX;
-    _top = bottom - _h;
+    paintPlate3D(canvas, Offset(cx, plateY), plateRx, plateRy, plateThick);
     canvas.drawOval(
       Rect.fromCenter(
-        center: Offset(_cx, bottom + _r * tilt * 0.12),
-        width: _r * 2.1,
-        height: _r * tilt * 2.2,
+        center: Offset(cx, plateY + base * tilt * 0.2),
+        width: base * 2.5,
+        height: base * tilt * 2.6,
       ),
       Paint()
-        ..color = Colors.black.withValues(alpha: 0.13)
+        ..color = Colors.black.withValues(alpha: 0.16)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
     );
 
-    final w0 = _wedgeCenter - _wedgeWidth / 2 + rotation;
-    final w1 = _wedgeCenter + _wedgeWidth / 2 + rotation;
+    final rimOval = Rect.fromCenter(
+        center: Offset(cx, rimY), width: rim * 2, height: rim * 2 * tilt);
+    final baseOval = Rect.fromCenter(
+        center: Offset(cx, plateY), width: base * 2, height: base * 2 * tilt);
 
-    // Kesim yuzlari: normali tomoshabinga qaraganlari ko'rinadi.
-    // w0 yuzining normali +dp/dt = (cos, −sin), w1 niki — teskarisi.
-    if (math.sin(w0) < 0) _paintCutFace(canvas, w0, math.cos(w0));
-    if (math.sin(w1) > 0) _paintCutFace(canvas, w1, -math.cos(w1));
-
-    // Oldingi yarim aylana (−π/2 … π/2) dan kesilgan bo'lak olib tashlanadi.
-    for (final (s, e) in _frontArcs(w0, _wedgeWidth, inside: false)) {
-      _paintWall(canvas, s, e);
-    }
-
-    _paintTop(canvas, w1, w0 + 2 * math.pi);
-  }
-
-  // Tortning bitta bo'lagi: [s0, s1] sektori. Kesim yuzlarining normali
-  // bu yerda TASHQARIGA qaraydi: s0 da −dp/dt, s1 da +dp/dt.
-  void _paintSlice(Canvas canvas, double midX, double bottom) {
-    final c = _sliceCenter + rotation;
-    final s0 = c - _wedgeWidth / 2, s1 = c + _wedgeWidth / 2;
-    // Bo'lak og'irlik markazi o'qdan ~r/2 da — uni patnis o'rtasiga suramiz.
-    _cx = midX - _r * 0.5 * math.sin(c);
-    _top = bottom - _h - _r * 0.5 * tilt * math.cos(c);
-
-    // Tagidagi soya — bo'lak izi bo'ylab.
-    final foot = Path()
-      ..addPolygon([
-        Offset(_cx, _top + _h),
-        for (var i = 0; i <= 16; i++)
-          _rim(s0 + (s1 - s0) * i / 16, _top + _h),
-      ], true);
+    // Kosa tanasi: og'izdan tagga torayadi.
+    final body = Path()
+      ..moveTo(cx - rim, rimY)
+      ..cubicTo(cx - rim, rimY + bowlH * 0.6, cx - base * 1.3, plateY,
+          cx - base, plateY)
+      ..arcTo(baseOval, math.pi, -math.pi, false)
+      ..cubicTo(cx + base * 1.3, plateY, cx + rim, rimY + bowlH * 0.6,
+          cx + rim, rimY)
+      ..arcTo(rimOval, 0, math.pi, false)
+      ..close();
     canvas.drawPath(
-      foot.shift(Offset(0, _h * 0.05)),
+      body,
       Paint()
-        ..color = Colors.black.withValues(alpha: 0.18)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-    );
-
-    void faces() {
-      if (math.sin(s0) > 0) _paintCutFace(canvas, s0, -math.cos(s0));
-      if (math.sin(s1) < 0) _paintCutFace(canvas, s1, math.cos(s1));
-    }
-
-    void wall() {
-      for (final (s, e) in _frontArcs(s0, _wedgeWidth, inside: true)) {
-        _paintWall(canvas, s, e);
-      }
-    }
-
-    // Yoyi oldinda bo'lsa devor yuzlarni to'sadi, orqada bo'lsa — aksincha.
-    if (math.cos(c) > 0) {
-      faces();
-      wall();
-    } else {
-      wall();
-      faces();
-    }
-    _paintTop(canvas, s0, s1);
-  }
-
-  // Oldingi yarim aylananing (−π/2 … π/2) [from, from + width] sektoriga
-  // tushgan ([inside]) yoki undan tashqaridagi qismlari.
-  static List<(double, double)> _frontArcs(double from, double width,
-      {required bool inside}) {
-    const lo = -math.pi / 2, hi = math.pi / 2;
-    var out = <(double, double)>[if (!inside) (lo, hi)];
-    for (final shift in [-2 * math.pi, 0.0, 2 * math.pi]) {
-      final a = _norm(from) + shift, b = a + width;
-      if (inside) {
-        out.add((math.max(lo, a), math.min(hi, b)));
-      } else {
-        out = [
-          for (final (s, e) in out) ...[
-            if (a > s) (s, math.min(e, a)),
-            if (b < e) (math.max(s, b), e),
-          ],
-        ];
-      }
-    }
-    return out.where((w) => w.$2 - w.$1 > 1e-4).toList();
-  }
-
-  // Burchakni (−π, π] oralig'iga keltirish.
-  static double _norm(double t) {
-    var a = t % (2 * math.pi);
-    if (a > math.pi) a -= 2 * math.pi;
-    if (a <= -math.pi) a += 2 * math.pi;
-    return a;
-  }
-
-  Color get _fill => look.color;
-  Color get _fillLight => Color.lerp(look.color, Colors.white, 0.22)!;
-  Color get _fillShade => Color.lerp(look.color, Colors.black, 0.16)!;
-
-  // Kesim yuzi: o'qdan chetgacha vertikal to'rtburchak, qatlamlar bo'yicha
-  // bo'yalgan. [nx] — normalning ekran-x tashkil etuvchisi (yorug'lik uchun).
-  void _paintCutFace(Canvas canvas, double t, double nx) {
-    final axis = Offset(_cx, _top);
-    final rim = _rim(t, _top);
-    final face = Path()
-      ..addPolygon([
-        axis,
-        rim,
-        rim.translate(0, _h),
-        axis.translate(0, _h),
-      ], true);
-
-    canvas.save();
-    canvas.clipPath(face);
-    var f = 0.0;
-    final rnd = math.Random(7 + (t * 10).round());
-    final pore = Paint()..color = _sponge.pore.withValues(alpha: 0.5);
-    for (final (part, isFilling) in _layers) {
-      final y0 = f * _h, y1 = (f + part) * _h;
-      final band = Path()
-        ..addPolygon([
-          axis.translate(0, y0),
-          rim.translate(0, y0),
-          rim.translate(0, y1),
-          axis.translate(0, y1),
-        ], true);
-      if (isFilling) {
-        canvas.drawPath(
-          band,
-          Paint()
-            ..shader = LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [_fillLight, _fill, _fillShade],
-            ).createShader(band.getBounds()),
-        );
-      } else {
-        canvas.drawPath(band, Paint()..color = _sponge.spongeLight);
-        // Kesimdagi g'ovaklar.
-        final n = ((rim - axis).distance / 3).round().clamp(6, 60);
-        for (var i = 0; i < n; i++) {
-          final u = rnd.nextDouble();
-          final v = y0 + (0.12 + rnd.nextDouble() * 0.76) * (y1 - y0);
-          final s = 1.2 + rnd.nextDouble() * 1.8;
-          canvas.drawOval(
-            Rect.fromCenter(
-              center: Offset.lerp(axis, rim, u)!.translate(0, v),
-              width: s,
-              height: s * 0.75,
-            ),
-            pore,
-          );
-        }
-      }
-      f += part;
-    }
-    // Yuzning yorug'lik soyasi: chapga qaragani ochroq, o'ngga — to'qroq.
-    canvas.drawPath(
-      face,
-      Paint()
-        ..color = Colors.black
-            .withValues(alpha: (0.10 + 0.12 * nx).clamp(0.0, 0.25)),
-    );
-    canvas.restore();
-    canvas.drawPath(
-      face,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 0.8
-        ..color = _sponge.spongeShade.withValues(alpha: 0.5),
-    );
-  }
-
-  // Tashqi yon devor bo'lagi [s, e] (oldingi yarim aylana ichida) —
-  // «yalang'och» tort: qatlamlar tashqaridan ham ko'rinadi.
-  void _paintWall(Canvas canvas, double s, double e) {
-    const step = math.pi / 60;
-    final n = math.max(2, ((e - s) / step).ceil());
-    List<Offset> arc(double y) =>
-        [for (var i = 0; i <= n; i++) _rim(s + (e - s) * i / n, y)];
-
-    final whole = Path()
-      ..addPolygon([...arc(_top), ...arc(_top + _h).reversed], true);
-    canvas.save();
-    canvas.clipPath(whole);
-    var f = 0.0;
-    for (final (part, isFilling) in _layers) {
-      final band = Path()
-        ..addPolygon([
-          ...arc(_top + f * _h),
-          ...arc(_top + (f + part) * _h).reversed,
-        ], true);
-      canvas.drawPath(
-          band, Paint()..color = isFilling ? _fill : _sponge.sponge);
-      f += part;
-    }
-    // Biskvit qatlamlaridagi g'ovaklar — tort bilan birga aylanadi.
-    final rnd = math.Random(3);
-    final pore = Paint()..color = _sponge.pore.withValues(alpha: 0.55);
-    for (var i = 0; i < 220; i++) {
-      final a = rnd.nextDouble() * 2 * math.pi;
-      final layer = rnd.nextInt(3) * 2; // 0, 2, 4 — biskvit qatlamlari
-      final v = 0.15 + rnd.nextDouble() * 0.7;
-      final size = 1.0 + rnd.nextDouble() * 1.6;
-      final t = a + rotation;
-      final c = math.cos(t);
-      if (c < 0.08) continue;
-      var y = 0.0;
-      for (var k = 0; k < layer; k++) {
-        y += _layers[k].$1;
-      }
-      y = (y + v * _layers[layer].$1) * _h;
-      canvas.drawOval(
-        Rect.fromCenter(
-          center: _rim(t, _top + y),
-          width: size * c + 0.5,
-          height: size * 0.8,
-        ),
-        pore,
-      );
-    }
-    // Pastki qizargan chiziq va silindr hajm soyasi.
-    final bottomOval = Rect.fromCenter(
-      center: Offset(_cx, _top + _h),
-      width: _r * 2,
-      height: _r * 2 * tilt,
-    );
-    canvas.drawArc(
-      bottomOval,
-      0,
-      math.pi,
-      false,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = _h * 0.05
-        ..color = _sponge.baked.withValues(alpha: 0.6),
-    );
-    canvas.drawRect(
-      Rect.fromLTRB(_cx - _r, _top - _r * tilt, _cx + _r,
-          _top + _h + _r * tilt),
-      Paint()
-        ..shader = LinearGradient(
+        ..shader = const LinearGradient(
           colors: [
-            Colors.black.withValues(alpha: 0.26),
-            Colors.black.withValues(alpha: 0),
-            Colors.white.withValues(alpha: 0.10),
-            Colors.black.withValues(alpha: 0),
-            Colors.black.withValues(alpha: 0.26),
+            Color(0xFFC9C3D3),
+            Color(0xFFFFFFFF),
+            Color(0xFFF3F0F7),
+            Color(0xFFBDB6C8),
           ],
-          stops: const [0, 0.3, 0.42, 0.62, 1],
-        ).createShader(bottomOval),
+          stops: [0, 0.34, 0.6, 1],
+        ).createShader(rimOval),
     );
-    canvas.restore();
+    // Og'iz halqasi (sopol labi).
+    canvas.drawOval(rimOval, Paint()..color = const Color(0xFFFBFAFD));
+    canvas.drawOval(
+      rimOval,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = const Color(0xFFB9B2C6),
+    );
+
+    final creamR = rim * 0.9;
+    if (photo != null) {
+      _paintPhoto(canvas, photo!, Offset(cx, rimY), creamR);
+    } else {
+      _paintCream(canvas, Offset(cx, rimY), creamR, mound);
+    }
   }
 
-  // Tepa — pishgan biskvit qobig'i, kesilgan bo'laksiz sektor [from, to].
-  void _paintTop(Canvas canvas, double from, double to) {
-    const n = 72;
-    final arc = [
-      for (var i = 0; i <= n; i++) _rim(from + (to - from) * i / n, _top),
-    ];
-    final sector = Path()..addPolygon([Offset(_cx, _top), ...arc], true);
-    final topOval = Rect.fromCenter(
-      center: Offset(_cx, _top),
-      width: _r * 2,
-      height: _r * 2 * tilt,
+  // Krem yuzasi = fotoning o'zi: o'rtasidan kvadrat qirqib, doiraga
+  // joylanadi. Doira tekisligi ekranga affin o'tadi: y o'qi [tilt] ga
+  // siqiladi va [rotation] ga buriladi (x = lx·cos + lz·sin).
+  void _paintPhoto(Canvas canvas, ui.Image img, Offset c, double r) {
+    final side = math.min(img.width, img.height).toDouble();
+    final src = Rect.fromCenter(
+      center: Offset(img.width / 2, img.height / 2),
+      width: side,
+      height: side,
     );
-    canvas.drawPath(
-      sector,
+    final oval = Rect.fromCenter(center: c, width: r * 2, height: r * 2 * tilt);
+    canvas.save();
+    canvas.clipPath(Path()..addOval(oval));
+    canvas.translate(c.dx, c.dy);
+    canvas.scale(1, tilt);
+    canvas.rotate(-rotation);
+    canvas.drawImageRect(
+      img,
+      src,
+      Rect.fromCircle(center: Offset.zero, radius: r),
+      Paint()..filterQuality = FilterQuality.medium,
+    );
+    canvas.restore();
+    // Kosa ichidagi yengil soya (chetlari) — foto «yopishtirilgan» emas,
+    // kosada turgandek ko'rinsin.
+    canvas.drawOval(
+      oval,
       Paint()
         ..shader = RadialGradient(
-          center: const Alignment(-0.15, -0.2),
-          radius: 0.85,
-          colors: [_sponge.crustLight, _sponge.crust, _sponge.crustDark],
-          stops: const [0, 0.7, 1],
-        ).createShader(topOval),
+          colors: [
+            Colors.black.withValues(alpha: 0),
+            Colors.black.withValues(alpha: 0),
+            Colors.black.withValues(alpha: 0.22),
+          ],
+          stops: const [0, 0.78, 1],
+        ).createShader(oval),
     );
+  }
+
+  // Foto yo'q: krem uyumi + burama iz, rangi [look] dan.
+  void _paintCream(Canvas canvas, Offset c, double r, double mound) {
+    final color = look.color;
+    final light = Color.lerp(color, Colors.white, 0.35)!;
+    final shade = Color.lerp(color, Colors.black, 0.18)!;
+    final deep = Color.lerp(color, Colors.black, 0.30)!;
+
+    // Uyum yuzasi — aylanish jismi: markazdan ρ (0..r) masofadagi balandlik
+    // qo'ng'iroqsimon (chetda 0, markazda [mound]).
+    double heightAt(double rho) =>
+        mound * (0.5 + 0.5 * math.cos(math.pi * (rho / r).clamp(0.0, 1.0)));
+
+    // Siluet: har ustunda (x) yuzaning ekrandagi eng baland nuqtasi
+    // (chuqurlik lz bo'ylab qidiriladi), pasti — og'iz ellipsining old yarmi.
+    const cols = 56, depthSteps = 20;
+    final topEdge = <Offset>[];
+    for (var i = 0; i <= cols; i++) {
+      final lx = r * (-1 + 2 * i / cols);
+      final span = math.sqrt(math.max(0.0, r * r - lx * lx));
+      var y = double.infinity;
+      for (var k = 0; k <= depthSteps; k++) {
+        final lz = span * (-1 + 2 * k / depthSteps);
+        final sy =
+            c.dy + lz * tilt - heightAt(math.sqrt(lx * lx + lz * lz));
+        if (sy < y) y = sy;
+      }
+      topEdge.add(Offset(c.dx + lx, y));
+    }
+    final oval =
+        Rect.fromCenter(center: c, width: r * 2, height: r * 2 * tilt);
+    final shape = Path()
+      ..addPolygon(topEdge, false)
+      ..arcTo(oval, 0, math.pi, false)
+      ..close();
+    final bounds = shape.getBounds();
     canvas.drawPath(
-      Path()..addPolygon(arc, false),
+      shape,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(-0.3, -0.45),
+          radius: 0.95,
+          colors: [light, color, shade],
+          stops: const [0, 0.55, 1],
+        ).createShader(bounds),
+    );
+
+    // Burama iz (konditer qopidan siqilgandek): chetdan markazga o'ralib,
+    // yuza bo'ylab tepaga ko'tariladi; kosa bilan birga aylanadi. Uyum
+    // ortida qolgan (tomoshabindan teskari qiyalikdagi) qismi chizilmaydi.
+    const turns = 3.2;
+    const n = 260;
+    final groove = Path(), ridge = Path();
+    final w = math.max(1.2, r * 0.075);
+    var pen = false;
+    for (var i = 0; i <= n; i++) {
+      final s = i / n;
+      final a = s * turns * 2 * math.pi + rotation;
+      final rho = r * 0.9 * (1 - s);
+      final lz = rho * math.cos(a);
+      // Ekran-y ning chuqurlik bo'yicha hosilasi: > 0 — yuza ko'rinadi.
+      final slope = rho < 1e-6
+          ? 0.0
+          : mound * 0.5 * math.pi / r * math.sin(math.pi * rho / r) * lz / rho;
+      if (tilt + slope <= 0.02) {
+        pen = false;
+        continue;
+      }
+      final p = Offset(
+          c.dx + rho * math.sin(a), c.dy + lz * tilt - heightAt(rho));
+      if (pen) {
+        groove.lineTo(p.dx, p.dy);
+        ridge.lineTo(p.dx, p.dy - w * 0.5);
+      } else {
+        groove.moveTo(p.dx, p.dy);
+        ridge.moveTo(p.dx, p.dy - w * 0.5);
+        pen = true;
+      }
+    }
+    canvas.save();
+    canvas.clipPath(shape);
+    canvas.drawPath(
+      groove,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2
-        ..color = _sponge.rim.withValues(alpha: 0.6),
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..strokeWidth = w
+        ..color = deep.withValues(alpha: 0.45),
     );
+    canvas.drawPath(
+      ridge,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..strokeWidth = w * 0.5
+        ..color = light.withValues(alpha: 0.9),
+    );
+    canvas.restore();
   }
 
   @override
-  bool shouldRepaint(FillingCakePainter old) =>
+  bool shouldRepaint(FillingBowlPainter old) =>
       old.look != look ||
-      old.slice != slice ||
+      old.photo != photo ||
       old.tilt != tilt ||
       old.rotation != rotation;
 }

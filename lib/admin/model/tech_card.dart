@@ -283,9 +283,10 @@ class TechCard {
   // (shef_tech_card_page.dart → isBiskvitCategory).
   final int bakeTimeMin;
   final int bakeTempC;
-  // Tayyor biskvit fotosi — tex kartada saqlanadi va ko'rsatiladi (shef
-  // «П/Ф Бисквит»). "/static/..." yoki '' (yo'q). JSON: biscuit_photo_url.
-  // 3D rasmga foto QO'YILMAYDI — u тех карта tarkibidan chiziladi.
+  // Tex kartadagi FOTO (shef «П/Ф Бисквит» — tayyor biskvit, «П/Ф Начинка» —
+  // nachinka/krem). "/static/..." yoki '' (yo'q). JSON: biscuit_photo_url.
+  // 3D shu fotodan chiziladi: biskvitda yon tomonga o'raladi, nachinkada —
+  // kosadagi krem yuzasi (biscuit_3d.dart, filling_3d.dart).
   final String biscuitPhotoUrl;
 
   const TechCard({

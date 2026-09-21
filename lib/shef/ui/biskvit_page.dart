@@ -337,7 +337,7 @@ class _BiskvitPageState extends State<BiskvitPage> {
           canAddProducts: true,
           // Pishirish vaqti/harorati — faqat «Бисквит» kategoriyasida.
           showBaking: isBiskvitCategory(category.name),
-          // «Начинка» — kesilgan tort, kesimda nachinka (тех картадан).
+          // «Начинка» — kosadagi kremning o'zi (foto yoki rang тех картадан).
           showFillingCake: isNachinkaCategory(category.name),
         ),
       ),

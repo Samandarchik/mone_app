@@ -70,7 +70,7 @@ class _ShefHomeUiState extends State<ShefHomeUi> {
         canAddProducts: true,
         // «П/Ф Бисквит» — tepada 3D tort va tort konstruktori.
         showCakeConstructor: isBiskvitCategory(category.name),
-        // «П/Ф Начинка» — kesilgan tort, kesimda nachinka (тех картадан).
+        // «П/Ф Начинка» — kosadagi kremning o'zi (foto yoki rang тех картадан).
         showFillingCake: isNachinkaCategory(category.name),
       ),
     );
