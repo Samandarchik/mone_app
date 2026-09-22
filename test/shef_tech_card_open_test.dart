@@ -129,8 +129,8 @@ void main() {
     await t.pump(const Duration(milliseconds: 400));
     await doubleTap(t, 'Начинка клубничная');
     expect(find.byType(TechCardEditorPage), findsOneWidget);
-    expect(find.textContaining('1-qatlam (yuqori)'), findsOneWidget);
-    expect(find.textContaining('2-qatlam (pastki)'), findsOneWidget);
+    expect(find.textContaining('1-qatlam (pastki)'), findsOneWidget);
+    expect(find.textContaining('2-qatlam (yuqori)'), findsOneWidget);
   });
 
   testWidgets('constructor step 3: double tap opens the coating palette',

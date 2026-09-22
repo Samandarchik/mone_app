@@ -147,15 +147,17 @@ void coatingTests() {
 }
 
 // Nachinka 2 qatlam — har biriga o'z palitrasi (filling_color / _color2).
+// Qatlamlar PASTDAN sanaladi: 1-palitra (filling_color) — pastki qatlam
+// (bandsOf(1)), 2-si — yuqori (bandsOf(0)).
 void twoLayerTests() {
   const pink = Color(0xFFF8BBD0);
 
-  test('resolve: yuqori qatlam pushti, pastki shokolad', () {
-    const card = TechCard(fillingColor: '#F8BBD0', fillingColor2: '#5A3420');
+  test('resolve: 1-palitra — pastki qatlam, 2-si — yuqori', () {
+    const card = TechCard(fillingColor: '#5A3420', fillingColor2: '#F8BBD0');
     final (look, photo) = FillingLook.resolve('Начинка №1', card);
     expect(photo, isNull);
-    expect(look.bandsOf(0).single.color, pink);
-    expect(look.bandsOf(1).single.color, _chocolate);
+    expect(look.bandsOf(0).single.color, pink); // yuqori
+    expect(look.bandsOf(1).single.color, _chocolate); // pastki
   });
 
   test('resolve: 2-qatlam tanlanmagan — ikkala qatlam bir xil', () {
@@ -165,12 +167,21 @@ void twoLayerTests() {
     expect(look.bandsOf(1).single.color, pink);
   });
 
-  test('resolve: faqat 2-qatlam tanlangan — 1-qatlam nom/tarkibdan', () {
+  test('resolve: faqat 2-qatlam (yuqori) tanlangan — pastki nom/tarkibdan',
+      () {
     const card = TechCard(fillingColor2: '#5A3420');
     final (look, photo) = FillingLook.resolve('Начинка клубничная', card);
     expect(photo, isNull);
+    expect(look.bandsOf(0).single.color, _chocolate); // yuqori
+    expect(look.bandsOf(1).single.color, _strawberry); // pastki
+  });
+
+  test('fromTechCard: palitra yo\'q — tavsifdan, foto hisobga olinmaydi', () {
+    const card = TechCard(biscuitPhotoUrl: '/x.jpg');
+    final look = FillingLook.fromTechCard('Начинка клубничная', card);
     expect(look.bandsOf(0).single.color, _strawberry);
-    expect(look.bandsOf(1).single.color, _chocolate);
+    expect(look.bandsOf(1).single.color, _strawberry);
+    expect(FillingLook.hasPaletteColor(card), isFalse);
   });
 
   test('TechCard: filling_color2 JSON\'da saqlanadi', () {

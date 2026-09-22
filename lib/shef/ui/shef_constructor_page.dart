@@ -8,7 +8,8 @@
 //       o'lchami/turi tex kartadan, foto bo'lsa yon tomonda).
 //   2 — Nachinka: O'SHA biskvit (o'lchami va korj rangi tanlangan
 //       biskvitdan) ichida nachinka QATLAMLARI bilan — bo'lagi kesilgan,
-//       kesimda nachinka. Odatda 2 qatlam; «+ Qatlam» yana qo'shadi (5
+//       kesimda nachinka. Qatlamlar PASTDAN sanaladi: «1-qatlam» — eng
+//       pastki. Odatda 2 qatlam; «+ Qatlam» ustiga yana qo'shadi (5
 //       tagacha), «×» olib tashlaydi. «N-qatlam» chipi — faol qatlam: griddan
 //       tanlangan nachinka shunga yoziladi, ya'ni har qatlam o'z mahsuloti,
 //       o'z ranglari va o'z tex kartasi bilan (chipdagi nuqta — qatlamning
@@ -20,9 +21,10 @@
 // Biskvitlar — nomi «Бисквит» bo'lgan kategoriyalar, nachinka va qoplamalar —
 // «Начинка» kategoriyalari mahsulotlari (isBiskvitCategory /
 // isNachinkaCategory). Nachinka rangi FAQAT o'z tex kartasidan
-// (_fillingLookOf): tex kartadagi palitrada rang tanlangan bo'lsa — o'sha;
-// tanlanmagan bo'lsa — mahsulot tavsifidan (nom / blok / masalliqlar,
-// FillingLook.detect). Foto tahlili konstruktorda ISHLATILMAYDI. Qoplama —
+// (FillingLook.fromTechCard): tex kartadagi palitrada rang tanlangan bo'lsa
+// — o'sha (1-palitra — pastki qatlam, 2-si — yuqori); tanlanmagan bo'lsa —
+// mahsulot tavsifidan (nom / blok / masalliqlar, FillingLook.detect). Foto
+// tahlili konstruktorda ISHLATILMAYDI. Qoplama —
 // FillingLook.coatOf («Покрытие rangi» palitrasi → nom/tarkib). Tex karta
 // kartochkani ikki marta bosib ochiladi; saqlangach 3D o'zi yangilanadi.
 // Tanlov faqat shu ekranda yashaydi
@@ -34,7 +36,6 @@ import 'package:uz_ai_dev/admin/model/product_model.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
-import 'package:uz_ai_dev/admin/ui/widgets/filling_color_palette.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:uz_ai_dev/shef/model/production_model.dart';
@@ -52,15 +53,15 @@ const double _heroH = 205;
 // tanlangan bo'lsa (filling_color / filling_color2) — o'sha; tanlanmagan
 // bo'lsa — tavsifidan (nom / blok / masalliqlar). Foto tahlili yo'q: rang
 // sinxron va aynan tex kartadagidek. null (qatlam bo'sh) — neytral.
-FillingLook _fillingLookOf(ProductModelAdmin? p) {
-  if (p == null) return FillingLook.neutral;
-  final card = p.techCard;
-  final first = fillingColorFromHex(card?.fillingColor ?? '');
-  final second = fillingColorFromHex(card?.fillingColor2 ?? '');
-  final described = FillingLook.detect(p.name, card);
-  if (first == null && second == null) return described;
-  return FillingLook(first ?? described.color, second);
-}
+FillingLook _fillingLookOf(ProductModelAdmin? p) =>
+    p == null ? FillingLook.neutral : FillingLook.fromTechCard(p.name, p.techCard);
+
+// [k]-qatlam (PASTDAN sanab, 0 — eng pastki) mahsulotining o'z rang yo'llari.
+// Tex kartada 2 ta palitra: 1-si — pastki qatlam (bandsOf(1)), 2-si —
+// yuqori (bandsOf(0)). Juft qatlam 1-palitrani, toq — 2-sini oladi: bitta
+// mahsulot ikki qatlamda turganda «pastki/yuqori» ranglari navbatlashadi.
+List<FillingBand> _layerBands(int k, ProductModelAdmin? p) =>
+    _fillingLookOf(p).bandsOf(k.isEven ? 1 : 0);
 
 // Qadamlar: (tugma yozuvi, grid sarlavhasi).
 const List<(String, String)> _steps = [
@@ -81,10 +82,10 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
   // Tanlanganlar (null — ro'yxatdagi birinchisi).
   int? _biscuitId;
   int? _coatingId;
-  // NACHINKA QATLAMLARI (tepadan pastga) — har biri o'z nachinka mahsuloti
-  // (id; null — ro'yxatdagi birinchisi). Odatda 2 ta; «+ Qatlam» yana
-  // qo'shadi (pastga). N nachinka → N+1 korj, hammasi biskvit balandligi
-  // ichida.
+  // NACHINKA QATLAMLARI PASTDAN yuqoriga (0 — eng pastki, «1-qatlam») — har
+  // biri o'z nachinka mahsuloti (id; null — ro'yxatdagi birinchisi). Odatda
+  // 2 ta; «+ Qatlam» yana qo'shadi (USTIGA). N nachinka → N+1 korj, hammasi
+  // biskvit balandligi ichida.
   final List<int?> _fillingIds = [null, null];
   // Qatlam rangi FAQAT mahsulotning tex kartasidan (kartochkadagi «tex karta»
   // tugmasi → 2 ta nachinka palitrasi); konstruktorda alohida palitra yo'q.
@@ -168,7 +169,7 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
             }
           }
           final biscuit = _pick(biscuits, _biscuitId);
-          // Har nachinka qatlamining mahsuloti (tepadan pastga).
+          // Har nachinka qatlamining mahsuloti (pastdan yuqoriga).
           final layers = [
             for (final id in _fillingIds) _pick(fillings, id),
           ];
@@ -275,7 +276,7 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
   }
 
   // Katta 3D: qadamga qarab biskvit / nachinkali / qoplangan tort.
-  // [layers] — nachinka qatlamlari mahsulotlari, tepadan pastga.
+  // [layers] — nachinka qatlamlari mahsulotlari, pastdan yuqoriga.
   Widget _hero(
     ProductModelAdmin? biscuit,
     List<ProductModelAdmin?> layers,
@@ -305,13 +306,11 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
       // nachinka qatlami qo'shilganda ham o'zgarmaydi: qatlamlar shu
       // balandlik ICHIGA sig'diriladi.
       dims: BiscuitDims.fromTechCard(biscuit?.techCard),
-      // Tex kartada 2 ta palitra bor: 1-qatlam (yuqori) va 2-qatlam
-      // (pastki). k-qatlam o'z mahsulotining (k juft -> 1-, toq -> 2-)
-      // palitrasini oladi: bitta mahsulot ikki qatlamda turganda
-      // avvalgidek «yuqori/pastki» ranglar chiqadi.
+      // Painter qatlamlarni TEPADAN pastga oladi, bizda esa pastdan
+      // yuqoriga — teskari tartibda beramiz (_layerBands).
       fillings: [
-        for (var k = 0; k < layers.length; k++)
-          _fillingLookOf(layers[k]).bandsOf(k.isEven ? 0 : 1),
+        for (var k = layers.length - 1; k >= 0; k--)
+          _layerBands(k, layers[k]),
       ],
       // 3-qadam: tashqaridan qoplangan, lekin bo'lagi kesilgan — ichidagi
       // nachinka ham ko'rinadi.
@@ -326,13 +325,13 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
 
   // Qatlamning hozirgi asosiy rangi — chipdagi rangli nuqta uchun.
   Color _layerDot(int k, ProductModelAdmin? p) {
-    final bands = _fillingLookOf(p).bandsOf(k.isEven ? 0 : 1);
+    final bands = _layerBands(k, p);
     return bands.reduce((a, b) => b.part > a.part ? b : a).color;
   }
 
-  // Nachinka qatlamlari qatori: «1-qatlam», «2-qatlam» ... (tepadan pastga) —
-  // bosilsa shu qatlam faol bo'ladi (grid tanlovi unga yoziladi); «×» —
-  // qatlamni olib tashlash; oxirida «+ Qatlam».
+  // Nachinka qatlamlari qatori: «1-qatlam» (eng pastki), «2-qatlam» ...
+  // (pastdan yuqoriga) — bosilsa shu qatlam faol bo'ladi (grid tanlovi unga
+  // yoziladi); «×» — qatlamni olib tashlash; oxirida «+ Qatlam».
   Widget _layerBar(List<ProductModelAdmin?> layers) {
     return SizedBox(
       height: 40,
@@ -381,8 +380,8 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
               label: const Text('Qatlam'),
               backgroundColor: Colors.white,
               side: const BorderSide(color: _accentColor),
-              // Yangi qatlam eng PASTGA qo'shiladi va faol bo'ladi; boshlanishiga
-              // ustidagi qatlamning nachinkasi — keyin griddan almashtiriladi.
+              // Yangi qatlam eng USTIGA qo'shiladi va faol bo'ladi; boshlanishiga
+              // ostidagi qatlamning nachinkasi — keyin griddan almashtiriladi.
               onPressed: () => setState(() {
                 _fillingIds.add(layers.last?.id);
                 _activeLayer = _fillingIds.length - 1;

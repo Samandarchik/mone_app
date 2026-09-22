@@ -1772,18 +1772,19 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
                   // yoki Штук = 1 — kesish yo'q) faqat mahsulot rasmi chiqadi.
                   if (_schemeVisible) _cuttingScheme() else _productPhoto(),
                   if (widget.showBiscuitPhoto) _biscuitPhotoSection(),
-                  // Tortda nachinka 2 qatlam — har biriga o'z palitrasi
-                  // (masalan yuqori pushti, pastki shokolad). 2-qatlam
-                  // tanlanmasa u 1-qatlam bilan bir xil bo'ladi.
+                  // Tortda nachinka 2 qatlam — har biriga o'z palitrasi.
+                  // Qatlamlar PASTDAN sanaladi: 1-palitra — pastki qatlam,
+                  // 2-si — uning ustidagi (masalan pastki shokolad, yuqori
+                  // pushti). 2-qatlam tanlanmasa u 1-qatlam bilan bir xil.
                   if (widget.showFillingColor) ...[
                     FillingColorPalette(
-                      title: 'Nachinka rangi — 1-qatlam (yuqori)',
+                      title: 'Nachinka rangi — 1-qatlam (pastki)',
                       value: c.fillingColor,
                       onChanged: (hex) =>
                           setState(() => c.fillingColor = hex),
                     ),
                     FillingColorPalette(
-                      title: 'Nachinka rangi — 2-qatlam (pastki)',
+                      title: 'Nachinka rangi — 2-qatlam (yuqori)',
                       value: c.fillingColor2,
                       onChanged: (hex) =>
                           setState(() => c.fillingColor2 = hex),
