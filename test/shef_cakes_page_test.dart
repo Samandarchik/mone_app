@@ -1,6 +1,7 @@
 // «Торты» bo'limi (shef_cakes_page.dart): tortlar gridi, tort bosilsa
-// konstruktor shu tort bilan (tanlovlar tex kartadan), ikki marta — tex
-// karta; isTortCategory — nom bo'yicha.
+// TORTNING O'Z konstruktori (shef_cake_constructor_page.dart — qadamlar tex
+// karta bloklari, 3D shulardan yig'iladi), ikki marta — tex karta;
+// isTortCategory — nom bo'yicha.
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,18 +14,15 @@ import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
 import 'package:uz_ai_dev/shef/provider/shef_provider.dart';
+import 'package:uz_ai_dev/shef/ui/shef_cake_constructor_page.dart';
 import 'package:uz_ai_dev/shef/ui/shef_cakes_page.dart';
 import 'package:uz_ai_dev/shef/ui/shef_constructor_page.dart';
 import 'package:uz_ai_dev/shef/ui/shef_tech_card_page.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
 
-ProductModelAdmin _product(
-  int id,
-  String name,
-  int cat,
-  String catName, {
-  TechCard? card,
-}) =>
+ProductModelAdmin _product(int id, String name, int cat, String catName,
+        {TechCard card = const TechCard()}) =>
     ProductModelAdmin(
       id: id,
       name: name,
@@ -33,31 +31,30 @@ ProductModelAdmin _product(
       categoryName: catName,
       filials: const [],
       filialNames: const [],
-      techCard: card ??
-          const TechCard(
-            diameterCm: 18,
-            heightCm: 6,
-            shape: 'round',
-            bases: [
-              TechBase(name: 'Основа', ingredients: [
-                TechItem(name: 'Сливки', unit: 'ml', amount: 500),
-              ]),
-            ],
-          ),
+      techCard: card,
     );
 
-// Tort tex kartasi: biskvit (id 10) + 2 ta nachinka (id 20, 21) + krem (id 22).
-const TechCard _cakeCard = TechCard(
+// «Рафаэлло» tex kartasi: 4 blok — biskvit, kokos kremi, qoplama, dekor.
+const TechCard _raffaello = TechCard(
   diameterCm: 22,
   heightCm: 8,
   shape: 'round',
   pieceWeightG: 1500,
+  stages: [TechStage(name: 'Бисквит'), TechStage(name: 'Крем')],
   bases: [
-    TechBase(name: 'Сборка', ingredients: [
-      TechItem(productId: 10, name: 'Бисквит', unit: 'pcs', amount: 1),
-      TechItem(productId: 20, name: 'Начинка клубничная', unit: 'g', amount: 300),
-      TechItem(productId: 21, name: 'Начинка шоколадная', unit: 'g', amount: 300),
-      TechItem(productId: 22, name: 'Крем сырный', unit: 'g', amount: 400),
+    TechBase(name: 'Бисквит ванильный', stage: 1, ingredients: [
+      TechItem(name: 'Мука', unit: 'g', amount: 300),
+      TechItem(name: 'Яйцо', unit: 'pcs', amount: 6),
+    ]),
+    TechBase(name: 'Крем кокосовый', stage: 2, ingredients: [
+      TechItem(name: 'Сливки 33%', unit: 'ml', amount: 500),
+      TechItem(name: 'Кокосовая стружка', unit: 'g', amount: 120),
+    ]),
+    TechBase(name: 'Покрытие', stage: 2, ingredients: [
+      TechItem(name: 'Крем чиз', unit: 'g', amount: 400),
+    ]),
+    TechBase(name: 'Декор', stage: 2, ingredients: [
+      TechItem(name: 'Рафаэлло конфеты', unit: 'pcs', amount: 8),
     ]),
   ],
 );
@@ -77,19 +74,13 @@ void main() {
     products = ProductProviderAdmin();
     cats.categories.addAll([
       CategoryProductAdmin(
-          id: 1, name: 'П/Ф Бисквит', imageUrl: null, printerId: 1),
-      CategoryProductAdmin(
           id: 2, name: 'П/Ф Начинка', imageUrl: null, printerId: 1),
       CategoryProductAdmin(id: 3, name: 'Торты', imageUrl: null, printerId: 1),
     ]);
     products.products.addAll([
-      _product(10, 'Бисквит Турецкий', 1, 'П/Ф Бисквит'),
-      _product(11, 'Бисквит Шоколадный', 1, 'П/Ф Бисквит'),
       _product(20, 'Начинка клубничная', 2, 'П/Ф Начинка'),
-      _product(21, 'Начинка шоколадная', 2, 'П/Ф Начинка'),
-      _product(22, 'Крем сырный', 2, 'П/Ф Начинка'),
-      _product(30, 'Торт Клубничный', 3, 'Торты', card: _cakeCard),
-      _product(31, 'Торт без карты', 3, 'Торты', card: const TechCard()),
+      _product(30, 'Торт Рафаэлло', 3, 'Торты', card: _raffaello),
+      _product(31, 'Торт без карты', 3, 'Торты'),
     ]);
   });
 
@@ -109,6 +100,12 @@ void main() {
     expect(t.takeException(), isNull);
   }
 
+  Future<void> settle(WidgetTester t) async {
+    await t.pump(const Duration(milliseconds: 400));
+    await t.pump(const Duration(milliseconds: 600));
+    expect(t.takeException(), isNull);
+  }
+
   test('isTortCategory: nom bo\'yicha, biskvit/nachinka emas', () {
     expect(isTortCategory('Торты'), isTrue);
     expect(isTortCategory('Tortlar'), isTrue);
@@ -119,10 +116,8 @@ void main() {
 
   testWidgets('cakes grid: names, size line and tech card status', (t) async {
     await open(
-      t,
-      const ShefCakesPage(categoryId: 3, categoryName: 'Торты'),
-    );
-    expect(find.text('Торт Клубничный'), findsOneWidget);
+        t, const ShefCakesPage(categoryId: 3, categoryName: 'Торты'));
+    expect(find.text('Торт Рафаэлло'), findsOneWidget);
     expect(find.text('Торт без карты'), findsOneWidget);
     // Boshqa kategoriya mahsulotlari chiqmaydi.
     expect(find.text('Начинка клубничная'), findsNothing);
@@ -133,42 +128,100 @@ void main() {
     expect(find.byType(FillingThumb), findsNWidgets(2));
   });
 
-  testWidgets('tap a cake → constructor with that cake preselected',
+  testWidgets('tap a cake → ITS OWN constructor built from tech card blocks',
       (t) async {
     await open(
-      t,
-      const ShefCakesPage(categoryId: 3, categoryName: 'Торты'),
-    );
-    await t.tap(find.text('Торт Клубничный'));
-    await t.pump(const Duration(milliseconds: 400));
-    await t.pump(const Duration(milliseconds: 600));
-    expect(t.takeException(), isNull);
-    expect(find.byType(ShefConstructorPage), findsOneWidget);
-    // Sarlavha — tort nomi; 3-qadamdan (qoplangan tort) boshlanadi.
-    expect(find.text('Торт Клубничный'), findsOneWidget);
-    expect(find.byType(Filling3DView), findsOneWidget);
-    expect(find.text('3. Tashqi qoplamani tanlang'), findsOneWidget);
-    // 2-qadam: tex kartadagi 2 ta nachinka — 2 ta qatlam chipi.
+        t, const ShefCakesPage(categoryId: 3, categoryName: 'Торты'));
+    await t.tap(find.text('Торт Рафаэлло'));
+    await settle(t);
+    expect(find.byType(ShefCakeConstructorPage), findsOneWidget);
+    // Umumiy konstruktor EMAS.
+    expect(find.byType(ShefConstructorPage), findsNothing);
+    expect(find.text('Торт Рафаэлло'), findsOneWidget);
+
+    // 1-qadam (boshlanish) — tortning biskviti (3D), ostida biskvit bloki
+    // va masalliqlari.
+    expect(find.byType(Biscuit3DView), findsOneWidget);
+    expect(find.byType(Filling3DView), findsNothing);
+    expect(find.text('1. Tortning biskviti'), findsOneWidget);
+    expect(find.text('Бисквит ванильный'), findsOneWidget);
+    expect(find.text('Мука'), findsOneWidget);
+    expect(find.text('300 г'), findsOneWidget);
+    expect(find.text('Og\'irligi 300 г'), findsOneWidget);
+    // Boshqa qadam bloklari bu yerda yo'q.
+    expect(find.text('Крем кокосовый'), findsNothing);
+
+    // 2-qadam — bo'lak kesimi, kesimda tex kartadagi nachinka.
     await t.tap(find.text('2'));
-    await t.pump(const Duration(milliseconds: 400));
-    expect(find.text('1-qatlam'), findsOneWidget);
-    expect(find.text('2-qatlam'), findsOneWidget);
-    expect(find.text('3-qatlam'), findsNothing);
+    await settle(t);
+    expect(find.byType(Filling3DView), findsOneWidget);
+    expect(find.byType(Biscuit3DView), findsNothing);
+    expect(find.text('2. Bo\'lak kesimi — nachinka'), findsOneWidget);
+    expect(find.text('Крем кокосовый'), findsOneWidget);
+    expect(find.text('Nachinka'), findsOneWidget);
+    expect(find.text('Кокосовая стружка'), findsOneWidget);
+    expect(find.text('Покрытие'), findsNothing);
+
+    // 3-qadam — butun tayyor tort; qoplama va dekor bloklari.
+    await t.tap(find.text('3'));
+    await settle(t);
+    expect(find.byType(Filling3DView), findsOneWidget);
+    expect(find.text('3. Tayyor tort'), findsOneWidget);
+    expect(find.text('Покрытие'), findsOneWidget);
+    expect(find.text('Qoplama'), findsOneWidget);
+    expect(find.text('Декор'), findsOneWidget);
+    expect(find.text('Bezak'), findsOneWidget);
+    expect(find.text('Рафаэлло конфеты'), findsOneWidget);
+    expect(find.text('8 дона'), findsOneWidget);
+  });
+
+  testWidgets('cake with only a biscuit block: step 2 falls back to biscuit',
+      (t) async {
+    final cake = _product(
+      32,
+      'Торт Медовик',
+      3,
+      'Торты',
+      card: const TechCard(
+        diameterCm: 20,
+        heightCm: 6,
+        bases: [
+          TechBase(name: 'Коржи медовые', ingredients: [
+            TechItem(name: 'Мёд', unit: 'g', amount: 200),
+          ]),
+        ],
+      ),
+    );
+    await open(t, ShefCakeConstructorPage(cake: cake));
+    await t.tap(find.text('2'));
+    await settle(t);
+    expect(find.byType(Biscuit3DView), findsOneWidget);
+    expect(find.textContaining('nachinka bloki'), findsOneWidget);
+    await t.tap(find.text('3'));
+    await settle(t);
+    expect(find.byType(Filling3DView), findsOneWidget);
+    expect(find.textContaining('qoplama/dekor bloki'), findsOneWidget);
+  });
+
+  testWidgets('cake without tech card → hint with tech card button',
+      (t) async {
+    await open(t, ShefCakeConstructorPage(cake: products.products.last));
+    expect(find.text('Tex kartani ochish'), findsOneWidget);
+    expect(find.byType(Filling3DView), findsNothing);
+    await t.tap(find.text('Tex kartani ochish'));
+    await settle(t);
+    expect(find.byType(TechCardEditorPage), findsOneWidget);
   });
 
   testWidgets('double tap a cake → its tech card', (t) async {
     await open(
-      t,
-      const ShefCakesPage(categoryId: 3, categoryName: 'Торты'),
-    );
-    final target = find.text('Торт Клубничный');
+        t, const ShefCakesPage(categoryId: 3, categoryName: 'Торты'));
+    final target = find.text('Торт Рафаэлло');
     await t.tap(target);
     await t.pump(const Duration(milliseconds: 80));
     await t.tap(target);
-    await t.pump(const Duration(milliseconds: 400));
-    await t.pump(const Duration(milliseconds: 600));
-    expect(t.takeException(), isNull);
+    await settle(t);
     expect(find.byType(TechCardEditorPage), findsOneWidget);
-    expect(find.byType(ShefConstructorPage), findsNothing);
+    expect(find.byType(ShefCakeConstructorPage), findsNothing);
   });
 }

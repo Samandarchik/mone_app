@@ -3,11 +3,11 @@
 // (isTortCategory) ochilganda. Tayyor tortlar 2 ustunli GRIDda: tepada
 // tortning fotosi (bo'lmasa — tex kartadagi o'lchamda qoplangan tort chizmasi,
 // rangi nom/tarkibdan), ostida nomi, o'lchami/og'irligi va tex karta holati.
-// Karta bir marta bosilsa — KONSTRUKTOR shu tort bilan
-// (ShefConstructorPage(cake: ...): biskvit/nachinka/qoplama tortning tex
-// kartasidan oldindan tanlanadi); ikki marta — tortning tex kartasi (narxsiz
-// rejim, bo'limlardagi naqsh). Pastda «Qo'shish» — shu kategoriyaga yangi
-// tort. Ro'yxat ProductProviderAdmin (YAGONA manba) dan, lokal qidiruv.
+// Karta bir marta bosilsa — TORTNING O'Z KONSTRUKTORI
+// (shef_cake_constructor_page.dart: qadamlar shu tortning tex kartasidagi
+// bloklar, 3D shulardan yig'iladi); ikki marta — tortning tex kartasi
+// (narxsiz rejim, bo'limlardagi naqsh). Pastda «Qo'shish» — shu kategoriyaga
+// yangi tort. Ro'yxat ProductProviderAdmin (YAGONA manba) dan, lokal qidiruv.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/admin/model/product_model.dart';
@@ -18,7 +18,7 @@ import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/utils/qty_units.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
-import 'package:uz_ai_dev/shef/ui/shef_constructor_page.dart';
+import 'package:uz_ai_dev/shef/ui/shef_cake_constructor_page.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
 
@@ -68,11 +68,11 @@ class _ShefCakesPageState extends State<ShefCakesPage> {
             forceRefresh: true,
           );
 
-  // Bir marta bosish — konstruktor shu tort bilan.
+  // Bir marta bosish — tortning o'z konstruktori (tex karta bloklaridan).
   void _openConstructor(ProductModelAdmin cake) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => ShefConstructorPage(cake: cake)),
+      MaterialPageRoute(builder: (_) => ShefCakeConstructorPage(cake: cake)),
     );
   }
 

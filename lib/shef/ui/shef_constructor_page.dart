@@ -1,10 +1,9 @@
 // shef/ui/shef_constructor_page.dart — shef KONSTRUKTORI (ShefConstructorPage):
 // «Готовый» ekranining (pf_stock_page.dart, ready: true) o'ng pastki
-// burchagidagi «Konstruktor» tugmasidan (bo'sh) yoki «Торты» bo'limidagi
-// tort kartasidan (shef_cakes_page.dart — [cake] berilib, tanlovlar tortning
-// tex kartasidan oldindan to'ladi, sarlavha tort nomi, AppBar'da tortning
-// tex kartasi, 3-qadamdan boshlanadi) ochiladi. Tort HAQIQIY
-// mahsulotlardan yig'iladi (tex kartalari bilan):
+// burchagidagi «Konstruktor» tugmasidan ochiladi. Tort HAQIQIY
+// mahsulotlardan yig'iladi (tex kartalari bilan). «Торты» bo'limidagi tayyor
+// tortning O'Z konstruktori boshqa — shef_cake_constructor_page.dart (qadamlar
+// tortning tex kartasi bloklaridan):
 // tepada katta aylanadigan 3D rasm, uning OSTIDA bir qatorda 3 ta qadam
 // tugmasi (1 · 2 · 3), undan pastda shu qadamning mahsulotlari (grid) —
 // bosilsa tanlanadi va 3D darhol o'zgaradi.
@@ -39,7 +38,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/admin/model/product_model.dart';
-import 'package:uz_ai_dev/admin/model/tech_card.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
@@ -76,95 +74,14 @@ const List<(String, String)> _steps = [
 ];
 
 class ShefConstructorPage extends StatefulWidget {
-  // Berilsa — «Торты» bo'limidan ochilgan TAYYOR TORT (shef_cakes_page.dart):
-  // sarlavha tort nomi, tanlovlar tortning tex kartasidan oldindan to'ladi
-  // (_CakePreset) va ekran 3-qadamdan (butun qoplangan tort) boshlanadi.
-  final ProductModelAdmin? cake;
-
-  const ShefConstructorPage({super.key, this.cake});
+  const ShefConstructorPage({super.key});
 
   @override
   State<ShefConstructorPage> createState() => _ShefConstructorPageState();
 }
 
-// Tort tex kartasidan konstruktor tanlovlari: masalliqlar orasida (hamma
-// bloklar, tartib bilan) biskvit va nachinka kategoriyasi mahsulotlari
-// qidiriladi — avval product_id bo'yicha, u 0 bo'lsa nom bo'yicha (harf
-// farqsiz). Biskvit — birinchi topilgani; nachinka qatlamlari — topilganlar
-// tartibda (bitta bo'lsa ikkala qatlamga, 5 tagacha); qoplama — nomida
-// krem/qoplama so'zi bor nachinka, bo'lmasa oxirgi topilgan nachinka.
-class _CakePreset {
-  final int? biscuitId;
-  final List<int> fillingIds;
-  final int? coatingId;
-
-  const _CakePreset({this.biscuitId, this.fillingIds = const [], this.coatingId});
-
-  static const List<String> _coatWords = ['крем', 'krem', 'покрыт', 'ганаш', 'глазур'];
-
-  static _CakePreset of(
-    ProductModelAdmin cake,
-    List<ProductModelAdmin> biscuits,
-    List<ProductModelAdmin> fillings,
-  ) {
-    final card = cake.techCard;
-    if (card == null) return const _CakePreset();
-    ProductModelAdmin? find(List<ProductModelAdmin> list, TechItem item) {
-      if (item.productId > 0) {
-        for (final p in list) {
-          if (p.id == item.productId) return p;
-        }
-        return null;
-      }
-      final name = item.name.trim().toLowerCase();
-      if (name.isEmpty) return null;
-      for (final p in list) {
-        if (p.name.trim().toLowerCase() == name) return p;
-      }
-      return null;
-    }
-
-    int? biscuit;
-    final found = <ProductModelAdmin>[];
-    for (final b in card.bases) {
-      for (final item in b.ingredients) {
-        biscuit ??= find(biscuits, item)?.id;
-        final f = find(fillings, item);
-        if (f != null && !found.any((x) => x.id == f.id)) found.add(f);
-      }
-    }
-    // Qoplama — nomida krem/qoplama so'zi bor birinchi mahsulot; u ICHKI
-    // qatlam emas (ro'yxatdan chiqariladi, boshqa nachinka qolmasa — qoladi).
-    ProductModelAdmin? coat;
-    for (final f in found) {
-      if (_coatWords.any(f.name.toLowerCase().contains)) {
-        coat = f;
-        break;
-      }
-    }
-    var layers = found;
-    if (coat != null) {
-      final inner = found.where((f) => f.id != coat!.id).toList();
-      if (inner.isNotEmpty) layers = inner;
-    } else if (found.isNotEmpty) {
-      coat = found.last;
-    }
-    if (layers.length > _ShefConstructorPageState._maxLayers) {
-      layers = layers.sublist(0, _ShefConstructorPageState._maxLayers);
-    }
-    return _CakePreset(
-      biscuitId: biscuit,
-      fillingIds: [for (final f in layers) f.id],
-      coatingId: coat?.id,
-    );
-  }
-}
-
 class _ShefConstructorPageState extends State<ShefConstructorPage> {
   int _step = 0;
-  // Tort berilgan: tex kartadan tanlovlar bir marta (mahsulotlar
-  // yuklangach) qo'yiladi.
-  bool _presetApplied = false;
   // Tanlanganlar (null — ro'yxatdagi birinchisi).
   int? _biscuitId;
   int? _coatingId;
@@ -185,8 +102,6 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
   @override
   void initState() {
     super.initState();
-    // Tayyor tort — avval butun (qoplangan) holda ko'rsatiladi.
-    if (widget.cake != null) _step = 2;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<CategoryProviderAdmin>().getCategories();
@@ -226,60 +141,17 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
     return list.first;
   }
 
-  // Tort berilgan bo'lsa — tex kartasidan tanlovlarni BIR MARTA qo'yish
-  // (build ichida, setState'siz: qiymatlar shu build'da ishlatiladi).
-  // Ro'yxatlar hali bo'sh bo'lsa keyingi build'ga qoldiriladi.
-  void _applyCakePreset(
-    List<ProductModelAdmin> biscuits,
-    List<ProductModelAdmin> fillings,
-  ) {
-    final cake = widget.cake;
-    if (_presetApplied || cake == null) return;
-    if (biscuits.isEmpty && fillings.isEmpty) return;
-    _presetApplied = true;
-    final preset = _CakePreset.of(cake, biscuits, fillings);
-    _biscuitId = preset.biscuitId;
-    _coatingId = preset.coatingId;
-    final ids = preset.fillingIds;
-    if (ids.isNotEmpty) {
-      _fillingIds
-        ..clear()
-        ..addAll(ids.length == 1 ? [ids.first, ids.first] : ids);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final cake = widget.cake;
     return Scaffold(
       backgroundColor: _bgColor,
       appBar: AppBar(
         backgroundColor: _bgColor,
         elevation: 0,
-        title: Text(
-          cake?.name ?? 'Konstruktor',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        title: const Text(
+          'Konstruktor',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
-        // Tortning o'z tex kartasi (narxsiz rejim).
-        actions: [
-          if (cake != null)
-            IconButton(
-              tooltip: 'Tortning tex kartasi',
-              icon: const Icon(Icons.menu_book_outlined),
-              color: Colors.brown.shade700,
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => TechCardEditorPage(
-                    product: cake,
-                    canEditPrices: false,
-                  ),
-                ),
-              ),
-            ),
-        ],
       ),
       body: Consumer2<CategoryProviderAdmin, ProductProviderAdmin>(
         builder: (context, cats, products, _) {
@@ -301,7 +173,6 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
               fillings.add(p);
             }
           }
-          _applyCakePreset(biscuits, fillings);
           final biscuit = _pick(biscuits, _biscuitId);
           // Har nachinka qatlamining mahsuloti (pastdan yuqoriga).
           final layers = [
