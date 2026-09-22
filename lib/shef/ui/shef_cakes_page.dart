@@ -87,8 +87,8 @@ class _ShefCakesPageState extends State<ShefCakesPage> {
     );
   }
 
-  // Ikki marta bosish — tortning tex kartasi (narxsiz rejim, har blok ostida
-  // o'z rang palitrasi — konstruktor/illyustratsiya uchun).
+  // Ikki marta bosish — tortning tex kartasi (narxsiz rejim) — boshqa
+  // bo'limlardagi kabi 3 ta palitra: Biskvit / Nachinka / Покрытие rangi.
   void _openTechCard(ProductModelAdmin cake) {
     Navigator.push(
       context,
@@ -96,7 +96,9 @@ class _ShefCakesPageState extends State<ShefCakesPage> {
         builder: (_) => TechCardEditorPage(
           product: cake,
           canEditPrices: false,
-          showBlockColors: true,
+          showBiscuitColor: true,
+          showFillingColor: true,
+          showCoatingColor: true,
         ),
       ),
     );

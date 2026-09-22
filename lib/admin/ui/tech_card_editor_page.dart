@@ -194,14 +194,6 @@ class TechCardEditorPage extends StatefulWidget {
   /// qatlamlari shu rangda. Tanlanmasa rang nom/tarkibdan aniqlanadi.
   final bool showBiscuitColor;
 
-  /// true — TORT tex kartasi («Торты» bo'limi): HAR BLOK (Бисквит, Крем,
-  /// Покрытие, Декор ...) sarlavhasi ostida o'z rang palitrasi
-  /// (FillingColorPalette, yig'ilgan). Tanlangan rang blokning `color`
-  /// maydonida saqlanadi (sarlavha rangi ham shu) va tort konstruktori /
-  /// illyustratsiyasida shu blok qatlami (nachinka, qoplama, biskvit)
-  /// AYNAN shu rangda chiziladi — nom/tarkibdan aniqlashdan ustun.
-  final bool showBlockColors;
-
   const TechCardEditorPage({
     super.key,
     required this.product,
@@ -210,7 +202,6 @@ class TechCardEditorPage extends StatefulWidget {
     this.showFillingColor = false,
     this.showCoatingColor = false,
     this.showBiscuitColor = false,
-    this.showBlockColors = false,
   });
 
   @override
@@ -2918,23 +2909,6 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
               ),
             ),
           ),
-
-          // Tort tex kartasi: blokning o'z rangi (konstruktor/illyustratsiya
-          // uchun) — yig'ilgan palitra, o'ngda tanlangan rang va strelka.
-          if (widget.showBlockColors)
-            Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(bottom: _kSide),
-              ),
-              padding: const EdgeInsets.fromLTRB(6, 6, 6, 0),
-              child: FillingColorPalette(
-                title: '«${base.name}» rangi',
-                value: base.color,
-                onChanged: (hex) => setState(
-                    () => c.bases[index] = base.copyWith(color: hex)),
-              ),
-            ),
 
           // Blok rasmi (bo'lsa) yoki yuklanish holati
           if (uploading)

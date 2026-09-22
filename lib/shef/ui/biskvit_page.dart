@@ -512,7 +512,9 @@ class _BiskvitPageState extends State<BiskvitPage> {
                             builder: (_) => TechCardEditorPage(
                               product: cakes[i],
                               canEditPrices: false,
-                              showBlockColors: true,
+                              showBiscuitColor: true,
+                              showFillingColor: true,
+                              showCoatingColor: true,
                             ),
                           ),
                         ),

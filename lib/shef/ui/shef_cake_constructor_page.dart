@@ -20,11 +20,12 @@
 // Blok roli nomidan (CakeBlockRole.of): бисквит/корж → biskvit; покрытие/
 // глазурь/выравнивание → qoplama; декор/украшение → bezak; пропитка/сироп/
 // сборка → bosqich (qatlam qo'shmaydi); qolgani (крем, начинка, конфи, мусс)
-// → nachinka. Rang — tex kartada blok uchun palitradan tanlangan rang
-// (TechBase.color, har blok ostidagi «… rangi» palitrasi), tanlanmagan
-// bo'lsa blok nomi/masalliqlaridan (cakeBlockColor / cakeBiscuitPalette).
-// Tex karta AppBar tugmasidan tahrirlanadi (showBlockColors) — saqlangach
-// (provider) konstruktor o'zi yangilanadi.
+// → nachinka. Ranglar — boshqa bo'limlardagi kabi tortning tex kartasidagi
+// palitralardan: «Biskvit rangi» (korjlar), «Nachinka rangi» (hamma nachinka
+// qatlami bir rangda), «Покрытие rangi» (qoplama); tanlanmagan bo'lsa —
+// avtomatik, tort nomi/bloklari/masalliqlaridan (BiscuitPalette.of /
+// FillingLook.fromTechCard / coatOf). Tex karta AppBar tugmasidan
+// tahrirlanadi — saqlangach (provider) konstruktor o'zi yangilanadi.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/admin/model/product_model.dart';
@@ -82,8 +83,8 @@ class ShefCakeConstructorPage extends StatefulWidget {
 class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
   int _step = 0;
 
-  // Tort tex kartasi — har blok ostida o'z rang palitrasi (showBlockColors):
-  // saqlangach konstruktor va illyustratsiya shu ranglarda qayta chiziladi.
+  // Tort tex kartasi — boshqa bo'limlardagi kabi 3 ta palitra (Biskvit /
+  // Nachinka / Покрытие rangi); saqlangach konstruktor shu ranglarda.
   void _openTechCard(ProductModelAdmin cake) {
     Navigator.push(
       context,
@@ -91,7 +92,9 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
         builder: (_) => TechCardEditorPage(
           product: cake,
           canEditPrices: false,
-          showBlockColors: true,
+          showBiscuitColor: true,
+          showFillingColor: true,
+          showCoatingColor: true,
         ),
       ),
     );
@@ -183,23 +186,20 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
   // 3D: qadamga qarab biskvit / kesilgan bo'lakli tort / butun tort.
   Widget _hero(ProductModelAdmin cake, TechCard card, List<TechBase> blocks) {
     final dims = BiscuitDims.fromTechCard(card);
-    TechBase? biscuit;
-    final fillings = <List<FillingBand>>[];
+    // Nachinka qatlamlari soni — tex kartadagi nachinka bloklari soni.
+    var fillCount = 0;
     for (final b in blocks) {
-      switch (CakeBlockRole.of(b)) {
-        case CakeBlockRole.biscuit:
-          biscuit ??= b;
-        case CakeBlockRole.filling:
-          fillings.add([FillingBand(cakeBlockColor(b), 1)]);
-        default:
-          break;
-      }
+      if (CakeBlockRole.of(b) == CakeBlockRole.filling) fillCount++;
     }
-    // Korj rangi — biskvit blokidan (palitradan tanlangan → nom/tarkib),
-    // bo'lmasa tort nomi/tarkibidan.
-    final sponge = biscuit == null
-        ? BiscuitPalette.detect(cake.name, card)
-        : cakeBiscuitPalette(biscuit);
+    // Ranglar — boshqa bo'limlardagi kabi, TORT tex kartasining palitralari:
+    // korjlar — «Biskvit rangi» (biscuit_color), nachinka — «Nachinka rangi»
+    // (filling_color, hamma qatlam bir xil). Palitrada tanlanmagan bo'lsa —
+    // avtomatik: tort nomi / bloklar / masalliqlardan.
+    final sponge = BiscuitPalette.of(cake.name, card);
+    final fillingLook = FillingLook.fromTechCard(cake.name, card);
+    final fillings = [
+      for (var i = 0; i < fillCount; i++) fillingLook.bandsOf(0),
+    ];
 
     // 1 — biskvitning o'zi; 2 — nachinka bloki bo'lmasa ham biskvit.
     if (_step == 0 || (_step == 1 && fillings.isEmpty)) {
@@ -390,10 +390,6 @@ class _BlockCard extends StatelessWidget {
             block.stage <= stages.length)
         ? stages[block.stage - 1].name
         : '';
-    final color = role == CakeBlockRole.biscuit
-        ? cakeBiscuitPalette(block).sponge
-        : cakeBlockColor(block);
-
     return Padding(
       padding: const EdgeInsets.only(top: 10),
       child: Material(
@@ -410,16 +406,6 @@ class _BlockCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Container(
-                    width: 14,
-                    height: 14,
-                    margin: const EdgeInsets.only(right: 8),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: color,
-                      border: Border.all(color: Colors.black26),
-                    ),
-                  ),
                   Expanded(
                     child: Text(
                       block.name,

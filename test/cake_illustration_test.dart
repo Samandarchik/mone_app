@@ -72,20 +72,19 @@ void main() {
         [CakeDecor.strawberry]);
   });
 
-  test('block palette colour (TechBase.color) overrides detection', () {
-    const card = TechCard(bases: [
-      TechBase(name: 'Бисквит', color: '#5A3420'),
-      TechBase(name: 'Крем клубничный', color: '#8BC34A'),
-      TechBase(name: 'Покрытие', color: '#B39DDB'),
+  test('«Покрытие rangi» palette (coating_color) overrides detection', () {
+    const card = TechCard(coatingColor: '#B39DDB', bases: [
+      TechBase(name: 'Бисквит'),
+      TechBase(name: 'Крем клубничный'),
+      TechBase(name: 'Покрытие'),
     ]);
     final s = CakeIllustrationSpec.fromTechCard('Торт', card);
-    // Qoplama — aynan tanlangan rang (oqartirilmaydi).
     expect(s.coat, const Color(0xFFB39DDB));
-    expect(cakeBlockColor(card.bases[1]), const Color(0xFF8BC34A));
-    expect(cakeBiscuitPalette(card.bases[0]).sponge, const Color(0xFF5A3420));
-    // Rang tanlanmagan — nom/tarkibdan.
-    expect(cakeBlockColor(const TechBase(name: 'Крем клубничный')),
-        const Color(0xFFD9364A));
+    expect(s.top, s.coat);
+    // Palitra bo'sh — avtomatik (oqartirilgan krem rangi), aynan shu emas.
+    final auto = CakeIllustrationSpec.fromTechCard(
+        'Торт', const TechCard(bases: [TechBase(name: 'Покрытие')]));
+    expect(auto.coat, isNot(const Color(0xFFB39DDB)));
   });
 
   test('CakeBlockRole.of by block name', () {

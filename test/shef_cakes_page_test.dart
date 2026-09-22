@@ -240,13 +240,45 @@ void main() {
     await settle(t);
     expect(find.byType(TechCardEditorPage), findsOneWidget);
     expect(find.byType(ShefCakeConstructorPage), findsNothing);
-    // Tort tex kartasida har blok ostida o'z rang palitrasi.
-    expect(
-      t.widget<TechCardEditorPage>(find.byType(TechCardEditorPage))
-          .showBlockColors,
-      isTrue,
+    // Tort tex kartasida boshqa bo'limlardagi 3 ta palitra.
+    final page =
+        t.widget<TechCardEditorPage>(find.byType(TechCardEditorPage));
+    expect(page.showBiscuitColor, isTrue);
+    expect(page.showFillingColor, isTrue);
+    expect(page.showCoatingColor, isTrue);
+    expect(find.text('Biskvit rangi'), findsOneWidget);
+    expect(find.text('Покрытие rangi'), findsOneWidget);
+  });
+
+  testWidgets('constructor colours come from the product palettes', (t) async {
+    final cake = _product(
+      34,
+      'Торт Рафаэлло',
+      3,
+      'Торты',
+      card: const TechCard(
+        biscuitColor: '#5A3420',
+        fillingColor: '#F8BBD0',
+        bases: [
+          TechBase(name: 'Бисквит'),
+          TechBase(name: 'Крем кокосовый'),
+          TechBase(name: 'Крем клубничный'),
+        ],
+      ),
     );
-    expect(find.text('«Бисквит ванильный» rangi'), findsOneWidget);
-    expect(find.text('«Крем кокосовый» rangi'), findsOneWidget);
+    await open(t, ShefCakeConstructorPage(cake: cake));
+    // 1 — korjlar «Biskvit rangi» palitrasidan.
+    final b = t.widget<Biscuit3DView>(find.byType(Biscuit3DView));
+    expect(b.palette.sponge, const Color(0xFF5A3420));
+    // 2 — 2 ta nachinka qatlami, HAMMASI «Nachinka rangi» palitrasidan
+    // (bloklar har xil bo'lsa ham bir rang).
+    await t.tap(find.text('2'));
+    await settle(t);
+    final f = t.widget<Filling3DView>(find.byType(Filling3DView));
+    expect(f.fillings!.length, 2);
+    for (final layer in f.fillings!) {
+      expect(layer.single.color, const Color(0xFFF8BBD0));
+    }
+    expect(f.sponge.sponge, const Color(0xFF5A3420));
   });
 }
