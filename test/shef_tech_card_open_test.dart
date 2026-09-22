@@ -16,6 +16,7 @@ import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
 import 'package:uz_ai_dev/admin/ui/widgets/filling_color_palette.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
 import 'package:uz_ai_dev/shef/provider/shef_provider.dart';
 import 'package:uz_ai_dev/shef/ui/shef_constructor_page.dart';
 import 'package:uz_ai_dev/shef/ui/shef_tech_card_page.dart';
@@ -196,8 +197,8 @@ void main() {
       expect(t.takeException(), isNull);
     }
 
-    // Qatlamlar qatori gorizontal suriladi — oxirgi «×» ekrandan tashqarida
-    // bo'lishi mumkin.
+    // Faqat eng ustki qatlamda «×» faol (bitta ishlaydigan tugma); qatorda
+    // gorizontal surish — u ekrandan tashqarida bo'lishi mumkin.
     await t.ensureVisible(find.byIcon(Icons.close).last);
     await t.pump(const Duration(milliseconds: 300));
     await t.tap(find.byIcon(Icons.close).last);
@@ -205,6 +206,21 @@ void main() {
     expect(t.takeException(), isNull);
     expect(find.text('3-qatlam'), findsNothing);
     expect(find.text('2-qatlam'), findsOneWidget);
+  });
+
+  testWidgets('constructor: tapping a filling card shows THAT tech card',
+      (t) async {
+    await open(t, const ShefConstructorPage());
+    await t.tap(find.text('2'));
+    await t.pump(const Duration(milliseconds: 400));
+    // Grid kartalari (nachinka mahsulotlari) bor; bosilsa tanlanadi va 3D
+    // xatosiz qayta chiziladi — nachinka tanlangan tex kartadan.
+    final cards = find.byType(FillingThumb);
+    expect(cards, findsWidgets);
+    await t.tap(cards.last);
+    await t.pump(const Duration(milliseconds: 400));
+    expect(t.takeException(), isNull);
+    expect(find.byType(Filling3DView), findsOneWidget);
   });
 
   testWidgets('constructor: no colour palette outside the tech card',

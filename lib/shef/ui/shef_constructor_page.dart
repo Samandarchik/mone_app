@@ -7,13 +7,13 @@
 //   1 — Biskvit: faqat biskvitning o'zi (П/Ф Бисквит sahifasidagidek:
 //       o'lchami/turi tex kartadan, foto bo'lsa yon tomonda).
 //   2 — Nachinka: O'SHA biskvit (o'lchami va korj rangi tanlangan
-//       biskvitdan) ichida nachinka QATLAMLARI bilan — bo'lagi kesilgan,
-//       kesimda nachinka. Qatlamlar PASTDAN sanaladi: «1-qatlam» — eng
-//       pastki. Odatda 2 qatlam; «+ Qatlam» ustiga yana qo'shadi (5
-//       tagacha), «×» olib tashlaydi. «N-qatlam» chipi — faol qatlam: griddan
-//       tanlangan nachinka shunga yoziladi, ya'ni har qatlam o'z mahsuloti,
-//       o'z ranglari va o'z tex kartasi bilan (chipdagi nuqta — qatlamning
-//       hozirgi rangi). N nachinka -> N+1 korj, tort balandligi o'zgarmaydi.
+//       biskvitdan) ichida TANLANGAN nachinka bilan — bo'lagi kesilgan,
+//       kesimda nachinka. Kartochka bosilsa tortda aynan shu tex kartaning
+//       nachinkasi: qatlamlar PASTDAN sanaladi — 1-qatlam (eng pastki) tex
+//       kartadagi 1-palitra rangida, 2-qatlam (ustidagi) — 2-palitra, keyin
+//       yana navbat bilan. Odatda 2 qatlam; «+ Qatlam» ustiga yana qo'shadi
+//       (5 tagacha), «×» eng ustkisini olib tashlaydi (chipdagi nuqta —
+//       qatlam rangi). N nachinka -> N+1 korj, tort balandligi o'zgarmaydi.
 //   3 — Покрытие: o'sha tort tanlangan krem bilan tashqaridan TO'LIQ
 //       qoplangan, bo'lagi kesilgan — kesimda nachinka ham, qoplama qatlami
 //       ham ko'rinadi. Griddagi qoplama kartalari ham 1-qadamdagi biskvit
@@ -56,12 +56,13 @@ const double _heroH = 205;
 FillingLook _fillingLookOf(ProductModelAdmin? p) =>
     p == null ? FillingLook.neutral : FillingLook.fromTechCard(p.name, p.techCard);
 
-// [k]-qatlam (PASTDAN sanab, 0 — eng pastki) mahsulotining o'z rang yo'llari.
-// Tex kartada 2 ta palitra: 1-si — pastki qatlam (bandsOf(1)), 2-si —
-// yuqori (bandsOf(0)). Juft qatlam 1-palitrani, toq — 2-sini oladi: bitta
-// mahsulot ikki qatlamda turganda «pastki/yuqori» ranglari navbatlashadi.
-List<FillingBand> _layerBands(int k, ProductModelAdmin? p) =>
-    _fillingLookOf(p).bandsOf(k.isEven ? 1 : 0);
+// [k]-qatlam (PASTDAN sanab, 0 — eng pastki) rang yo'llari — tanlangan
+// nachinka tex kartasidan. Tex kartada 2 ta palitra: 1-si — pastki qatlam
+// (bandsOf(1)), 2-si — yuqori (bandsOf(0)). Qatlamlar pastdan yuqoriga
+// navbatlashadi: 1-qatlam — 1-palitra, 2-qatlam — 2-palitra, 3-qatlam —
+// yana 1-palitra ...
+List<FillingBand> _layerBands(int k, FillingLook look) =>
+    look.bandsOf(k.isEven ? 1 : 0);
 
 // Qadamlar: (tugma yozuvi, grid sarlavhasi).
 const List<(String, String)> _steps = [
@@ -81,16 +82,16 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
   int _step = 0;
   // Tanlanganlar (null — ro'yxatdagi birinchisi).
   int? _biscuitId;
+  // Nachinka — BITTA mahsulot butun tortga: kartochka bosilsa tortda AYNAN
+  // shu tex kartaning nachinkasi chiqadi (pastki qatlam — 1-palitra, yuqori
+  // — 2-palitra; palitra tanlanmagan bo'lsa — tavsifdan). Konstruktorda
+  // alohida palitra yo'q — rang tex karta ichida sozlanadi.
+  int? _fillingId;
   int? _coatingId;
-  // NACHINKA QATLAMLARI PASTDAN yuqoriga (0 — eng pastki, «1-qatlam») — har
-  // biri o'z nachinka mahsuloti (id; null — ro'yxatdagi birinchisi). Odatda
-  // 2 ta; «+ Qatlam» yana qo'shadi (USTIGA). N nachinka → N+1 korj, hammasi
-  // biskvit balandligi ichida.
-  final List<int?> _fillingIds = [null, null];
-  // Qatlam rangi FAQAT mahsulotning tex kartasidan (kartochkadagi «tex karta»
-  // tugmasi → 2 ta nachinka palitrasi); konstruktorda alohida palitra yo'q.
-  // Hozir nachinka tanlanayotgan qatlam (_fillingIds indeksi).
-  int _activeLayer = 0;
+  // Nachinka qatlamlari soni (pastdan yuqoriga, 1-palitra/2-palitra
+  // navbatlashadi). Odatda 2; «+ Qatlam» ustiga qo'shadi, «×» olib
+  // tashlaydi. N nachinka → N+1 korj, hammasi biskvit balandligi ichida.
+  int _layerCount = 2;
 
   static const int _maxLayers = 5;
 
@@ -169,21 +170,17 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
             }
           }
           final biscuit = _pick(biscuits, _biscuitId);
-          // Har nachinka qatlamining mahsuloti (pastdan yuqoriga).
-          final layers = [
-            for (final id in _fillingIds) _pick(fillings, id),
-          ];
+          final filling = _pick(fillings, _fillingId);
           final coating = _pick(fillings, _coatingId);
 
           final items = _step == 0 ? biscuits : fillings;
-          final selectedId =
-              [biscuit?.id, layers[_activeLayer]?.id, coating?.id][_step];
+          final selectedId = [biscuit?.id, filling?.id, coating?.id][_step];
 
           return Column(
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                child: _hero(biscuit, layers, coating),
+                child: _hero(biscuit, filling, coating),
               ),
               // Qadam tugmalari — rasmning OSTIDA, bir qatorda.
               Padding(
@@ -219,11 +216,12 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
                         ),
                       ),
                     ),
-                    // 2-qadam: nachinka qatlamlari — qaysi qatlamga
-                    // tanlanayotgani va «+ Qatlam». Rang — mahsulot tex
-                    // kartasi ichidagi palitradan (kartochkadagi tugma).
+                    // 2-qadam: nachinka qatlamlari soni va har qatlamning
+                    // rangi (tex karta palitrasi: 1-qatlam — 1-palitra ...).
                     if (_step == 1 && fillings.isNotEmpty)
-                      SliverToBoxAdapter(child: _layerBar(layers)),
+                      SliverToBoxAdapter(
+                        child: _layerBar(_fillingLookOf(filling)),
+                      ),
                     if (items.isEmpty)
                       SliverFillRemaining(
                         hasScrollBody: false,
@@ -254,7 +252,7 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
                                   if (_step == 0) {
                                     _biscuitId = p.id;
                                   } else if (_step == 1) {
-                                    _fillingIds[_activeLayer] = p.id;
+                                    _fillingId = p.id;
                                   } else {
                                     _coatingId = p.id;
                                   }
@@ -279,7 +277,7 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
   // [layers] — nachinka qatlamlari mahsulotlari, pastdan yuqoriga.
   Widget _hero(
     ProductModelAdmin? biscuit,
-    List<ProductModelAdmin?> layers,
+    ProductModelAdmin? filling,
     ProductModelAdmin? coating,
   ) {
     final palette = biscuit == null
@@ -297,8 +295,9 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
       );
     }
 
-    // Har qatlamning rangi o'z mahsulotining tex kartasidan (sinxron, foto
-    // tahlili yo'q — _fillingLookOf).
+    // Nachinka — tanlangan mahsulot tex kartasidan (sinxron, foto tahlili
+    // yo'q — _fillingLookOf): pastki qatlam 1-palitra, yuqori — 2-palitra.
+    final look = _fillingLookOf(filling);
     return Filling3DView(
       height: _heroH,
       sponge: palette,
@@ -309,8 +308,7 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
       // Painter qatlamlarni TEPADAN pastga oladi, bizda esa pastdan
       // yuqoriga — teskari tartibda beramiz (_layerBands).
       fillings: [
-        for (var k = layers.length - 1; k >= 0; k--)
-          _layerBands(k, layers[k]),
+        for (var k = _layerCount - 1; k >= 0; k--) _layerBands(k, look),
       ],
       // 3-qadam: tashqaridan qoplangan, lekin bo'lagi kesilgan — ichidagi
       // nachinka ham ko'rinadi.
@@ -323,69 +321,52 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
     );
   }
 
-  // Qatlamning hozirgi asosiy rangi — chipdagi rangli nuqta uchun.
-  Color _layerDot(int k, ProductModelAdmin? p) {
-    final bands = _layerBands(k, p);
+  // Qatlamning asosiy rangi — chipdagi rangli nuqta uchun.
+  static Color _layerDot(int k, FillingLook look) {
+    final bands = _layerBands(k, look);
     return bands.reduce((a, b) => b.part > a.part ? b : a).color;
   }
 
   // Nachinka qatlamlari qatori: «1-qatlam» (eng pastki), «2-qatlam» ...
-  // (pastdan yuqoriga) — bosilsa shu qatlam faol bo'ladi (grid tanlovi unga
-  // yoziladi); «×» — qatlamni olib tashlash; oxirida «+ Qatlam».
-  Widget _layerBar(List<ProductModelAdmin?> layers) {
+  // (pastdan yuqoriga), har birida o'z rangi (tex karta palitrasi); «×» —
+  // eng ustki qatlamni olib tashlash; oxirida «+ Qatlam» (ustiga qo'shadi).
+  Widget _layerBar(FillingLook look) {
     return SizedBox(
       height: 40,
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         children: [
-          for (var i = 0; i < layers.length; i++)
+          for (var i = 0; i < _layerCount; i++)
             Padding(
               padding: const EdgeInsets.only(right: 6),
               child: InputChip(
-                // Qatlamning hozirgi rangi.
+                // Qatlamning rangi.
                 avatar: Container(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: _layerDot(i, layers[i]),
+                    color: _layerDot(i, look),
                     border: Border.all(color: Colors.black26),
                   ),
                 ),
                 label: Text('${i + 1}-qatlam'),
-                selected: _activeLayer == i,
-                showCheckmark: false,
-                selectedColor: _accentColor.withValues(alpha: 0.35),
                 backgroundColor: Colors.white,
-                side: BorderSide(
-                  color: _activeLayer == i
-                      ? _accentColor
-                      : Colors.grey.shade300,
-                ),
-                onPressed: () => setState(() => _activeLayer = i),
+                side: BorderSide(color: Colors.grey.shade300),
                 deleteIcon: const Icon(Icons.close, size: 16),
-                // Yagona qatlamni olib tashlab bo'lmaydi.
-                onDeleted: layers.length < 2
+                // Faqat eng ustki qatlam olib tashlanadi; yagona qatlam —
+                // yo'q.
+                onDeleted: (_layerCount < 2 || i != _layerCount - 1)
                     ? null
-                    : () => setState(() {
-                          _fillingIds.removeAt(i);
-                          if (_activeLayer >= _fillingIds.length) {
-                            _activeLayer = _fillingIds.length - 1;
-                          }
-                        }),
+                    : () => setState(() => _layerCount--),
               ),
             ),
-          if (layers.length < _maxLayers)
+          if (_layerCount < _maxLayers)
             ActionChip(
               avatar: const Icon(Icons.add, size: 18),
               label: const Text('Qatlam'),
               backgroundColor: Colors.white,
               side: const BorderSide(color: _accentColor),
-              // Yangi qatlam eng USTIGA qo'shiladi va faol bo'ladi; boshlanishiga
-              // ostidagi qatlamning nachinkasi — keyin griddan almashtiriladi.
-              onPressed: () => setState(() {
-                _fillingIds.add(layers.last?.id);
-                _activeLayer = _fillingIds.length - 1;
-              }),
+              onPressed: () => setState(() => _layerCount++),
             ),
         ],
       ),
