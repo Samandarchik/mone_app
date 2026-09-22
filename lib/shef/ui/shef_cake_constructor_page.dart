@@ -10,14 +10,14 @@
 //       qatlamlari (tex kartadagi krem/nachinka/konfi bloklari, pastdan
 //       yuqoriga, har biri o'z rangida). Nachinka bloki bo'lmasa — faqat
 //       biskvit.
-//   3 — Tort: TORTNING O'ZI 3D'da — butun (kesilmagan) qoplangan tortga
-//       mahsulotning asosiy FOTOSI o'raladi (yon devorga tasma, tepaga
-//       fotoning markazi; Filling3DView.sidePhotoUrl), barmoq bilan
-//       buriladi. Foto yo'q bo'lsa — qoplama bloki rangida (bo'lmasa oxirgi
-//       krem) qoplangan tort.
+//   3 — Tort: TAYYOR TORT — vektor ILLYUSTRATSIYA (cake_illustration.dart,
+//       referens: Mone'ning yassi grafikasi — patnis, lenta va bant, glazur,
+//       dekor doirasi). Qoplama/glazur rangi, kokos/yong'oq fakturasi va
+//       dekor (Рафаэлло, безе, миндаль, mevalar ...) — tex karta
+//       bloklaridan (CakeIllustrationSpec.fromTechCard).
 // Qadam ostida shu qadamga tegishli tex karta BLOKLARI: nomi, rol chipi,
 // rasmi (tex kartadagi blok rasmi), og'irligi, bo'limi va masalliqlar.
-// Blok roli nomidan (_BlockRole.of): бисквит/корж → biskvit; покрытие/
+// Blok roli nomidan (CakeBlockRole.of): бисквит/корж → biskvit; покрытие/
 // глазурь/выравнивание → qoplama; декор/украшение → bezak; пропитка/сироп/
 // сборка → bosqich (qatlam qo'shmaydi); qolgani (крем, начинка, конфи, мусс)
 // → nachinka. Rang — blok nomi/masalliqlaridan (FillingLook.detect /
@@ -32,6 +32,7 @@ import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/cake_illustration.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
 
 const Color _bgColor = Color(0xFFFAF6F1);
@@ -58,46 +59,6 @@ const List<(String, String, String)> _steps = [
     'Tex kartada qoplama/dekor bloki yo\'q',
   ),
 ];
-
-// Blokning tortdagi roli — nomidan (ru / uz), katta-kichik harf farqsiz.
-enum _BlockRole {
-  biscuit,
-  filling,
-  coat,
-  decor,
-  other;
-
-  static const List<(List<String>, _BlockRole)> _rules = [
-    // Tashqi qoplama — krem/glazur bilan qoplash, tekislash, velyur.
-    (['покрыт', 'выравн', 'глазур', 'обтяж', 'обмаз', 'велюр', 'qoplama'],
-        coat),
-    (['бискв', 'корж', 'biskvit', 'korj', 'основ'], biscuit),
-    (['декор', 'украш', 'посып', 'bezak'], decor),
-    // Tortga qatlam qo'shmaydigan bloklar.
-    (['пропит', 'сироп', 'сборк', 'упаков', 'sirop'], other),
-  ];
-
-  static _BlockRole of(TechBase b) {
-    final n = b.name.toLowerCase();
-    for (final (words, role) in _rules) {
-      if (words.any(n.contains)) return role;
-    }
-    // Krem, nachinka, konfi, muss, jele, ganash ... — ichki qatlam.
-    return filling;
-  }
-
-  String get label => switch (this) {
-        biscuit => 'Biskvit',
-        filling => 'Nachinka',
-        coat => 'Qoplama',
-        decor => 'Bezak',
-        other => 'Bosqich',
-      };
-}
-
-// Blok rangi — nomi va masalliqlaridan (faqat shu blok hisobga olinadi).
-Color _blockColor(TechBase b) =>
-    FillingLook.detect(b.name, TechCard(bases: [b])).color;
 
 // Tex kartadagi blok rasmi to'liq URL'i (yo'q — null).
 String? _blockImageUrl(TechBase b) {
@@ -201,14 +162,14 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
   // Qadamga tegishli bloklar: 1 — biskvit; 2 — nachinka; 3 — qoplama, bezak
   // va boshqa bosqichlar (tartib saqlanadi).
   List<TechBase> _blocksOfStep(List<TechBase> blocks) {
-    bool keep(_BlockRole r) => switch (_step) {
-          0 => r == _BlockRole.biscuit,
-          1 => r == _BlockRole.filling,
-          _ => r == _BlockRole.coat ||
-              r == _BlockRole.decor ||
-              r == _BlockRole.other,
+    bool keep(CakeBlockRole r) => switch (_step) {
+          0 => r == CakeBlockRole.biscuit,
+          1 => r == CakeBlockRole.filling,
+          _ => r == CakeBlockRole.coat ||
+              r == CakeBlockRole.decor ||
+              r == CakeBlockRole.other,
         };
-    return [for (final b in blocks) if (keep(_BlockRole.of(b))) b];
+    return [for (final b in blocks) if (keep(CakeBlockRole.of(b))) b];
   }
 
   // 3D: qadamga qarab biskvit / kesilgan bo'lakli tort / butun tort.
@@ -216,17 +177,12 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
     final dims = BiscuitDims.fromTechCard(card);
     TechBase? biscuit;
     final fillings = <List<FillingBand>>[];
-    TechBase? coatBlock;
-    TechBase? lastFilling;
     for (final b in blocks) {
-      switch (_BlockRole.of(b)) {
-        case _BlockRole.biscuit:
+      switch (CakeBlockRole.of(b)) {
+        case CakeBlockRole.biscuit:
           biscuit ??= b;
-        case _BlockRole.filling:
-          fillings.add([FillingBand(_blockColor(b), 1)]);
-          lastFilling = b;
-        case _BlockRole.coat:
-          coatBlock ??= b;
+        case CakeBlockRole.filling:
+          fillings.add([FillingBand(cakeBlockColor(b), 1)]);
         default:
           break;
       }
@@ -245,30 +201,22 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
         fruits: BiscuitFruit.detect(cake.name),
       );
     }
-    // Qoplama: qoplama bloki → oxirgi krem → neytral.
-    final coat = coatBlock != null
-        ? _blockColor(coatBlock)
-        : lastFilling != null
-            ? _blockColor(lastFilling)
-            : FillingLook.neutral.color;
-    // 3 — TORTNING O'ZI 3D'da: butun qoplangan tortga mahsulotning asosiy
-    // fotosi o'raladi (yon devor + tepa), tort burilganda foto birga
-    // buriladi. Foto yo'q / yuklanguncha — qoplama rangi.
-    final image = cake.imageUrl ?? '';
-    final photoUrl = (_step == 2 && image.isNotEmpty)
-        ? (image.startsWith('http') ? image : '${AppUrls.baseUrl}$image')
-        : null;
-    // Painter qatlamlarni TEPADAN pastga oladi — teskari tartib.
+    // 3 — TAYYOR TORT: vektor illyustratsiya (cake_illustration.dart) —
+    // qoplama/glazur rangi, faktura va dekor tex kartadan.
+    if (_step == 2) {
+      return CakeIllustrationView(
+        height: _heroH + 30,
+        spec: CakeIllustrationSpec.fromTechCard(cake.name, card),
+      );
+    }
+    // 2 — bo'lagi kesilgan «yalang'och» tort, kesimda nachinka. Painter
+    // qatlamlarni TEPADAN pastga oladi — teskari tartib.
     return Filling3DView(
       height: _heroH,
       sponge: sponge,
       dims: dims,
-      fillings: fillings.isEmpty ? null : fillings.reversed.toList(),
+      fillings: fillings.reversed.toList(),
       look: FillingLook.neutral,
-      // 2 — bo'lagi kesilgan «yalang'och» tort; 3 — butun qoplangan tort.
-      coat: _step == 2 ? coat : null,
-      coatCut: false,
-      sidePhotoUrl: photoUrl,
     );
   }
 }
@@ -424,7 +372,7 @@ class _BlockCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final role = _BlockRole.of(block);
+    final role = CakeBlockRole.of(block);
     final url = _blockImageUrl(block);
     final weight = block.weightG > 0 ? block.weightG : block.computedWeightG;
     final stages = card.stages;
@@ -433,9 +381,9 @@ class _BlockCard extends StatelessWidget {
             block.stage <= stages.length)
         ? stages[block.stage - 1].name
         : '';
-    final color = role == _BlockRole.biscuit
+    final color = role == CakeBlockRole.biscuit
         ? BiscuitPalette.detect(block.name, TechCard(bases: [block])).sponge
-        : _blockColor(block);
+        : cakeBlockColor(block);
 
     return Padding(
       padding: const EdgeInsets.only(top: 10),

@@ -1,8 +1,8 @@
 // shef/ui/shef_cakes_page.dart — «Торты» bo'limi (ShefCakesPage): Biskvit
 // bo'limi yoki shef bosh ekranidagi nomi «Торт» bo'lgan kategoriya
 // (isTortCategory) ochilganda. Tayyor tortlar 2 ustunli GRIDda: tepada
-// tortning fotosi (bo'lmasa — tex kartadagi o'lchamda qoplangan tort chizmasi,
-// rangi nom/tarkibdan), ostida nomi, o'lchami/og'irligi va tex karta holati.
+// tortning fotosi (bo'lmasa — tex kartadan chizilgan vektor illyustratsiyasi,
+// cake_illustration.dart), ostida nomi, o'lchami/og'irligi va tex karta holati.
 // Karta bir marta bosilsa — TORTNING O'Z KONSTRUKTORI
 // (shef_cake_constructor_page.dart: qadamlar shu tortning tex kartasidagi
 // bloklar, 3D shulardan yig'iladi); ikki marta — tortning tex kartasi
@@ -19,8 +19,7 @@ import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/utils/qty_units.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:uz_ai_dev/shef/ui/shef_cake_constructor_page.dart';
-import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
-import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/cake_illustration.dart';
 
 const Color _bgColor = Color(0xFFFAF6F1);
 const Color _accentColor = Color(0xFFC5A97B);
@@ -275,13 +274,16 @@ class _CakeCard extends StatelessWidget {
     final url = image.isEmpty ? null : '${AppUrls.baseUrl}$image';
     final hasCard = _hasTechCard(cake);
     final size = _sizeLine(cake.techCard);
-    // Foto yo'q — qoplangan butun tort, o'lchami tex kartadan, rangi
-    // nom/tarkibdan (FillingLook.coatOf: «Покрытие» palitrasi → tavsif).
-    final Widget drawn = FillingThumb(
-      look: FillingLook.neutral,
-      coat: FillingLook.coatOf(cake.name, cake.techCard),
-      dims: BiscuitDims.fromTechCard(cake.techCard),
-      whole: true,
+    // Foto yo'q — tortning vektor illyustratsiyasi (konstruktor 3-qadamidagi
+    // bilan bir xil, yozuvsiz): qoplama, faktura va dekor tex kartadan.
+    final Widget drawn = DecoratedBox(
+      decoration: const BoxDecoration(color: Color(0xFFF7F5FC)),
+      child: CakeIllustrationView(
+        spec: CakeIllustrationSpec.fromTechCard(cake.name, cake.techCard),
+        height: double.infinity,
+        label: null,
+        subLabel: null,
+      ),
     );
     return Material(
       color: Colors.white,

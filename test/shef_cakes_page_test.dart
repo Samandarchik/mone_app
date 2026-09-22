@@ -20,6 +20,7 @@ import 'package:uz_ai_dev/shef/ui/shef_cakes_page.dart';
 import 'package:uz_ai_dev/shef/ui/shef_constructor_page.dart';
 import 'package:uz_ai_dev/shef/ui/shef_tech_card_page.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/cake_illustration.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
 
 ProductModelAdmin _product(int id, String name, int cat, String catName,
@@ -125,8 +126,8 @@ void main() {
     expect(find.text('Ø 22 sm · 8 sm · 1.5 kg'), findsOneWidget);
     expect(find.text('Тех карта bor'), findsOneWidget);
     expect(find.text('Тех карта to\'ldirilmagan'), findsOneWidget);
-    // Foto yo'q — qoplangan tort chizmasi.
-    expect(find.byType(FillingThumb), findsNWidgets(2));
+    // Foto yo'q — tortning vektor illyustratsiyasi.
+    expect(find.byType(CakeIllustrationView), findsNWidgets(2));
   });
 
   testWidgets('tap a cake → ITS OWN constructor built from tech card blocks',
@@ -163,10 +164,11 @@ void main() {
     expect(find.text('Кокосовая стружка'), findsOneWidget);
     expect(find.text('Покрытие'), findsNothing);
 
-    // 3-qadam — butun tayyor tort; qoplama va dekor bloklari.
+    // 3-qadam — tayyor tort illyustratsiyasi; qoplama va dekor bloklari.
     await t.tap(find.text('3'));
     await settle(t);
-    expect(find.byType(Filling3DView), findsOneWidget);
+    expect(find.byType(Filling3DView), findsNothing);
+    expect(find.byType(CakeIllustrationView), findsOneWidget);
     expect(find.text('3. Tayyor tort'), findsOneWidget);
     expect(find.text('Покрытие'), findsOneWidget);
     expect(find.text('Qoplama'), findsOneWidget);
@@ -176,33 +178,17 @@ void main() {
     expect(find.text('8 дона'), findsOneWidget);
   });
 
-  testWidgets('step 3 shows the cake\'s own photo when it has one',
+  testWidgets('step 3 illustration spec comes from the tech card',
       (t) async {
-    final cake = ProductModelAdmin(
-      id: 33,
-      name: 'Торт Рафаэлло фото',
-      categoryId: 3,
-      type: 'шт',
-      categoryName: 'Торты',
-      filials: const [],
-      filialNames: const [],
-      imageUrl: '/static/raffaello.jpg',
-      techCard: _raffaello,
-    );
-    await open(t, ShefCakeConstructorPage(cake: cake));
-    // 1- va 2-qadamda foto o'ralmaydi.
-    await t.tap(find.text('2'));
-    await settle(t);
-    var view = t.widget<Filling3DView>(find.byType(Filling3DView));
-    expect(view.sidePhotoUrl, isNull);
-    expect(view.coat, isNull);
-    // 3-qadam — 3D butun tortga tortning o'z fotosi o'raladi.
+    await open(t, ShefCakeConstructorPage(cake: products.products[1]));
     await t.tap(find.text('3'));
     await settle(t);
-    view = t.widget<Filling3DView>(find.byType(Filling3DView));
-    expect(view.sidePhotoUrl, endsWith('/static/raffaello.jpg'));
-    expect(view.coat, isNotNull);
-    expect(view.coatCut, isFalse);
+    final view =
+        t.widget<CakeIllustrationView>(find.byType(CakeIllustrationView));
+    expect(view.spec.decor, contains(CakeDecor.raffaello));
+    expect(view.spec.texture, CakeCoatTexture.coconut);
+    expect(view.label, 'Mone');
+    // Tortning fotosi bu yerda ishlatilmaydi.
     expect(find.byType(AppNetworkImage), findsNothing);
   });
 
@@ -230,7 +216,7 @@ void main() {
     expect(find.textContaining('nachinka bloki'), findsOneWidget);
     await t.tap(find.text('3'));
     await settle(t);
-    expect(find.byType(Filling3DView), findsOneWidget);
+    expect(find.byType(CakeIllustrationView), findsOneWidget);
     expect(find.textContaining('qoplama/dekor bloki yo\'q'), findsOneWidget);
   });
 
