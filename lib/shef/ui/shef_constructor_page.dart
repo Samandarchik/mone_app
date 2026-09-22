@@ -31,7 +31,6 @@ import 'package:uz_ai_dev/admin/model/product_model.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
-import 'package:uz_ai_dev/admin/ui/widgets/filling_color_palette.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:uz_ai_dev/shef/model/production_model.dart';
@@ -70,11 +69,8 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
   // qo'shadi (pastga). N nachinka → N+1 korj, hammasi biskvit balandligi
   // ichida.
   final List<int?> _fillingIds = [null, null];
-  // Har qatlamning QO'LDA tanlangan rangi ("#RRGGBB"; '' — tanlanmagan:
-  // rang qatlam mahsulotidan). Qatlam tugmalari ostidagi palitradan
-  // tanlanadi va mahsulot rangidan USTUN turadi. _fillingIds bilan bir xil
-  // uzunlikda; faqat shu ekranda yashaydi (tex kartaga yozilmaydi).
-  final List<String> _layerColors = ['', ''];
+  // Qatlam rangi FAQAT mahsulotning tex kartasidan (kartochkadagi «tex karta»
+  // tugmasi → 2 ta nachinka palitrasi); konstruktorda alohida palitra yo'q.
   // Hozir nachinka tanlanayotgan qatlam (_fillingIds indeksi).
   int _activeLayer = 0;
 
@@ -188,9 +184,8 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
                 ),
               ),
               // Tugmalar ostidagi hamma narsa — BITTA suriladigan maydon:
-              // sarlavha, (2-qadamda) qatlamlar + palitra va mahsulotlar
-              // gridi. Palitra to'liq ochilganda ham joy yetadi — grid pastga
-              // suriladi, tepadagi 3D va qadam tugmalari joyida qoladi.
+              // sarlavha, (2-qadamda) qatlamlar qatori va mahsulotlar gridi.
+              // Tepadagi 3D va qadam tugmalari joyida qoladi.
               Expanded(
                 child: CustomScrollView(
                   slivers: [
@@ -207,23 +202,10 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
                       ),
                     ),
                     // 2-qadam: nachinka qatlamlari — qaysi qatlamga
-                    // tanlanayotgani, «+ Qatlam» va faol qatlamning rang
-                    // palitrasi (yig'iladigan — strelka hammasini ochadi).
-                    if (_step == 1 && fillings.isNotEmpty) ...[
+                    // tanlanayotgani va «+ Qatlam». Rang — mahsulot tex
+                    // kartasi ichidagi palitradan (kartochkadagi tugma).
+                    if (_step == 1 && fillings.isNotEmpty)
                       SliverToBoxAdapter(child: _layerBar(layers)),
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-                          child: FillingColorPalette(
-                            key: ValueKey('layer-palette-$_activeLayer'),
-                            title: '${_activeLayer + 1}-qatlam rangi',
-                            value: _layerColors[_activeLayer],
-                            onChanged: (hex) => setState(
-                                () => _layerColors[_activeLayer] = hex),
-                          ),
-                        ),
-                      ),
-                    ],
                     if (items.isEmpty)
                       SliverFillRemaining(
                         hasScrollBody: false,
@@ -317,11 +299,9 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
         // (pastki). k-qatlam o'z mahsulotining (k juft -> 1-, toq -> 2-)
         // palitrasini oladi: bitta mahsulot ikki qatlamda turganda
         // avvalgidek «yuqori/pastki» ranglar chiqadi.
-        // Qatlam palitrasidan qo'lda tanlangan rang hammasidan ustun.
         fillings: [
           for (var k = 0; k < resolved.length; k++)
-            _pickedBands(k) ??
-                (photoLooks[k] ?? resolved[k].$1).bandsOf(k.isEven ? 0 : 1),
+            (photoLooks[k] ?? resolved[k].$1).bandsOf(k.isEven ? 0 : 1),
         ],
         // 3-qadam: tashqaridan qoplangan, lekin bo'lagi kesilgan — ichidagi
         // nachinka ham ko'rinadi.
@@ -335,17 +315,9 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
     );
   }
 
-  // [k]-qatlam uchun palitradan qo'lda tanlangan rang (bo'lmasa null).
-  List<FillingBand>? _pickedBands(int k) {
-    final c = fillingColorFromHex(_layerColors[k]);
-    return c == null ? null : [FillingBand(c, 1)];
-  }
-
   // Qatlamning hozirgi asosiy rangi — chipdagi rangli nuqta uchun (foto
-  // tahlili kutilmaydi: palitra → mahsulot palitrasi / nom-tarkib).
+  // tahlili kutilmaydi: mahsulot tex karta palitrasi → nom-tarkib).
   Color _layerDot(int k, ProductModelAdmin? p) {
-    final picked = fillingColorFromHex(_layerColors[k]);
-    if (picked != null) return picked;
     if (p == null) return FillingLook.neutral.color;
     final bands =
         FillingLook.resolve(p.name, p.techCard).$1.bandsOf(k.isEven ? 0 : 1);
@@ -391,7 +363,6 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
                     ? null
                     : () => setState(() {
                           _fillingIds.removeAt(i);
-                          _layerColors.removeAt(i);
                           if (_activeLayer >= _fillingIds.length) {
                             _activeLayer = _fillingIds.length - 1;
                           }
@@ -408,7 +379,6 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
               // ustidagi qatlamning nachinkasi — keyin griddan almashtiriladi.
               onPressed: () => setState(() {
                 _fillingIds.add(layers.last?.id);
-                _layerColors.add('');
                 _activeLayer = _fillingIds.length - 1;
               }),
             ),

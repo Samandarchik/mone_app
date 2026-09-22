@@ -207,39 +207,17 @@ void main() {
     expect(find.text('2-qatlam'), findsOneWidget);
   });
 
-  testWidgets('constructor: each filling layer has its own colour palette',
+  testWidgets('constructor: no colour palette outside the tech card',
       (t) async {
     await open(t, const ShefConstructorPage());
     await t.tap(find.text('2'));
     await t.pump(const Duration(milliseconds: 400));
 
-    // Faol qatlam — 1-si: uning palitrasi, yig'ilgan (6 rang).
-    expect(find.text('1-qatlam rangi'), findsOneWidget);
-    expect(_swatches(), findsNWidgets(6));
-    expect(find.text('Rangsiz'), findsNothing);
-
-    // Rang tanlash → «Rangsiz» paydo bo'ladi (rang shu qatlamga yozildi).
-    await t.tap(_swatches().at(2));
-    await t.pump(const Duration(milliseconds: 300));
-    expect(t.takeException(), isNull);
-    expect(find.text('Rangsiz'), findsOneWidget);
-
-    // 2-qatlamga o'tish: o'z palitrasi, hali rangsiz — 1-qatlamniki
-    // aralashib ketmaydi.
-    await t.tap(find.text('2-qatlam'));
-    await t.pump(const Duration(milliseconds: 400));
-    expect(find.text('2-qatlam rangi'), findsOneWidget);
-    expect(find.text('Rangsiz'), findsNothing);
-
-    // 1-qatlamga qaytish — tanlangan rang saqlangan.
-    await t.tap(find.text('1-qatlam'));
-    await t.pump(const Duration(milliseconds: 400));
-    expect(find.text('Rangsiz'), findsOneWidget);
-
-    // Palitra to'liq ochilganda ham tartib buzilmaydi (suriladigan maydon).
-    await t.tap(find.byIcon(Icons.expand_more));
-    await t.pump(const Duration(milliseconds: 300));
-    expect(t.takeException(), isNull);
-    expect(_swatches(), findsNWidgets(kFillingPalette.length));
+    // 2-qadamda qatlam chiplari bor, lekin palitra YO'Q — rang faqat
+    // mahsulot tex kartasi ichida (2 ta nachinka palitrasi).
+    expect(find.text('1-qatlam'), findsOneWidget);
+    expect(find.textContaining('qatlam rangi'), findsNothing);
+    expect(_swatches(), findsNothing);
+    expect(find.byIcon(Icons.expand_more), findsNothing);
   });
 }
