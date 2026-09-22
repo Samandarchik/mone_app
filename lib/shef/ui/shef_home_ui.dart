@@ -148,23 +148,35 @@ class _ShefHomeUiState extends State<ShefHomeUi> {
       appBar: AppBar(
         backgroundColor: _bgColor,
         elevation: 0,
-        title: const Text(
-          'Shef — Ishlab chiqarish',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        // Tor ekranda (telefon) 3 ta action bilan sarlavha sig'masa —
+        // kichrayadi, ikki qatorga «yoyilmaydi».
+        title: const FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Shef — Ishlab chiqarish',
+            maxLines: 1,
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
         ),
+        titleSpacing: 12,
         actions: [
           IconButton(
             onPressed: _addCategory,
             tooltip: 'Kategoriya qo\'shish',
             icon: const Icon(Icons.add_circle_outline),
             color: Colors.brown.shade700,
-            iconSize: 28,
+            iconSize: 26,
+            padding: const EdgeInsets.all(6),
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
           ),
           // Ombor 2.0 (mone_core): retseptlar/hujjatlar — perms bo'yicha.
           const CoreEntryMenu(),
           IconButton(
             onPressed: () => logoutAndClear(context),
             icon: const Icon(Icons.logout),
+            padding: const EdgeInsets.all(6),
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
           ),
         ],
       ),
@@ -198,12 +210,17 @@ class _ShefHomeUiState extends State<ShefHomeUi> {
     List<CategoryProductAdmin> linked,
     Map<int, int> counts,
   ) {
-    return GridView.count(
+    // Ustun soni ekran kengligidan (karta ≤ 230 px), balandligi QAT'IY —
+    // telefonda kartalar ezilib, rasm/yozuv «yoyilib» ketmaydi: 2 ustun
+    // (juda tor ekranda 1), qolganlari pastga.
+    return GridView(
       padding: const EdgeInsets.all(12),
-      crossAxisCount: 2,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 1.05,
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 230,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        mainAxisExtent: 178,
+      ),
       children: [
         // Biskvit — rasmli karta; ichida shakllar / nachinka / krem /
         // bezaklar bo'limlari (biskvit_page.dart → BiskvitPage).
