@@ -23,6 +23,7 @@ import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:uz_ai_dev/shef/model/production_model.dart';
 import 'package:uz_ai_dev/shef/provider/shef_provider.dart';
+import 'package:uz_ai_dev/shef/ui/shef_cakes_page.dart';
 import 'package:uz_ai_dev/shef/ui/shef_tech_card_page.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
 
@@ -328,6 +329,20 @@ class _BiskvitPageState extends State<BiskvitPage> {
   }
 
   void _openCategory(CategoryProductAdmin category) {
+    // «Торты» — tortlar gridi, tort bosilsa konstruktor (shef_cakes_page).
+    if (isTortCategory(category.name)) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ShefCakesPage(
+            categoryId: category.id,
+            categoryName: category.name,
+            canAddProducts: true,
+          ),
+        ),
+      );
+      return;
+    }
     // Sarlavha — kategoriyaning o'z nomi, xuddi «Тех карта»dagidek.
     Navigator.push(
       context,

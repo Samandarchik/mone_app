@@ -16,6 +16,7 @@ import 'package:uz_ai_dev/shef/model/production_model.dart';
 import 'package:uz_ai_dev/shef/provider/shef_provider.dart';
 import 'package:uz_ai_dev/shef/ui/biskvit_page.dart';
 import 'package:uz_ai_dev/shef/ui/pf_stock_page.dart';
+import 'package:uz_ai_dev/shef/ui/shef_cakes_page.dart';
 // ShefOrdersPage ichidagi «Yangi buyurtma» tugmasi uchun kerak (bosh menyudan
 // olib tashlangan bo'lsa ham).
 import 'package:uz_ai_dev/shef/ui/shef_create_order_ui.dart';
@@ -63,6 +64,18 @@ class _ShefHomeUiState extends State<ShefHomeUi> {
   }
 
   void _openCategory(CategoryProductAdmin category) {
+    // «Торты» — tortlar gridi, tort bosilsa konstruktor (shef_cakes_page).
+    if (isTortCategory(category.name)) {
+      _open(
+        context,
+        ShefCakesPage(
+          categoryId: category.id,
+          categoryName: category.name,
+          canAddProducts: true,
+        ),
+      );
+      return;
+    }
     _open(
       context,
       ShefTechCardProductsPage(

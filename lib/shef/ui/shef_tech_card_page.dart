@@ -775,6 +775,16 @@ bool isNachinkaCategory(String name) {
   return n.contains('начинк') || n.contains('nachink');
 }
 
+// «Торты» kategoriyasimi (nomi bo'yicha) — tayyor tortlar: Biskvit bo'limida
+// grid (shef_cakes_page.dart), tort bosilsa konstruktor shu tort bilan
+// ochiladi. «Бисквит для торта» kabi nomlar biskvit — avval
+// isBiskvitCategory tekshiriladi.
+bool isTortCategory(String name) {
+  if (isBiskvitCategory(name) || isNachinkaCategory(name)) return false;
+  final n = name.toLowerCase();
+  return n.contains('торт') || n.contains('tort');
+}
+
 // Mahsulot qatori: rasm + nom (+ ПФ belgisi) + тех карта bor/yo'q belgisi.
 // [onEditBaking] berilsa (faqat «Бисквит») ostida pishirish rejimi chipi.
 class _ProductTile extends StatelessWidget {
