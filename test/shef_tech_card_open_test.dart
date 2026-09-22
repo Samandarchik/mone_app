@@ -223,6 +223,28 @@ void main() {
     expect(find.byType(Filling3DView), findsOneWidget);
   });
 
+  testWidgets('constructor: layer chips are enabled and toggle selection',
+      (t) async {
+    await open(t, const ShefConstructorPage());
+    await t.tap(find.text('2'));
+    await t.pump(const Duration(milliseconds: 400));
+    InputChip chip(String label) => t.widget<InputChip>(
+        find.ancestor(of: find.text(label), matching: find.byType(InputChip)));
+    // Hamma chip faol (xira emas) va hech biri tanlanmagan.
+    expect(chip('1-qatlam').isEnabled, isTrue);
+    expect(chip('2-qatlam').isEnabled, isTrue);
+    expect(chip('1-qatlam').selected, isFalse);
+    // Bosish — tanlanadi; qayta bosish — tanlov olinadi.
+    await t.tap(find.text('2-qatlam'));
+    await t.pump(const Duration(milliseconds: 300));
+    expect(chip('2-qatlam').selected, isTrue);
+    expect(chip('1-qatlam').selected, isFalse);
+    await t.tap(find.text('2-qatlam'));
+    await t.pump(const Duration(milliseconds: 300));
+    expect(chip('2-qatlam').selected, isFalse);
+    expect(t.takeException(), isNull);
+  });
+
   testWidgets('constructor: no colour palette outside the tech card',
       (t) async {
     await open(t, const ShefConstructorPage());
