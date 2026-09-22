@@ -16,12 +16,14 @@
 // Filling3DView — Rotating3DView (cake_3d.dart) qo'lda rejimida;
 // FillingThumb — grid kartasi uchun kichik statik rasm.
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:uz_ai_dev/admin/model/tech_card.dart';
 import 'package:uz_ai_dev/admin/ui/widgets/filling_color_palette.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/biscuit_side_photo.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/cake_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/filling_photo_look.dart';
 
@@ -229,6 +231,12 @@ class Filling3DView extends StatelessWidget {
   // Konstruktor: nachinka QATLAMLARI (tepadan pastga) — har biri o'z
   // yo'llari bilan (painter.fillings). null — [look] dan 2 qatlam.
   final List<List<FillingBand>>? fillings;
+  // Tort konstruktori (3-qadam): TAYYOR TORTNING fotosi (to'liq URL) —
+  // qoplangan butun tortga «o'raladi»: yon devorga tasma bo'lib
+  // (biskvitdagidek), tepaga fotoning markazi (doira → ellips). Tort
+  // burilganda foto birga buriladi. Faqat [coat] bilan; yuklanguncha —
+  // oddiy qoplama rangi.
+  final String? sidePhotoUrl;
   final double height;
 
   const Filling3DView({
@@ -240,6 +248,7 @@ class Filling3DView extends StatelessWidget {
     this.sponge = BiscuitPalette.classic,
     this.dims,
     this.fillings,
+    this.sidePhotoUrl,
     this.height = 240,
   });
 
@@ -247,18 +256,23 @@ class Filling3DView extends StatelessWidget {
   Widget build(BuildContext context) {
     return FillingPhotoLookBuilder(
       url: photoUrl,
-      builder: (context, photoLook) => Rotating3DView(
-        height: height,
-        manual: true,
-        painter: (tilt, rotation) => FillingCakePainter(
-          look: photoLook ?? look,
-          coat: coat,
-          coatCut: coatCut,
-          sponge: sponge,
-          dims: dims,
-          fillings: fillings,
-          tilt: tilt,
-          rotation: rotation,
+      builder: (context, photoLook) => BiscuitSidePhotoBuilder(
+        url: sidePhotoUrl,
+        displayWidth: height * 2,
+        builder: (context, sidePhoto) => Rotating3DView(
+          height: height,
+          manual: true,
+          painter: (tilt, rotation) => FillingCakePainter(
+            look: photoLook ?? look,
+            coat: coat,
+            coatCut: coatCut,
+            sponge: sponge,
+            dims: dims,
+            fillings: fillings,
+            sidePhoto: sidePhoto,
+            tilt: tilt,
+            rotation: rotation,
+          ),
         ),
       ),
     );
@@ -362,6 +376,10 @@ class FillingCakePainter extends CustomPainter {
   // qalinlikda va tort balandligi ICHIGA sig'diriladi. null — [look] dan
   // odatdagi 2 qatlam (bandsOf(0), bandsOf(1)).
   final List<List<FillingBand>>? fillings;
+  // Tayyor tort fotosi — qoplangan BUTUN tortga o'raladi (Filling3DView.
+  // sidePhotoUrl): yon devor — tasma (BiscuitPainter._textureRound kabi),
+  // tepa — fotoning markaziy doirasi. Faqat [coat] != null && ![coatCut].
+  final ui.Image? sidePhoto;
   final bool slice;
   final double tilt;
   final double rotation;
@@ -373,6 +391,7 @@ class FillingCakePainter extends CustomPainter {
     this.sponge = BiscuitPalette.classic,
     this.dims,
     this.fillings,
+    this.sidePhoto,
     this.slice = false,
     required this.tilt,
     required this.rotation,
@@ -846,6 +865,11 @@ class FillingCakePainter extends CustomPainter {
   void _paintCoatedWall(Canvas canvas, Path whole, Color coat) {
     // Devor SILLIQ — hech qanday chiziq/izsiz, faqat hajm soyasi.
     canvas.drawPath(whole, Paint()..color = coat);
+    // Tayyor tort fotosi — yon devorga o'raladi (butun tortda).
+    final photo = sidePhoto;
+    if (photo != null && !coatCut) {
+      _textureRound(canvas, photo, _r, _top, _top + _h, _h);
+    }
     final bottomOval = Rect.fromCenter(
       center: Offset(_cx, _top + _h),
       width: _r * 2,
@@ -909,6 +933,10 @@ class FillingCakePainter extends CustomPainter {
             stops: const [0, 0.6, 1],
           ).createShader(topOval),
       );
+      final photo = sidePhoto;
+      if (photo != null && !coatCut) {
+        _textureTop(canvas, photo, sector, topOval);
+      }
       // Tepa chetidagi yumaloqlangan qirra — ochroq hoshiya.
       canvas.drawPath(
         Path()..addPolygon(arc, false),
@@ -946,6 +974,97 @@ class FillingCakePainter extends CustomPainter {
     );
   }
 
+  // Fotodan yon tomonga tushadigan qism: o'rtadagi gorizontal tasma,
+  // nisbati yuzaning o'ziniki ([aspect] = uzunlik / balandlik) — rasm
+  // cho'zilib/ezilib ketmaydi (BoxFit.cover kabi). BiscuitPainter bilan bir xil.
+  static Rect _photoBand(ui.Image img, double aspect) {
+    final w = img.width.toDouble(), hgt = img.height.toDouble();
+    final bandH = math.min(hgt, w / math.max(aspect, 0.01));
+    final bandW = math.min(w, bandH * aspect);
+    return Rect.fromCenter(
+        center: Offset(w / 2, hgt / 2), width: bandW, height: bandH);
+  }
+
+  // Qoplangan tort yon devoriga fotoni «o'rash»: old yarim aylana ingichka
+  // vertikal bo'laklarga bo'linadi, har biriga tasmaning mos qismi chiziladi.
+  // Tasma yarim aylanaga teng; ikkinchi yarmida ko'zgu (chok ko'rinmasin).
+  // Tort burilganda foto ham birga buriladi (BiscuitPainter._textureRound).
+  void _textureRound(Canvas canvas, ui.Image img, double r, double top,
+      double bottom, double h) {
+    final band = _photoBand(img, math.pi * r / math.max(h, 1));
+    final paint = Paint()..filterQuality = FilterQuality.medium;
+    double u(double t) {
+      var a = (t - rotation) % (2 * math.pi);
+      if (a < 0) a += 2 * math.pi;
+      return a < math.pi ? a / math.pi : 2 - a / math.pi;
+    }
+
+    const n = 72;
+    for (var j = 0; j < n; j++) {
+      final t0 = -math.pi / 2 + math.pi * j / n;
+      final t1 = -math.pi / 2 + math.pi * (j + 1) / n;
+      final yOff = r * tilt * math.cos((t0 + t1) / 2);
+      final ua = u(t0);
+      final ub = u(t1);
+      final lo = math.min(ua, ub);
+      final hi = math.max(math.max(ua, ub), lo + 0.002);
+      final src = Rect.fromLTRB(band.left + lo * band.width, band.top,
+          band.left + math.min(hi, 1) * band.width, band.bottom);
+      final dst = Rect.fromLTRB(_cx + r * math.sin(t0) - 0.4, top + yOff,
+          _cx + r * math.sin(t1) + 0.4, bottom + yOff);
+      if (ua <= ub) {
+        canvas.drawImageRect(img, src, dst, paint);
+      } else {
+        canvas.save();
+        canvas.translate(dst.center.dx, 0);
+        canvas.scale(-1, 1);
+        canvas.translate(-dst.center.dx, 0);
+        canvas.drawImageRect(img, src, dst, paint);
+        canvas.restore();
+      }
+    }
+  }
+
+  // Tepaga fotoning MARKAZIY doirasi: doira ellipsga (tilt) ezilib, tort
+  // bilan birga buriladi; ustidan yengil hajm soyasi (qirra yorug', chet
+  // to'qroq) — tepa yassi rasm emas, qavariq ko'rinadi.
+  void _textureTop(Canvas canvas, ui.Image img, Path sector, Rect topOval) {
+    final side = math.min(img.width, img.height).toDouble();
+    final src = Rect.fromCenter(
+      center: Offset(img.width / 2, img.height / 2),
+      width: side,
+      height: side,
+    );
+    canvas.save();
+    canvas.clipPath(sector);
+    canvas.translate(_cx, _top);
+    canvas.scale(1, tilt);
+    // Chekkadagi nuqta a burchakda ekranda a + rotation'da turadi (_rim) —
+    // rasm shunga mos buriladi.
+    canvas.rotate(-rotation);
+    canvas.drawImageRect(
+      img,
+      src,
+      Rect.fromCircle(center: Offset.zero, radius: _r),
+      Paint()..filterQuality = FilterQuality.medium,
+    );
+    canvas.restore();
+    canvas.drawPath(
+      sector,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(-0.2, -0.3),
+          radius: 0.9,
+          colors: [
+            Colors.white.withValues(alpha: 0.16),
+            Colors.white.withValues(alpha: 0),
+            Colors.black.withValues(alpha: 0.14),
+          ],
+          stops: const [0, 0.55, 1],
+        ).createShader(topOval),
+    );
+  }
+
   @override
   bool shouldRepaint(FillingCakePainter old) =>
       old.look != look ||
@@ -954,6 +1073,7 @@ class FillingCakePainter extends CustomPainter {
       old.sponge != sponge ||
       old.dims != dims ||
       !_sameFillings(old.fillings, fillings) ||
+      old.sidePhoto != sidePhoto ||
       old.slice != slice ||
       old.tilt != tilt ||
       old.rotation != rotation;

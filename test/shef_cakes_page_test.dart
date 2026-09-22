@@ -190,18 +190,20 @@ void main() {
       techCard: _raffaello,
     );
     await open(t, ShefCakeConstructorPage(cake: cake));
-    // 1- va 2-qadamda foto yo'q — chizma.
-    expect(find.byType(AppNetworkImage), findsNothing);
+    // 1- va 2-qadamda foto o'ralmaydi.
     await t.tap(find.text('2'));
     await settle(t);
-    expect(find.byType(AppNetworkImage), findsNothing);
-    // 3-qadam — tortning o'z rasmi (yuklanmasa chizma o'rnida qoladi).
+    var view = t.widget<Filling3DView>(find.byType(Filling3DView));
+    expect(view.sidePhotoUrl, isNull);
+    expect(view.coat, isNull);
+    // 3-qadam — 3D butun tortga tortning o'z fotosi o'raladi.
     await t.tap(find.text('3'));
     await settle(t);
-    final photo = find.byType(AppNetworkImage);
-    expect(photo, findsOneWidget);
-    expect(t.widget<AppNetworkImage>(photo).imageUrl,
-        endsWith('/static/raffaello.jpg'));
+    view = t.widget<Filling3DView>(find.byType(Filling3DView));
+    expect(view.sidePhotoUrl, endsWith('/static/raffaello.jpg'));
+    expect(view.coat, isNotNull);
+    expect(view.coatCut, isFalse);
+    expect(find.byType(AppNetworkImage), findsNothing);
   });
 
   testWidgets('cake with only a biscuit block: step 2 falls back to biscuit',

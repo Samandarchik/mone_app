@@ -10,10 +10,11 @@
 //       qatlamlari (tex kartadagi krem/nachinka/konfi bloklari, pastdan
 //       yuqoriga, har biri o'z rangida). Nachinka bloki bo'lmasa — faqat
 //       biskvit.
-//   3 — Tort: TORTNING O'ZI — mahsulotning asosiy RASMI (tayyor Рафаэлло
-//       qanday ko'rinsa shunday; bosilsa to'liq ekranda). Rasm yo'q bo'lsa —
-//       chizilgan butun tort: qoplama bloki rangida (bo'lmasa oxirgi krem)
-//       qoplangan, kesilmagan.
+//   3 — Tort: TORTNING O'ZI 3D'da — butun (kesilmagan) qoplangan tortga
+//       mahsulotning asosiy FOTOSI o'raladi (yon devorga tasma, tepaga
+//       fotoning markazi; Filling3DView.sidePhotoUrl), barmoq bilan
+//       buriladi. Foto yo'q bo'lsa — qoplama bloki rangida (bo'lmasa oxirgi
+//       krem) qoplangan tort.
 // Qadam ostida shu qadamga tegishli tex karta BLOKLARI: nomi, rol chipi,
 // rasmi (tex kartadagi blok rasmi), og'irligi, bo'limi va masalliqlar.
 // Blok roli nomidan (_BlockRole.of): бисквит/корж → biskvit; покрытие/
@@ -30,7 +31,6 @@ import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
-import 'package:uz_ai_dev/core/widgets/full_screen_image.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
 
@@ -251,8 +251,15 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
         : lastFilling != null
             ? _blockColor(lastFilling)
             : FillingLook.neutral.color;
+    // 3 — TORTNING O'ZI 3D'da: butun qoplangan tortga mahsulotning asosiy
+    // fotosi o'raladi (yon devor + tepa), tort burilganda foto birga
+    // buriladi. Foto yo'q / yuklanguncha — qoplama rangi.
+    final image = cake.imageUrl ?? '';
+    final photoUrl = (_step == 2 && image.isNotEmpty)
+        ? (image.startsWith('http') ? image : '${AppUrls.baseUrl}$image')
+        : null;
     // Painter qatlamlarni TEPADAN pastga oladi — teskari tartib.
-    final drawn = Filling3DView(
+    return Filling3DView(
       height: _heroH,
       sponge: sponge,
       dims: dims,
@@ -261,31 +268,7 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
       // 2 — bo'lagi kesilgan «yalang'och» tort; 3 — butun qoplangan tort.
       coat: _step == 2 ? coat : null,
       coatCut: false,
-    );
-    if (_step != 2) return drawn;
-    // 3 — TORTNING O'ZI: mahsulotning asosiy rasmi (tayyor tort qanday
-    // ko'rinsa shunday). Rasm yo'q / yuklanmasa — chizilgan qoplangan tort.
-    final image = cake.imageUrl ?? '';
-    if (image.isEmpty) return drawn;
-    final url = image.startsWith('http') ? image : '${AppUrls.baseUrl}$image';
-    return SizedBox(
-      height: _heroH,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: LayoutBuilder(
-          builder: (context, box) => GestureDetector(
-            onTap: () => openFullScreenImage(context, url),
-            child: AppNetworkImage(
-              imageUrl: url,
-              width: box.maxWidth,
-              height: box.maxHeight,
-              fit: BoxFit.cover,
-              placeholder: (_) => drawn,
-              errorWidget: (_) => drawn,
-            ),
-          ),
-        ),
-      ),
+      sidePhotoUrl: photoUrl,
     );
   }
 }
