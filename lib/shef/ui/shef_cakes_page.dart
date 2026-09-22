@@ -87,12 +87,17 @@ class _ShefCakesPageState extends State<ShefCakesPage> {
     );
   }
 
-  // Ikki marta bosish — tortning tex kartasi (narxsiz rejim).
+  // Ikki marta bosish — tortning tex kartasi (narxsiz rejim, har blok ostida
+  // o'z rang palitrasi — konstruktor/illyustratsiya uchun).
   void _openTechCard(ProductModelAdmin cake) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => TechCardEditorPage(product: cake, canEditPrices: false),
+        builder: (_) => TechCardEditorPage(
+          product: cake,
+          canEditPrices: false,
+          showBlockColors: true,
+        ),
       ),
     );
   }

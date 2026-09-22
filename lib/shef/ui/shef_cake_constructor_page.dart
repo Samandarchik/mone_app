@@ -20,9 +20,11 @@
 // Blok roli nomidan (CakeBlockRole.of): бисквит/корж → biskvit; покрытие/
 // глазурь/выравнивание → qoplama; декор/украшение → bezak; пропитка/сироп/
 // сборка → bosqich (qatlam qo'shmaydi); qolgani (крем, начинка, конфи, мусс)
-// → nachinka. Rang — blok nomi/masalliqlaridan (FillingLook.detect /
-// BiscuitPalette.detect). Tex karta AppBar tugmasidan tahrirlanadi —
-// saqlangach (provider) konstruktor o'zi yangilanadi.
+// → nachinka. Rang — tex kartada blok uchun palitradan tanlangan rang
+// (TechBase.color, har blok ostidagi «… rangi» palitrasi), tanlanmagan
+// bo'lsa blok nomi/masalliqlaridan (cakeBlockColor / cakeBiscuitPalette).
+// Tex karta AppBar tugmasidan tahrirlanadi (showBlockColors) — saqlangach
+// (provider) konstruktor o'zi yangilanadi.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/admin/model/product_model.dart';
@@ -80,11 +82,17 @@ class ShefCakeConstructorPage extends StatefulWidget {
 class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
   int _step = 0;
 
+  // Tort tex kartasi — har blok ostida o'z rang palitrasi (showBlockColors):
+  // saqlangach konstruktor va illyustratsiya shu ranglarda qayta chiziladi.
   void _openTechCard(ProductModelAdmin cake) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => TechCardEditorPage(product: cake, canEditPrices: false),
+        builder: (_) => TechCardEditorPage(
+          product: cake,
+          canEditPrices: false,
+          showBlockColors: true,
+        ),
       ),
     );
   }
@@ -187,10 +195,11 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
           break;
       }
     }
-    // Korj rangi — biskvit blokidan, bo'lmasa tort nomi/tarkibidan.
+    // Korj rangi — biskvit blokidan (palitradan tanlangan → nom/tarkib),
+    // bo'lmasa tort nomi/tarkibidan.
     final sponge = biscuit == null
         ? BiscuitPalette.detect(cake.name, card)
-        : BiscuitPalette.detect(biscuit.name, TechCard(bases: [biscuit]));
+        : cakeBiscuitPalette(biscuit);
 
     // 1 — biskvitning o'zi; 2 — nachinka bloki bo'lmasa ham biskvit.
     if (_step == 0 || (_step == 1 && fillings.isEmpty)) {
@@ -382,7 +391,7 @@ class _BlockCard extends StatelessWidget {
         ? stages[block.stage - 1].name
         : '';
     final color = role == CakeBlockRole.biscuit
-        ? BiscuitPalette.detect(block.name, TechCard(bases: [block])).sponge
+        ? cakeBiscuitPalette(block).sponge
         : cakeBlockColor(block);
 
     return Padding(

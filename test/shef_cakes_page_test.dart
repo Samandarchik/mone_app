@@ -240,5 +240,13 @@ void main() {
     await settle(t);
     expect(find.byType(TechCardEditorPage), findsOneWidget);
     expect(find.byType(ShefCakeConstructorPage), findsNothing);
+    // Tort tex kartasida har blok ostida o'z rang palitrasi.
+    expect(
+      t.widget<TechCardEditorPage>(find.byType(TechCardEditorPage))
+          .showBlockColors,
+      isTrue,
+    );
+    expect(find.text('«Бисквит ванильный» rangi'), findsOneWidget);
+    expect(find.text('«Крем кокосовый» rangi'), findsOneWidget);
   });
 }

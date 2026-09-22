@@ -14,6 +14,10 @@
 //     so'zlardan: Рафаэлло shariklari, безе tomchilari, миндаль lepestkalari,
 //     kokos qirindisi, qulupnay/malina/olcha/chernika, shokolad bo'laklari,
 //     yong'oq; hech narsa topilmasa — qoplama rangidagi krem tomchilari.
+// Har blok uchun tex kartada PALITRADAN tanlangan rang (TechBase.color,
+// TechCardEditorPage.showBlockColors) hammasidan ustun: qoplama, glazur,
+// nachinka va biskvit bloki aynan shu rangda (cakeBlockColor /
+// cakeBiscuitPalette).
 // Tort konstruktori 3-qadami (shef_cake_constructor_page.dart) va «Торты»
 // gridida fotosiz tort kartasi (shef_cakes_page.dart) shu rasmni ko'rsatadi.
 // Statik (burilmaydi) — referens illyustratsiyadagi kabi bitta rakurs.
@@ -21,6 +25,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:uz_ai_dev/admin/model/tech_card.dart';
+import 'package:uz_ai_dev/admin/ui/widgets/filling_color_palette.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
 
@@ -60,9 +65,21 @@ enum CakeBlockRole {
       };
 }
 
-// Blok rangi — nomi va masalliqlaridan (faqat shu blok hisobga olinadi).
+// Blok rangi: tex kartada blok uchun PALITRADAN tanlangan rang (TechBase.
+// color, tort tex kartasidagi «… rangi» palitrasi) — eng ustun; tanlanmagan
+// bo'lsa — nomi va masalliqlaridan (faqat shu blok hisobga olinadi).
 Color cakeBlockColor(TechBase b) =>
+    fillingColorFromHex(b.color) ??
     FillingLook.detect(b.name, TechCard(bases: [b])).color;
+
+// Biskvit blokining korj palitrasi: tanlangan rangdan (fromColor), bo'lmasa
+// nomi/masalliqlaridan (shokoladli, qizil baxmal ...).
+BiscuitPalette cakeBiscuitPalette(TechBase b) {
+  final picked = fillingColorFromHex(b.color);
+  return picked != null
+      ? BiscuitPalette.fromColor(picked)
+      : BiscuitPalette.detect(b.name, TechCard(bases: [b]));
+}
 
 // Tepadagi dekor turlari.
 enum CakeDecor {
@@ -165,10 +182,13 @@ class CakeIllustrationSpec {
         glazeBlock = b;
       }
     }
+    // Qoplama rangi: blok palitrasidan tanlangan bo'lsa — aynan o'sha;
+    // aniqlangan bo'lsa — krem ko'rinishi uchun sal oqartiriladi.
     final coatSrc = coatBlock ?? lastFilling;
     final coat = coatSrc == null
         ? const Color(0xFFFFF6E3)
-        : _softenCoat(cakeBlockColor(coatSrc));
+        : (fillingColorFromHex(coatSrc.color) ??
+            _softenCoat(cakeBlockColor(coatSrc)));
     final top = glazeBlock == null ? coat : cakeBlockColor(glazeBlock);
 
     // Faktura — tort nomi, qoplama bloki va dekor bloklari so'zlaridan
