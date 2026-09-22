@@ -13,6 +13,7 @@ import 'package:uz_ai_dev/admin/model/tech_card.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
+import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:uz_ai_dev/shef/provider/shef_provider.dart';
 import 'package:uz_ai_dev/shef/ui/shef_cake_constructor_page.dart';
 import 'package:uz_ai_dev/shef/ui/shef_cakes_page.dart';
@@ -175,6 +176,34 @@ void main() {
     expect(find.text('8 дона'), findsOneWidget);
   });
 
+  testWidgets('step 3 shows the cake\'s own photo when it has one',
+      (t) async {
+    final cake = ProductModelAdmin(
+      id: 33,
+      name: 'Торт Рафаэлло фото',
+      categoryId: 3,
+      type: 'шт',
+      categoryName: 'Торты',
+      filials: const [],
+      filialNames: const [],
+      imageUrl: '/static/raffaello.jpg',
+      techCard: _raffaello,
+    );
+    await open(t, ShefCakeConstructorPage(cake: cake));
+    // 1- va 2-qadamda foto yo'q — chizma.
+    expect(find.byType(AppNetworkImage), findsNothing);
+    await t.tap(find.text('2'));
+    await settle(t);
+    expect(find.byType(AppNetworkImage), findsNothing);
+    // 3-qadam — tortning o'z rasmi (yuklanmasa chizma o'rnida qoladi).
+    await t.tap(find.text('3'));
+    await settle(t);
+    final photo = find.byType(AppNetworkImage);
+    expect(photo, findsOneWidget);
+    expect(t.widget<AppNetworkImage>(photo).imageUrl,
+        endsWith('/static/raffaello.jpg'));
+  });
+
   testWidgets('cake with only a biscuit block: step 2 falls back to biscuit',
       (t) async {
     final cake = _product(
@@ -200,7 +229,7 @@ void main() {
     await t.tap(find.text('3'));
     await settle(t);
     expect(find.byType(Filling3DView), findsOneWidget);
-    expect(find.textContaining('qoplama/dekor bloki'), findsOneWidget);
+    expect(find.textContaining('qoplama/dekor bloki yo\'q'), findsOneWidget);
   });
 
   testWidgets('cake without tech card → hint with tech card button',
