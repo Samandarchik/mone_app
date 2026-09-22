@@ -136,20 +136,24 @@ void main() {
     expect(find.byType(FillingColorPalette), findsOneWidget);
   });
 
-  testWidgets('constructor step 3: double tap opens the coating palette',
+  testWidgets('constructor step 3: double tap — the same single palette',
       (t) async {
     await open(t, const ShefConstructorPage());
     await t.tap(find.text('3'));
     await t.pump(const Duration(milliseconds: 400));
     await doubleTap(t, 'Начинка клубничная');
-    expect(find.text('Покрытие rangi'), findsOneWidget);
+    // Qoplama uchun alohida palitra YO'Q — yagona «Nachinka rangi».
+    expect(find.text('Nachinka rangi'), findsOneWidget);
+    expect(find.text('Покрытие rangi'), findsNothing);
+    expect(find.byType(FillingColorPalette), findsOneWidget);
   });
 
-  testWidgets('constructor step 1: double tap opens the biscuit colour palette',
+  testWidgets('constructor step 1: biscuit tech card has no colour palette',
       (t) async {
     await open(t, const ShefConstructorPage());
     await doubleTap(t, 'Бисквит Турецкий 18 см');
-    expect(find.text('Biskvit rangi'), findsOneWidget);
+    expect(find.byType(TechCardEditorPage), findsOneWidget);
+    expect(find.byType(FillingColorPalette), findsNothing);
   });
 
   testWidgets('palette: collapsed by default, arrow expands and collapses',
@@ -159,7 +163,7 @@ void main() {
       TechCardEditorPage(
         product: _product(20, 'Начинка клубничная', 2, 'П/Ф Начинка'),
         canEditPrices: false,
-        showCoatingColor: true,
+        showFillingColor: true,
       ),
     );
     // Yig'ilgan: faqat sarlavha qatori — ranglar yo'q, o'ngda tanlangan

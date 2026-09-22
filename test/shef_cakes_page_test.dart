@@ -13,6 +13,7 @@ import 'package:uz_ai_dev/admin/model/tech_card.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
+import 'package:uz_ai_dev/admin/ui/widgets/filling_color_palette.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:uz_ai_dev/shef/provider/shef_provider.dart';
 import 'package:uz_ai_dev/shef/ui/shef_cake_constructor_page.dart';
@@ -158,7 +159,9 @@ void main() {
     await settle(t);
     expect(find.byType(Filling3DView), findsOneWidget);
     expect(find.byType(Biscuit3DView), findsNothing);
-    expect(find.text('2. Bo\'lak kesimi — nachinka'), findsOneWidget);
+    // Sarlavha o'rniga qatlam chiplari.
+    expect(find.text('2. Bo\'lak kesimi — nachinka'), findsNothing);
+    expect(find.text('1-qatlam'), findsOneWidget);
     expect(find.text('Крем кокосовый'), findsOneWidget);
     expect(find.text('Nachinka'), findsOneWidget);
     expect(find.text('Кокосовая стружка'), findsOneWidget);
@@ -240,24 +243,22 @@ void main() {
     await settle(t);
     expect(find.byType(TechCardEditorPage), findsOneWidget);
     expect(find.byType(ShefCakeConstructorPage), findsNothing);
-    // Tort tex kartasida boshqa bo'limlardagi 3 ta palitra.
+    // Tort tex kartasida YAGONA palitra — «Nachinka rangi».
     final page =
         t.widget<TechCardEditorPage>(find.byType(TechCardEditorPage));
-    expect(page.showBiscuitColor, isTrue);
     expect(page.showFillingColor, isTrue);
-    expect(page.showCoatingColor, isTrue);
-    expect(find.text('Biskvit rangi'), findsOneWidget);
-    expect(find.text('Покрытие rangi'), findsOneWidget);
+    expect(find.text('Nachinka rangi'), findsOneWidget);
+    expect(find.byType(FillingColorPalette), findsOneWidget);
   });
 
-  testWidgets('constructor colours come from the product palettes', (t) async {
+  testWidgets('constructor: filling colour from the single palette, layers',
+      (t) async {
     final cake = _product(
       34,
       'Торт Рафаэлло',
       3,
       'Торты',
       card: const TechCard(
-        biscuitColor: '#5A3420',
         fillingColor: '#F8BBD0',
         bases: [
           TechBase(name: 'Бисквит'),
@@ -267,18 +268,37 @@ void main() {
       ),
     );
     await open(t, ShefCakeConstructorPage(cake: cake));
-    // 1 — korjlar «Biskvit rangi» palitrasidan.
+    // 1 — korjlar avtomatik (nom/tarkibdan), palitra yo'q.
     final b = t.widget<Biscuit3DView>(find.byType(Biscuit3DView));
-    expect(b.palette.sponge, const Color(0xFF5A3420));
-    // 2 — 2 ta nachinka qatlami, HAMMASI «Nachinka rangi» palitrasidan
-    // (bloklar har xil bo'lsa ham bir rang).
+    expect(b.palette, BiscuitPalette.classic);
+    // 2 — qatlam chiplari (2 ta nachinka bloki → 2 qatlam), sarlavhasiz;
+    // HAMMA qatlam «Nachinka rangi» palitrasidan.
     await t.tap(find.text('2'));
     await settle(t);
-    final f = t.widget<Filling3DView>(find.byType(Filling3DView));
+    expect(find.text('1-qatlam'), findsOneWidget);
+    expect(find.text('2-qatlam'), findsOneWidget);
+    expect(find.text('Qatlam'), findsOneWidget);
+    expect(find.textContaining('kesimi'), findsNothing);
+    var f = t.widget<Filling3DView>(find.byType(Filling3DView));
     expect(f.fillings!.length, 2);
     for (final layer in f.fillings!) {
       expect(layer.single.color, const Color(0xFFF8BBD0));
     }
-    expect(f.sponge.sponge, const Color(0xFF5A3420));
+    // «+ Qatlam» — 3-qatlam; «×» — olib tashlash.
+    await t.tap(find.text('Qatlam'));
+    await settle(t);
+    expect(find.text('3-qatlam'), findsOneWidget);
+    f = t.widget<Filling3DView>(find.byType(Filling3DView));
+    expect(f.fillings!.length, 3);
+    await t.ensureVisible(find.byIcon(Icons.close).last);
+    await t.pump(const Duration(milliseconds: 300));
+    await t.tap(find.byIcon(Icons.close).last, warnIfMissed: true);
+    await settle(t);
+    expect(find.text('3-qatlam'), findsNothing);
+    // Chip bosilsa — faqat shu qatlam bloki ko'rinadi.
+    await t.tap(find.text('2-qatlam'));
+    await settle(t);
+    expect(find.text('Крем клубничный'), findsOneWidget);
+    expect(find.text('Крем кокосовый'), findsNothing);
   });
 }

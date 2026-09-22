@@ -125,11 +125,11 @@ void coatingTests() {
     expect(FillingLook.coatOf('Начинка шоколадная', const TechCard()),
         _chocolate);
     expect(FillingLook.coatOf('Начинка №9', null), FillingLook.neutral.color);
-    // Faqat nachinka rangi tanlangan — qoplamaga o'tmaydi.
+    // Yagona palitra: nachinka rangi tanlangan — qoplama ham shu rangda.
     expect(
       FillingLook.coatOf(
           'Начинка клубничная', const TechCard(fillingColor: '#8BC34A')),
-      _strawberry,
+      const Color(0xFF8BC34A),
     );
   });
 

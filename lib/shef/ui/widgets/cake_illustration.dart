@@ -171,7 +171,9 @@ class CakeIllustrationSpec {
     // — aynan o'sha; tanlanmagan bo'lsa avtomatik — qoplama bloki (bo'lmasa
     // oxirgi krem) nomi/masalliqlaridan, krem ko'rinishi uchun sal oqartirib.
     final coatSrc = coatBlock ?? lastFilling;
-    final picked = fillingColorFromHex(card.coatingColor);
+    // Yagona palitra («Nachinka rangi»); eski coating_color bo'lsa — ustun.
+    final picked = fillingColorFromHex(card.coatingColor) ??
+        fillingColorFromHex(card.fillingColor);
     final coat = picked ??
         (coatSrc == null
             ? const Color(0xFFFFF6E3)

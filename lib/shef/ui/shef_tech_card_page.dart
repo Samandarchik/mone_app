@@ -362,14 +362,10 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
           // nachinkada qatlamlar RANGI fotodan olinadi.
           showBiscuitPhoto:
               widget.showCakeConstructor || widget.showFillingCake,
-          // «П/Ф Начинка»: rang palitrasi — tanlangan rang saqlangach 3D
-          // tortda nachinka shu rangda chiziladi (foto/tarkibdan ustun).
-          showFillingColor: widget.showFillingCake,
-          // «Покрытие»: alohida palitra — qoplama rangi (nachinkadan
-          // mustaqil, tech_card.coating_color).
-          showCoatingColor: widget.showCoating,
-          // «П/Ф Бисквит»: biskvitning o'z rangi (biscuit_color).
-          showBiscuitColor: widget.showCakeConstructor,
+          // «П/Ф Начинка» va «Покрытие»: YAGONA rang palitrasi («Nachinka
+          // rangi») — tanlangan rang saqlangach 3D tortda nachinka (va shu
+          // mahsulot bilan qoplangan tort) shu rangda chiziladi.
+          showFillingColor: widget.showFillingCake || widget.showCoating,
         ),
       ),
     );

@@ -125,9 +125,8 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
           product: product,
           canEditPrices: false,
           showBiscuitPhoto: _step != 2,
-          showBiscuitColor: _step == 0,
-          showFillingColor: _step == 1,
-          showCoatingColor: _step == 2,
+          // Nachinka/qoplama mahsuloti — yagona «Nachinka rangi» palitrasi.
+          showFillingColor: _step != 0,
         ),
       ),
     );

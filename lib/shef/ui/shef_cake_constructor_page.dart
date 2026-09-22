@@ -7,9 +7,11 @@
 //   1 — Biskvit: tortning biskvitining o'zi (3D) — rangi/turi tex kartadagi
 //       biskvit blokidan (nomi/masalliqlari), o'lchami tex kartadan.
 //   2 — Kesim: shu tortning BO'LAGI kesilgan holda — kesimda nachinka
-//       qatlamlari (tex kartadagi krem/nachinka/konfi bloklari, pastdan
-//       yuqoriga, har biri o'z rangida). Nachinka bloki bo'lmasa — faqat
-//       biskvit.
+//       qatlamlari (hammasi bir rangda). Qatlamlar soni — umumiy
+//       konstruktordagi kabi chiplar bilan: boshlanishida tex kartadagi
+//       nachinka bloklari soni, «+ Qatlam» qo'shadi, «×» olib tashlaydi; chip
+//       bosilsa ostida faqat shu qatlamning bloki. Nachinka bloki bo'lmasa —
+//       faqat biskvit.
 //   3 — Tort: TAYYOR TORT — vektor ILLYUSTRATSIYA (cake_illustration.dart,
 //       referens: Mone'ning yassi grafikasi — patnis, lenta va bant, glazur,
 //       dekor doirasi). Qoplama/glazur rangi, kokos/yong'oq fakturasi va
@@ -82,9 +84,29 @@ class ShefCakeConstructorPage extends StatefulWidget {
 
 class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
   int _step = 0;
+  // 2-qadam: nachinka QATLAMLARI soni (umumiy konstruktordagi kabi chiplar:
+  // «1-qatlam», «2-qatlam» ..., «+ Qatlam», «×»). null — hali
+  // o'zgartirilmagan: tex kartadagi nachinka bloklari soni. Hamma qatlam
+  // bir rangda («Nachinka rangi» palitrasi / avtomatik).
+  int? _layerCount;
+  // Chip bilan tanlangan qatlam — ostidagi panelda faqat shu qatlamga mos
+  // nachinka bloki (k-qatlam → k-blok, navbat bilan). null — hammasi.
+  int? _activeLayer;
 
-  // Tort tex kartasi — boshqa bo'limlardagi kabi 3 ta palitra (Biskvit /
-  // Nachinka / Покрытие rangi); saqlangach konstruktor shu ranglarda.
+  static const int _maxLayers = 5;
+
+  int _layersOf(List<TechBase> blocks) {
+    final n = _layerCount;
+    if (n != null) return n.clamp(1, _maxLayers);
+    var fillCount = 0;
+    for (final b in blocks) {
+      if (CakeBlockRole.of(b) == CakeBlockRole.filling) fillCount++;
+    }
+    return fillCount;
+  }
+
+  // Tort tex kartasi — boshqa bo'limlardagi kabi yagona «Nachinka rangi»
+  // palitrasi; saqlangach konstruktor shu rangda.
   void _openTechCard(ProductModelAdmin cake) {
     Navigator.push(
       context,
@@ -92,9 +114,7 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
         builder: (_) => TechCardEditorPage(
           product: cake,
           canEditPrices: false,
-          showBiscuitColor: true,
           showFillingColor: true,
-          showCoatingColor: true,
         ),
       ),
     );
@@ -111,6 +131,9 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
     );
     final card = cake.techCard;
     final blocks = card?.bases ?? const <TechBase>[];
+    // Nachinka rangi — «Nachinka rangi» palitrasi (filling_color), hamma
+    // qatlam bir xil; tanlanmagan bo'lsa avtomatik (nom/bloklar/masalliqlar).
+    final fillingLook = FillingLook.fromTechCard(cake.name, card);
 
     return Scaffold(
       backgroundColor: _bgColor,
@@ -157,9 +180,12 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
                     ],
                   ),
                 ),
+                // 2-qadam: qatlam chiplari (sarlavha o'rniga — joy tejash).
+                if (_step == 1) _layerBar(blocks, fillingLook),
                 Expanded(
                   child: _BlocksPanel(
-                    title: '${_step + 1}. ${_steps[_step].$2}',
+                    // 2-qadamda sarlavha yo'q — chiplar o'zi aytib turadi.
+                    title: _step == 1 ? null : '${_step + 1}. ${_steps[_step].$2}',
                     blocks: _blocksOfStep(blocks),
                     emptyHint: _steps[_step].$3,
                     card: card,
@@ -170,8 +196,9 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
     );
   }
 
-  // Qadamga tegishli bloklar: 1 — biskvit; 2 — nachinka; 3 — qoplama, bezak
-  // va boshqa bosqichlar (tartib saqlanadi).
+  // Qadamga tegishli bloklar: 1 — biskvit; 2 — nachinka (chip tanlangan
+  // bo'lsa — faqat shu qatlamning bloki); 3 — qoplama, bezak va boshqa
+  // bosqichlar (tartib saqlanadi).
   List<TechBase> _blocksOfStep(List<TechBase> blocks) {
     bool keep(CakeBlockRole r) => switch (_step) {
           0 => r == CakeBlockRole.biscuit,
@@ -180,25 +207,91 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
               r == CakeBlockRole.decor ||
               r == CakeBlockRole.other,
         };
-    return [for (final b in blocks) if (keep(CakeBlockRole.of(b))) b];
+    final list = [for (final b in blocks) if (keep(CakeBlockRole.of(b))) b];
+    final k = _activeLayer;
+    if (_step == 1 && k != null && list.isNotEmpty) {
+      return [list[k % list.length]];
+    }
+    return list;
+  }
+
+  // Nachinka qatlamlari qatori — umumiy konstruktordagi bilan bir xil
+  // ko'rinish: «1-qatlam» (pastki) ... rangli nuqta bilan, «×» olib
+  // tashlaydi, «+ Qatlam» ustiga qo'shadi. Chip bosilsa shu qatlam tanlanadi
+  // (panelda uning bloki), qayta bosilsa tanlov olinadi.
+  Widget _layerBar(List<TechBase> blocks, FillingLook look) {
+    final n = _layersOf(blocks);
+    final dot = look.bandsOf(0).first.color;
+    const chipText = TextStyle(fontSize: 12);
+    return SizedBox(
+      height: 34,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        children: [
+          for (var i = 0; i < n; i++)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: InputChip(
+                avatar: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: dot,
+                    border: Border.all(color: Colors.black26),
+                  ),
+                ),
+                label: Text('${i + 1}-qatlam', style: chipText),
+                labelPadding: const EdgeInsets.only(left: 2, right: 4),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                selected: _activeLayer == i,
+                showCheckmark: false,
+                selectedColor: _accentColor.withValues(alpha: 0.35),
+                backgroundColor: Colors.white,
+                side: BorderSide(
+                  color: _activeLayer == i ? _accentColor : Colors.grey.shade300,
+                ),
+                onPressed: () => setState(
+                    () => _activeLayer = _activeLayer == i ? null : i),
+                deleteIcon: const Icon(Icons.close, size: 14),
+                // Yagona qatlamni olib tashlab bo'lmaydi.
+                onDeleted: n < 2
+                    ? null
+                    : () => setState(() {
+                          _layerCount = n - 1;
+                          final a = _activeLayer;
+                          if (a != null && a >= n - 1) _activeLayer = null;
+                        }),
+              ),
+            ),
+          if (n < _maxLayers)
+            ActionChip(
+              avatar: const Icon(Icons.add, size: 16),
+              label: const Text('Qatlam', style: chipText),
+              labelPadding: const EdgeInsets.only(left: 2, right: 4),
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              backgroundColor: Colors.white,
+              side: const BorderSide(color: _accentColor),
+              onPressed: () => setState(() => _layerCount = n + 1),
+            ),
+        ],
+      ),
+    );
   }
 
   // 3D: qadamga qarab biskvit / kesilgan bo'lakli tort / butun tort.
   Widget _hero(ProductModelAdmin cake, TechCard card, List<TechBase> blocks) {
     final dims = BiscuitDims.fromTechCard(card);
-    // Nachinka qatlamlari soni — tex kartadagi nachinka bloklari soni.
-    var fillCount = 0;
-    for (final b in blocks) {
-      if (CakeBlockRole.of(b) == CakeBlockRole.filling) fillCount++;
-    }
-    // Ranglar — boshqa bo'limlardagi kabi, TORT tex kartasining palitralari:
-    // korjlar — «Biskvit rangi» (biscuit_color), nachinka — «Nachinka rangi»
-    // (filling_color, hamma qatlam bir xil). Palitrada tanlanmagan bo'lsa —
-    // avtomatik: tort nomi / bloklar / masalliqlardan.
-    final sponge = BiscuitPalette.of(cake.name, card);
+    // Korjlar — avtomatik, tort nomi/bloklari/masalliqlaridan (biskvit uchun
+    // palitra yo'q). Nachinka — «Nachinka rangi» palitrasi yoki avtomatik,
+    // qatlamlar soni — chiplardan (boshlanishida nachinka bloklari soni).
+    final sponge = BiscuitPalette.detect(cake.name, card);
     final fillingLook = FillingLook.fromTechCard(cake.name, card);
     final fillings = [
-      for (var i = 0; i < fillCount; i++) fillingLook.bandsOf(0),
+      for (var i = 0; i < _layersOf(blocks); i++) fillingLook.bandsOf(0),
     ];
 
     // 1 — biskvitning o'zi; 2 — nachinka bloki bo'lmasa ham biskvit.
@@ -337,7 +430,8 @@ class _StepButton extends StatelessWidget {
 // og'irligi/bo'limi va masalliqlar (miqdor — tex kartadagidek, butun partiya
 // uchun). Blok yo'q — izoh.
 class _BlocksPanel extends StatelessWidget {
-  final String title;
+  // null — sarlavhasiz (2-qadam: chiplar o'rnida).
+  final String? title;
   final List<TechBase> blocks;
   final String emptyHint;
   final TechCard card;
@@ -354,10 +448,11 @@ class _BlocksPanel extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
       children: [
-        Text(
-          title,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-        ),
+        if (title != null)
+          Text(
+            title!,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+          ),
         if (blocks.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 14),

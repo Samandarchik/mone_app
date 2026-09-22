@@ -159,11 +159,13 @@ class FillingLook {
   }
 
   // «Покрытие» bo'limi: shu mahsulot tortni TASHQARIDAN qoplagandagi rang.
-  // Tex kartadagi «Покрытие» palitrasi (coating_color) ustun; tanlanmagan
-  // bo'lsa — nom/tarkibdan (detect). Nachinka rangi (filling_color) va foto
-  // bu yerga ta'sir QILMAYDI: ichki nachinka va tashqi qoplama mustaqil.
+  // Tex kartadagi YAGONA palitra («Nachinka rangi», filling_color) — mahsulot
+  // qanday rangda tanlangan bo'lsa, qoplama ham shu rangda; eski
+  // coating_color qiymati bo'lsa u ustun. Tanlanmagan bo'lsa — nom/tarkibdan
+  // (detect). Foto bu yerga ta'sir qilmaydi.
   static Color coatOf(String name, TechCard? card) =>
       fillingColorFromHex(card?.coatingColor ?? '') ??
+      fillingColorFromHex(card?.fillingColor ?? '') ??
       detect(name, card).color;
 
   static FillingLook detect(String name, TechCard? card) {
