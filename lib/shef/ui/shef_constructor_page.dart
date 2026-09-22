@@ -11,18 +11,21 @@
 //       kesimda nachinka. Odatda 2 qatlam; «+ Qatlam» yana qo'shadi (5
 //       tagacha), «×» olib tashlaydi. «N-qatlam» chipi — faol qatlam: griddan
 //       tanlangan nachinka shunga yoziladi, ya'ni har qatlam o'z mahsuloti,
-//       o'z ranglari va o'z tex kartasi bilan. Chiplar ostida faol qatlamning
-//       RANG PALITRASI: tanlangan rang shu qatlamda mahsulot rangidan ustun
-//       (chipdagi nuqta — qatlamning hozirgi rangi). N nachinka -> N+1 korj, tort
-//       balandligi o'zgarmaydi.
+//       o'z ranglari va o'z tex kartasi bilan (chipdagi nuqta — qatlamning
+//       hozirgi rangi). N nachinka -> N+1 korj, tort balandligi o'zgarmaydi.
 //   3 — Покрытие: o'sha tort tanlangan krem bilan tashqaridan TO'LIQ
 //       qoplangan, bo'lagi kesilgan — kesimda nachinka ham, qoplama qatlami
-//       ham ko'rinadi.
+//       ham ko'rinadi. Griddagi qoplama kartalari ham 1-qadamdagi biskvit
+//       O'LCHAMIDA chiziladi.
 // Biskvitlar — nomi «Бисквит» bo'lgan kategoriyalar, nachinka va qoplamalar —
 // «Начинка» kategoriyalari mahsulotlari (isBiskvitCategory /
-// isNachinkaCategory). Ranglar bo'limlardagi bilan bir xil manbadan:
-// FillingLook.resolve (palitra → foto → nom/tarkib) va FillingLook.coatOf
-// («Покрытие rangi» palitrasi → nom/tarkib). Tanlov faqat shu ekranda yashaydi
+// isNachinkaCategory). Nachinka rangi FAQAT o'z tex kartasidan
+// (_fillingLookOf): tex kartadagi palitrada rang tanlangan bo'lsa — o'sha;
+// tanlanmagan bo'lsa — mahsulot tavsifidan (nom / blok / masalliqlar,
+// FillingLook.detect). Foto tahlili konstruktorda ISHLATILMAYDI. Qoplama —
+// FillingLook.coatOf («Покрытие rangi» palitrasi → nom/tarkib). Tex karta
+// kartochkani ikki marta bosib ochiladi; saqlangach 3D o'zi yangilanadi.
+// Tanlov faqat shu ekranda yashaydi
 // (saqlanmaydi). Eski lokal-katalogli cake_constructor_page.dart bunga
 // aloqador emas.
 import 'package:flutter/material.dart';
@@ -31,6 +34,7 @@ import 'package:uz_ai_dev/admin/model/product_model.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
+import 'package:uz_ai_dev/admin/ui/widgets/filling_color_palette.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:uz_ai_dev/shef/model/production_model.dart';
@@ -39,11 +43,24 @@ import 'package:uz_ai_dev/shef/ui/biskvit_page.dart';
 import 'package:uz_ai_dev/shef/ui/shef_tech_card_page.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
-import 'package:uz_ai_dev/shef/ui/widgets/filling_photo_look.dart';
 
 const Color _bgColor = Color(0xFFFAF6F1);
 const Color _accentColor = Color(0xFFC5A97B);
 const double _heroH = 205;
+
+// Nachinka mahsulotining rangi FAQAT o'z tex kartasidan: palitrada rang
+// tanlangan bo'lsa (filling_color / filling_color2) — o'sha; tanlanmagan
+// bo'lsa — tavsifidan (nom / blok / masalliqlar). Foto tahlili yo'q: rang
+// sinxron va aynan tex kartadagidek. null (qatlam bo'sh) — neytral.
+FillingLook _fillingLookOf(ProductModelAdmin? p) {
+  if (p == null) return FillingLook.neutral;
+  final card = p.techCard;
+  final first = fillingColorFromHex(card?.fillingColor ?? '');
+  final second = fillingColorFromHex(card?.fillingColor2 ?? '');
+  final described = FillingLook.detect(p.name, card);
+  if (first == null && second == null) return described;
+  return FillingLook(first ?? described.color, second);
+}
 
 // Qadamlar: (tugma yozuvi, grid sarlavhasi).
 const List<(String, String)> _steps = [
@@ -229,6 +246,8 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
                               return _PickCard(
                                 product: p,
                                 step: _step,
+                                cakeDims:
+                                    BiscuitDims.fromTechCard(biscuit?.techCard),
                                 selected: p.id == selectedId,
                                 onTap: () => setState(() {
                                   if (_step == 0) {
@@ -277,50 +296,37 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
       );
     }
 
-    // Har qatlamning ko'rinishi o'z mahsulotidan: palitra → foto →
-    // nom/tarkib (FillingLook.resolve). Foto tahlili asinxron — natija
-    // kelganda FillingPhotoLooksBuilder qayta quradi.
-    final resolved = [
-      for (final p in layers)
-        p == null
-            ? (FillingLook.neutral, null)
-            : FillingLook.resolve(p.name, p.techCard),
-    ];
-    return FillingPhotoLooksBuilder(
-      urls: [for (final (_, url) in resolved) url],
-      builder: (context, photoLooks) => Filling3DView(
-        height: _heroH,
-        sponge: palette,
-        // Tort o'lchami 1-qadamdagi biskvitniki — qadam almashganda ham,
-        // nachinka qatlami qo'shilganda ham o'zgarmaydi: qatlamlar shu
-        // balandlik ICHIGA sig'diriladi.
-        dims: BiscuitDims.fromTechCard(biscuit?.techCard),
-        // Tex kartada 2 ta palitra bor: 1-qatlam (yuqori) va 2-qatlam
-        // (pastki). k-qatlam o'z mahsulotining (k juft -> 1-, toq -> 2-)
-        // palitrasini oladi: bitta mahsulot ikki qatlamda turganda
-        // avvalgidek «yuqori/pastki» ranglar chiqadi.
-        fillings: [
-          for (var k = 0; k < resolved.length; k++)
-            (photoLooks[k] ?? resolved[k].$1).bandsOf(k.isEven ? 0 : 1),
-        ],
-        // 3-qadam: tashqaridan qoplangan, lekin bo'lagi kesilgan — ichidagi
-        // nachinka ham ko'rinadi.
-        coat: _step == 2
-            ? (coating == null
-                ? FillingLook.neutral.color
-                : FillingLook.coatOf(coating.name, coating.techCard))
-            : null,
-        coatCut: true,
-      ),
+    // Har qatlamning rangi o'z mahsulotining tex kartasidan (sinxron, foto
+    // tahlili yo'q — _fillingLookOf).
+    return Filling3DView(
+      height: _heroH,
+      sponge: palette,
+      // Tort o'lchami 1-qadamdagi biskvitniki — qadam almashganda ham,
+      // nachinka qatlami qo'shilganda ham o'zgarmaydi: qatlamlar shu
+      // balandlik ICHIGA sig'diriladi.
+      dims: BiscuitDims.fromTechCard(biscuit?.techCard),
+      // Tex kartada 2 ta palitra bor: 1-qatlam (yuqori) va 2-qatlam
+      // (pastki). k-qatlam o'z mahsulotining (k juft -> 1-, toq -> 2-)
+      // palitrasini oladi: bitta mahsulot ikki qatlamda turganda
+      // avvalgidek «yuqori/pastki» ranglar chiqadi.
+      fillings: [
+        for (var k = 0; k < layers.length; k++)
+          _fillingLookOf(layers[k]).bandsOf(k.isEven ? 0 : 1),
+      ],
+      // 3-qadam: tashqaridan qoplangan, lekin bo'lagi kesilgan — ichidagi
+      // nachinka ham ko'rinadi.
+      coat: _step == 2
+          ? (coating == null
+              ? FillingLook.neutral.color
+              : FillingLook.coatOf(coating.name, coating.techCard))
+          : null,
+      coatCut: true,
     );
   }
 
-  // Qatlamning hozirgi asosiy rangi — chipdagi rangli nuqta uchun (foto
-  // tahlili kutilmaydi: mahsulot tex karta palitrasi → nom-tarkib).
+  // Qatlamning hozirgi asosiy rangi — chipdagi rangli nuqta uchun.
   Color _layerDot(int k, ProductModelAdmin? p) {
-    if (p == null) return FillingLook.neutral.color;
-    final bands =
-        FillingLook.resolve(p.name, p.techCard).$1.bandsOf(k.isEven ? 0 : 1);
+    final bands = _fillingLookOf(p).bandsOf(k.isEven ? 0 : 1);
     return bands.reduce((a, b) => b.part > a.part ? b : a).color;
   }
 
@@ -456,6 +462,9 @@ class _StepButton extends StatelessWidget {
 class _PickCard extends StatelessWidget {
   final ProductModelAdmin product;
   final int step;
+  // 1-qadamda tanlangan biskvit o'lchami — 3-qadamdagi qoplangan tort
+  // kartalari shu o'lchamda (hammasi tanlangan biskvitga mos).
+  final BiscuitDims cakeDims;
   final bool selected;
   final VoidCallback onTap;
   // Shu mahsulotning тех картаси — kartani IKKI MARTA bosish.
@@ -464,6 +473,7 @@ class _PickCard extends StatelessWidget {
   const _PickCard({
     required this.product,
     required this.step,
+    required this.cakeDims,
     required this.selected,
     required this.onTap,
     required this.onOpenTechCard,
@@ -480,13 +490,13 @@ class _PickCard extends StatelessWidget {
         photoUrl: biscuitPhotoUrlOf(product.techCard),
       );
     } else if (step == 1) {
-      final (look, photoUrl) =
-          FillingLook.resolve(product.name, product.techCard);
-      drawn = FillingThumb(look: look, photoUrl: photoUrl);
+      // Rang faqat tex kartadan (palitra → tavsif), foto tahlili yo'q.
+      drawn = FillingThumb(look: _fillingLookOf(product));
     } else {
       drawn = FillingThumb(
         look: FillingLook.neutral,
         coat: FillingLook.coatOf(product.name, product.techCard),
+        dims: cakeDims,
       );
     }
     // Qoplama qadamida mahsulotning o'z rasmi ko'rsatilmaydi: u nachinkaning

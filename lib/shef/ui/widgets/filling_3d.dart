@@ -267,6 +267,10 @@ class FillingThumb extends StatelessWidget {
   final Color? coat;
   // true — bo'lak emas, BUTUN (kesilgan) tort: bo'lim kartasi rasmi uchun.
   final bool whole;
+  // Konstruktor (3-qadam): qoplangan tort o'lchami TANLANGAN BISKVITNIKI —
+  // griddagi hamma qoplama kartalari 1-qadamdagi biskvit o'lchamida
+  // (painter.dims). null — standart o'lcham. Bo'lakka ta'sir qilmaydi.
+  final BiscuitDims? dims;
 
   const FillingThumb({
     super.key,
@@ -274,6 +278,7 @@ class FillingThumb extends StatelessWidget {
     this.photoUrl,
     this.coat,
     this.whole = false,
+    this.dims,
   });
 
   @override
@@ -294,6 +299,7 @@ class FillingThumb extends StatelessWidget {
             painter: FillingCakePainter(
               look: photoLook ?? look,
               coat: coat,
+              dims: dims,
               slice: !whole,
               tilt: 0.36,
               rotation: 0,
