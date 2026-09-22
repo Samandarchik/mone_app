@@ -20,7 +20,9 @@
 // IKKI REJIM: `ready: false` — пф qoldig'i (GET pf-stock → pfStock);
 // `ready: true` — «Готовый»: пф BO'LMAGAN tayyor mahsulotlar
 // (GET pf-stock?kind=ready → readyStock). Ekran tuzilishi bir xil, faqat
-// manba ro'yxat va AppBar sarlavhasi boshqa.
+// manba ro'yxat va AppBar sarlavhasi boshqa. «Готовый» rejimida o'ng pastki
+// burchakda «Konstruktor» tugmasi (ShefConstructorPage — biskvit + nachinka +
+// qoplamani haqiqiy mahsulotlardan yig'ib 3D'da ko'rish); пф rejimida yo'q.
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -36,6 +38,7 @@ import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:uz_ai_dev/shef/model/production_model.dart';
 import 'package:uz_ai_dev/shef/provider/shef_provider.dart';
+import 'package:uz_ai_dev/shef/ui/shef_constructor_page.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/category_group.dart';
 
 // Shef ekranlarining umumiy ranglari (shef_home_ui / shef_tech_card_page bilan
@@ -262,6 +265,22 @@ class _PfStockPageState extends State<PfStockPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bgColor,
+      // Faqat «Готовый»: o'ng pastki burchakda KONSTRUKTOR — biskvit + ichki
+      // nachinka + tashqi qoplamani haqiqiy mahsulotlardan yig'ib, 3D'da
+      // ko'rish (shef_constructor_page.dart).
+      floatingActionButton: widget.ready
+          ? FloatingActionButton.extended(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const ShefConstructorPage()),
+              ),
+              backgroundColor: _accentColor,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.layers_outlined),
+              label: const Text('Konstruktor'),
+            )
+          : null,
       appBar: AppBar(
         backgroundColor: _bgColor,
         elevation: 0,
@@ -365,7 +384,9 @@ class _PfStockPageState extends State<PfStockPage> {
                         )
                       : ListView.separated(
                           physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.only(bottom: 24),
+                          // «Готовый»da pastki joy — «Konstruktor» tugmasi
+                          // oxirgi qatorni yopmasin.
+                          padding: EdgeInsets.only(bottom: ready ? 96 : 24),
                           itemCount: rows.length,
                           separatorBuilder: (_, __) => const Divider(height: 1),
                           itemBuilder: (context, index) => _PfStockTile(

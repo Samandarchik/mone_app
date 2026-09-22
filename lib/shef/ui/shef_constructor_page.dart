@@ -1,6 +1,7 @@
 // shef/ui/shef_constructor_page.dart — shef KONSTRUKTORI (ShefConstructorPage):
-// shef bosh ekranining o'ng pastki burchagidagi «Konstruktor» tugmasidan
-// ochiladi. Tort HAQIQIY mahsulotlardan yig'iladi (tex kartalari bilan):
+// «Готовый» ekranining (pf_stock_page.dart, ready: true) o'ng pastki
+// burchagidagi «Konstruktor» tugmasidan ochiladi. Tort HAQIQIY
+// mahsulotlardan yig'iladi (tex kartalari bilan):
 // tepada katta aylanadigan 3D rasm, uning OSTIDA bir qatorda 3 ta qadam
 // tugmasi (1 · 2 · 3), undan pastda shu qadamning mahsulotlari (grid) —
 // bosilsa tanlanadi va 3D darhol o'zgaradi.

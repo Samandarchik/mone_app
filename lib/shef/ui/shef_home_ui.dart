@@ -16,7 +16,6 @@ import 'package:uz_ai_dev/shef/model/production_model.dart';
 import 'package:uz_ai_dev/shef/provider/shef_provider.dart';
 import 'package:uz_ai_dev/shef/ui/biskvit_page.dart';
 import 'package:uz_ai_dev/shef/ui/pf_stock_page.dart';
-import 'package:uz_ai_dev/shef/ui/shef_constructor_page.dart';
 // ShefOrdersPage ichidagi «Yangi buyurtma» tugmasi uchun kerak (bosh menyudan
 // olib tashlangan bo'lsa ham).
 import 'package:uz_ai_dev/shef/ui/shef_create_order_ui.dart';
@@ -131,16 +130,8 @@ class _ShefHomeUiState extends State<ShefHomeUi> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bgColor,
-      // O'ng pastki burchak: KONSTRUKTOR — biskvit + ichki nachinka + tashqi
-      // qoplamani haqiqiy mahsulotlardan yig'ib, 3D'da ko'rish
-      // (shef_constructor_page.dart).
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _open(context, const ShefConstructorPage()),
-        backgroundColor: _accentColor,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.layers_outlined),
-        label: const Text('Konstruktor'),
-      ),
+      // «Konstruktor» tugmasi bosh menyuda EMAS — u «Готовый» ekranining o'ng
+      // pastki burchagida (pf_stock_page.dart, ready: true).
       appBar: AppBar(
         backgroundColor: _bgColor,
         elevation: 0,
@@ -195,8 +186,7 @@ class _ShefHomeUiState extends State<ShefHomeUi> {
     Map<int, int> counts,
   ) {
     return GridView.count(
-      // Pastki joy — «Konstruktor» tugmasi oxirgi qatorni yopmasin.
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
+      padding: const EdgeInsets.all(12),
       crossAxisCount: 2,
       crossAxisSpacing: 12,
       mainAxisSpacing: 12,
