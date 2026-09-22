@@ -212,23 +212,25 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
                 ),
               ),
               // Tugmalar ostidagi hamma narsa — BITTA suriladigan maydon:
-              // sarlavha, (2-qadamda) qatlamlar qatori va mahsulotlar gridi.
-              // Tepadagi 3D va qadam tugmalari joyida qoladi.
+              // sarlavha (2-qadamda o'rniga qatlam chiplari — sarlavhasiz,
+              // joy tejash uchun) va mahsulotlar gridi. Tepadagi 3D va qadam
+              // tugmalari joyida qoladi.
               Expanded(
                 child: CustomScrollView(
                   slivers: [
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-                        child: Text(
-                          '${_step + 1}. ${_steps[_step].$2}',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
+                    if (_step != 1)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+                          child: Text(
+                            '${_step + 1}. ${_steps[_step].$2}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
-                    ),
                     // 2-qadam: nachinka qatlamlari — har birining rangi,
                     // qaysi qatlamga tanlanayotgani va «+ Qatlam».
                     if (_step == 1 && fillings.isNotEmpty)
@@ -242,9 +244,12 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
                       SliverPadding(
                         padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
                         sliver: SliverGrid(
+                          // Ustun soni ekran kengligidan (karta ≤ 140 px),
+                          // balandligi qat'iy — tor ekranda kartalar
+                          // kichrayib yopishmaydi, pastga joylashadi.
                           gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
+                              const SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: 140,
                             mainAxisSpacing: 10,
                             crossAxisSpacing: 10,
                             mainAxisExtent: 150,
@@ -352,9 +357,11 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
   // olinadi (kartochka butun tortga). «×» — qatlamni olib tashlash;
   // oxirida «+ Qatlam» (ustiga qo'shadi). Chiplar HAR DOIM faol (onPressed
   // bor) — aks holda Flutter ularni xira chizadi.
+  // Chiplar IXCHAM (kichik shrift, zich) — 3D ostida ko'p joy olmasin.
   Widget _layerBar(List<ProductModelAdmin?> layers) {
+    const chipText = TextStyle(fontSize: 12);
     return SizedBox(
-      height: 40,
+      height: 34,
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -371,7 +378,11 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
                     border: Border.all(color: Colors.black26),
                   ),
                 ),
-                label: Text('${i + 1}-qatlam'),
+                label: Text('${i + 1}-qatlam', style: chipText),
+                labelPadding: const EdgeInsets.only(left: 2, right: 4),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 selected: _activeLayer == i,
                 showCheckmark: false,
                 selectedColor: _accentColor.withValues(alpha: 0.35),
@@ -383,7 +394,7 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
                 ),
                 onPressed: () => setState(
                     () => _activeLayer = _activeLayer == i ? null : i),
-                deleteIcon: const Icon(Icons.close, size: 16),
+                deleteIcon: const Icon(Icons.close, size: 14),
                 // Yagona qatlamni olib tashlab bo'lmaydi.
                 onDeleted: layers.length < 2
                     ? null
@@ -398,8 +409,12 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
             ),
           if (layers.length < _maxLayers)
             ActionChip(
-              avatar: const Icon(Icons.add, size: 18),
-              label: const Text('Qatlam'),
+              avatar: const Icon(Icons.add, size: 16),
+              label: const Text('Qatlam', style: chipText),
+              labelPadding: const EdgeInsets.only(left: 2, right: 4),
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               backgroundColor: Colors.white,
               side: const BorderSide(color: _accentColor),
               // Yangi qatlam eng USTIGA qo'shiladi; boshlanishiga ostidagi

@@ -162,14 +162,22 @@ void main() {
         showCoatingColor: true,
       ),
     );
-    expect(_swatches(), findsNWidgets(6));
+    // Yig'ilgan: faqat sarlavha qatori — ranglar yo'q, o'ngda tanlangan
+    // rang doirachasi (28px) va strelka.
+    expect(_swatches(), findsNothing);
+    expect(find.byIcon(Icons.expand_more), findsOneWidget);
     await t.tap(find.byIcon(Icons.expand_more));
     await t.pump(const Duration(milliseconds: 300));
     expect(t.takeException(), isNull);
     expect(_swatches(), findsNWidgets(kFillingPalette.length));
+    // Rang tanlash — sarlavhadagi doiracha shu rangda, «Rangsiz» chiqadi.
+    await t.tap(_swatches().at(3));
+    await t.pump(const Duration(milliseconds: 300));
+    expect(find.text('Rangsiz'), findsOneWidget);
     await t.tap(find.byIcon(Icons.expand_less));
     await t.pump(const Duration(milliseconds: 300));
-    expect(_swatches(), findsNWidgets(6));
+    expect(_swatches(), findsNothing);
+    expect(find.text('Rangsiz'), findsNothing);
   });
 
   testWidgets('constructor: «+ Qatlam» adds a FILLING layer, × removes it',

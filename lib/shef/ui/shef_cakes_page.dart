@@ -24,6 +24,18 @@ import 'package:uz_ai_dev/shef/ui/widgets/cake_illustration.dart';
 const Color _bgColor = Color(0xFFFAF6F1);
 const Color _accentColor = Color(0xFFC5A97B);
 
+// Tort kartalari gridi: ustun soni ekran kengligidan (karta ≤ 220 px),
+// balandligi QAT'IY — tor ekranda (telefon) kartalar kichrayib yopishib
+// ketmaydi, pastga qarab tartib bilan joylashadi. Biskvit bo'limi ham shuni
+// ishlatadi.
+const SliverGridDelegate kCakeGridDelegate =
+    SliverGridDelegateWithMaxCrossAxisExtent(
+  maxCrossAxisExtent: 220,
+  mainAxisSpacing: 12,
+  crossAxisSpacing: 12,
+  mainAxisExtent: 246,
+);
+
 class ShefCakesPage extends StatefulWidget {
   final int categoryId;
   final String categoryName;
@@ -175,17 +187,11 @@ class _ShefCakesPageState extends State<ShefCakesPage> {
                     // Pastki joy — FAB oxirgi qatorni yopmasin.
                     padding: EdgeInsets.fromLTRB(
                         12, 8, 12, widget.canAddProducts ? 88 : 24),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      mainAxisExtent: 246,
-                    ),
+                    gridDelegate: kCakeGridDelegate,
                     itemCount: rows.length,
                     itemBuilder: (context, index) {
                       final p = rows[index];
-                      return _CakeCard(
+                      return CakeCard(
                         cake: p,
                         onTap: () => _openConstructor(p),
                         onDoubleTap: () => _openTechCard(p),
@@ -254,15 +260,17 @@ String _sizeLine(TechCard? c) {
   return parts.join(' · ');
 }
 
-// Bitta tort kartasi: tepada foto (bo'lmasa — tex kartadagi o'lchamda
-// qoplangan tort chizmasi), ostida nom, o'lcham/og'irlik va tex karta
-// holati. Bir marta — konstruktor, ikki marta — tex karta.
-class _CakeCard extends StatelessWidget {
+// Bitta tort kartasi: tepada foto (bo'lmasa — tex kartadan chizilgan
+// illyustratsiya), ostida nom, o'lcham/og'irlik va tex karta holati.
+// Bir marta — konstruktor, ikki marta — tex karta. Biskvit bo'limidagi
+// tortlar gridi ham shu kartani ishlatadi.
+class CakeCard extends StatelessWidget {
   final ProductModelAdmin cake;
   final VoidCallback onTap;
   final VoidCallback onDoubleTap;
 
-  const _CakeCard({
+  const CakeCard({
+    super.key,
     required this.cake,
     required this.onTap,
     required this.onDoubleTap,

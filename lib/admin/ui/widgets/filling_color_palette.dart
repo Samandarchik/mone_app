@@ -4,10 +4,12 @@
 // Начинка» sahifasidagi 3D tortda nachinka AYNAN shu rangda chiziladi —
 // foto va nom/tarkibdan ustun. Xuddi shu palitra «Покрытие» bo'limida
 // qoplama rangi uchun ham ishlatiladi (tech_card.coating_color, [title]).
-// «Biskvit rangi» (biscuit_color) uchun ham shu. Palitra odatda YIG'ILGAN
-// (bir qator rang) — sarlavhadagi strelka hamma ranglarni ochadi/yig'adi.
-// Tanlangan rangni yana bosish yoki «Rangsiz» — tanlovni olib tashlaydi
-// (rang yana foto / tex kartadan aniqlanadi).
+// «Biskvit rangi» (biscuit_color) uchun ham shu. Palitra odatda YIG'ILGAN —
+// BITTA qator: sarlavha, o'ng tomonda TANLANGAN rang doirachasi va strelka;
+// strelka (yoki qator) bosilsa ostida hamma ranglar ochiladi, yana bosilsa
+// yig'iladi — tex kartada ko'p joy egallamaydi. Ochilganda tanlangan rangni
+// yana bosish yoki «Rangsiz» — tanlovni olib tashlaydi (rang yana foto /
+// tex kartadan aniqlanadi).
 // fillingColorFromHex / fillingColorToHex — saqlash formati bilan o'girish.
 import 'package:flutter/material.dart';
 
@@ -61,10 +63,6 @@ const List<Color> kFillingPalette = [
   Color(0xFF9E9E9E),
 ];
 
-
-// Yig'ilgan holatda ko'rinadigan ranglar soni (bir qator).
-const int _kCollapsedCount = 6;
-
 class FillingColorPalette extends StatefulWidget {
   // Tanlangan rang ("#RRGGBB") yoki '' — tanlanmagan.
   final String value;
@@ -84,9 +82,8 @@ class FillingColorPalette extends StatefulWidget {
 }
 
 class _FillingColorPaletteState extends State<FillingColorPalette> {
-  // Palitra tex kartada ko'p joy egallamasin: odatda YIG'ILGAN — faqat bir
-  // qator rang (tanlangani har doim ko'rinadi); sarlavhadagi strelka bosilsa
-  // hamma ranglar ochiladi, yana bosilsa yig'iladi.
+  // Odatda YIG'ILGAN — faqat sarlavha qatori (o'ngda tanlangan rang +
+  // strelka); strelka bosilsa hamma ranglar ochiladi.
   bool _expanded = false;
 
   @override
@@ -94,23 +91,9 @@ class _FillingColorPaletteState extends State<FillingColorPalette> {
     final selected = fillingColorFromHex(widget.value);
     final selectedHex = selected == null ? null : fillingColorToHex(selected);
 
-    // Yig'ilganda: birinchi bir nechta rang; tanlangan rang ular orasida
-    // bo'lmasa — eng boshiga qo'yiladi (nima tanlangani ko'rinib tursin).
-    final List<Color> shown;
-    if (_expanded) {
-      shown = kFillingPalette;
-    } else {
-      final first = kFillingPalette.take(_kCollapsedCount).toList();
-      final inFirst = selectedHex == null ||
-          first.any((c) => fillingColorToHex(c) == selectedHex);
-      shown = inFirst
-          ? first
-          : [selected!, ...first.take(_kCollapsedCount - 1)];
-    }
-
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.fromLTRB(12, 4, 4, 10),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.fromLTRB(12, 2, 4, 2),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -130,21 +113,14 @@ class _FillingColorPaletteState extends State<FillingColorPalette> {
                 Expanded(
                   child: Text(
                     widget.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                 ),
-                if (selected != null)
-                  TextButton.icon(
-                    onPressed: () => widget.onChanged(''),
-                    style: TextButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      foregroundColor: Colors.red,
-                    ),
-                    icon: const Icon(Icons.format_color_reset_outlined,
-                        size: 16),
-                    label: const Text('Rangsiz'),
-                  ),
+                // O'ngda — TANLANGAN rang (tanlanmagan — chizilgan bo'sh doira).
+                _SelectedDot(color: selected),
                 Padding(
                   padding: const EdgeInsets.all(8),
                   child: Icon(
@@ -155,27 +131,75 @@ class _FillingColorPaletteState extends State<FillingColorPalette> {
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final c in shown)
-                  _Swatch(
-                    color: c,
-                    selected: selectedHex == fillingColorToHex(c),
-                    onTap: () {
-                      final hex = fillingColorToHex(c);
-                      // Tanlanganini yana bosish — tanlovni olib tashlash.
-                      widget.onChanged(hex == selectedHex ? '' : hex);
-                    },
+          if (_expanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(0, 4, 8, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final c in kFillingPalette)
+                        _Swatch(
+                          color: c,
+                          selected: selectedHex == fillingColorToHex(c),
+                          onTap: () {
+                            final hex = fillingColorToHex(c);
+                            // Tanlanganini yana bosish — tanlovni olib tashlash.
+                            widget.onChanged(hex == selectedHex ? '' : hex);
+                          },
+                        ),
+                    ],
                   ),
-              ],
+                  if (selected != null)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: () => widget.onChanged(''),
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          foregroundColor: Colors.red,
+                        ),
+                        icon: const Icon(Icons.format_color_reset_outlined,
+                            size: 16),
+                        label: const Text('Rangsiz'),
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
         ],
       ),
+    );
+  }
+}
+
+// Sarlavha qatoridagi tanlangan rang doirachasi (28px). null — tanlanmagan:
+// oq doira ichida «rangsiz» belgisi.
+class _SelectedDot extends StatelessWidget {
+  final Color? color;
+
+  const _SelectedDot({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color ?? Colors.white,
+        border: Border.all(
+          color: color == null ? Colors.black26 : const Color(0xFF5D4037),
+          width: color == null ? 1 : 2,
+        ),
+      ),
+      child: color == null
+          ? const Icon(Icons.format_color_reset_outlined,
+              size: 15, color: Colors.black38)
+          : null,
     );
   }
 }

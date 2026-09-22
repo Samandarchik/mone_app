@@ -17,12 +17,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uz_ai_dev/admin/model/category_model.dart';
+import 'package:uz_ai_dev/admin/model/product_model.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
+import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:uz_ai_dev/shef/model/production_model.dart';
 import 'package:uz_ai_dev/shef/provider/shef_provider.dart';
+import 'package:uz_ai_dev/shef/ui/shef_cake_constructor_page.dart';
 import 'package:uz_ai_dev/shef/ui/shef_cakes_page.dart';
 import 'package:uz_ai_dev/shef/ui/shef_tech_card_page.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
@@ -460,24 +463,96 @@ class _BiskvitPageState extends State<BiskvitPage> {
               );
               final byId = shefCategoriesById(cats.categories, pf);
               final counts = <int, int>{};
+              // HAMMA tortlar (nomi «Торт» bo'lgan kategoriyalar mahsulotlari)
+              // — bo'limga kirilishi bilan tepada, kategoriyalardan oldin.
+              final cakes = <ProductModelAdmin>[];
               for (final p in products.products) {
                 counts[p.categoryId] = (counts[p.categoryId] ?? 0) + 1;
+                if (isTortCategory(byId[p.categoryId]?.name ?? '')) {
+                  cakes.add(p);
+                }
               }
               // Backend'da o'chirilgan (ro'yxatda yo'q) id'lar ko'rsatilmaydi.
               final linked = [
                 for (final id in BiskvitLinks.ids)
                   if (byId[id] != null) byId[id]!,
               ];
-              if (linked.isEmpty) {
+              if (linked.isEmpty && cakes.isEmpty) {
                 return _EmptyHint(onAdd: _addCategory);
               }
-              return GridView.count(
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (cakes.isNotEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(4, 2, 4, 8),
+                      child: Text(
+                        'Tortlar',
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: kCakeGridDelegate,
+                      itemCount: cakes.length,
+                      itemBuilder: (context, i) => CakeCard(
+                        cake: cakes[i],
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                ShefCakeConstructorPage(cake: cakes[i]),
+                          ),
+                        ),
+                        onDoubleTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => TechCardEditorPage(
+                              product: cakes[i],
+                              canEditPrices: false,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (linked.isNotEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(4, 2, 4, 8),
+                      child: Text(
+                        'Kategoriyalar',
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    _categoryGrid(linked, counts),
+                  ] else
+                    _EmptyHint(onAdd: _addCategory),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Kategoriya kartalari: ustun soni ekran kengligidan (karta ≤ 220 px),
+  // balandligi QAT'IY — tor ekranda kartalar kichrayib yopishib ketmaydi.
+  Widget _categoryGrid(
+      List<CategoryProductAdmin> linked, Map<int, int> counts) {
+    return GridView(
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 220,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  mainAxisExtent: 200,
+                ),
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 0.9,
                 children: [
                   for (final c in linked) ...[
                     _CategoryTile(
@@ -509,11 +584,6 @@ class _BiskvitPageState extends State<BiskvitPage> {
                   ],
                 ],
               );
-            },
-          ),
-        ],
-      ),
-    );
   }
 }
 
