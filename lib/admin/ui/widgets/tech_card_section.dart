@@ -44,11 +44,9 @@ class TechCardController {
   // Tayyor biskvit fotosi ("/static/..." yoki '') — tex kartada saqlanadi.
   String biscuitPhotoUrl;
 
-  // Palitradan tanlangan nachinka rangi ("#RRGGBB" yoki '').
+  // Yagona palitradan tanlangan nachinka rangi ("#RRGGBB" yoki '') — hamma
+  // nachinka qatlamlari uchun.
   String fillingColor;
-
-  // Pastki (2-) nachinka qatlami rangi ("#RRGGBB" yoki '').
-  String fillingColor2;
 
   // «Покрытие» uchun palitradan tanlangan rang ("#RRGGBB" yoki '').
   String coatingColor;
@@ -77,7 +75,6 @@ class TechCardController {
         bakeTempC = initial?.bakeTempC ?? 0,
         biscuitPhotoUrl = initial?.biscuitPhotoUrl ?? '',
         fillingColor = initial?.fillingColor ?? '',
-        fillingColor2 = initial?.fillingColor2 ?? '',
         coatingColor = initial?.coatingColor ?? '',
         biscuitColor = initial?.biscuitColor ?? '';
 
@@ -108,7 +105,6 @@ class TechCardController {
         bakeTempC: bakeTempC,
         biscuitPhotoUrl: biscuitPhotoUrl,
         fillingColor: fillingColor,
-        fillingColor2: fillingColor2,
         coatingColor: coatingColor,
         biscuitColor: biscuitColor,
       );

@@ -146,34 +146,26 @@ void coatingTests() {
   });
 }
 
-// Nachinka 2 qatlam — har biriga o'z palitrasi (filling_color / _color2).
-// Qatlamlar PASTDAN sanaladi: 1-palitra (filling_color) — pastki qatlam
-// (bandsOf(1)), 2-si — yuqori (bandsOf(0)).
+// Tex kartada nachinka uchun YAGONA palitra (filling_color): tanlangan rang
+// nachinkaning HAMMA qatlamlariga (bandsOf(0), bandsOf(1)) qo'llanadi.
 void twoLayerTests() {
   const pink = Color(0xFFF8BBD0);
 
-  test('resolve: 1-palitra — pastki qatlam, 2-si — yuqori', () {
-    const card = TechCard(fillingColor: '#5A3420', fillingColor2: '#F8BBD0');
+  test('resolve: yagona palitra rangi — hamma qatlam bir xil', () {
+    const card = TechCard(fillingColor: '#F8BBD0');
     final (look, photo) = FillingLook.resolve('Начинка №1', card);
     expect(photo, isNull);
-    expect(look.bandsOf(0).single.color, pink); // yuqori
-    expect(look.bandsOf(1).single.color, _chocolate); // pastki
-  });
-
-  test('resolve: 2-qatlam tanlanmagan — ikkala qatlam bir xil', () {
-    const card = TechCard(fillingColor: '#F8BBD0');
-    final (look, _) = FillingLook.resolve('Начинка №1', card);
     expect(look.bandsOf(0).single.color, pink);
     expect(look.bandsOf(1).single.color, pink);
+    expect(look.bandsOf(2).single.color, pink);
   });
 
-  test('resolve: faqat 2-qatlam (yuqori) tanlangan — pastki nom/tarkibdan',
-      () {
-    const card = TechCard(fillingColor2: '#5A3420');
-    final (look, photo) = FillingLook.resolve('Начинка клубничная', card);
-    expect(photo, isNull);
-    expect(look.bandsOf(0).single.color, _chocolate); // yuqori
-    expect(look.bandsOf(1).single.color, _strawberry); // pastki
+  test('fromTechCard: palitra rangi nom/tarkibdan ustun, hamma qatlamda', () {
+    const card = TechCard(fillingColor: '#5A3420');
+    final look = FillingLook.fromTechCard('Начинка клубничная', card);
+    expect(look.bandsOf(0).single.color, _chocolate);
+    expect(look.bandsOf(1).single.color, _chocolate);
+    expect(FillingLook.hasPaletteColor(card), isTrue);
   });
 
   test('fromTechCard: palitra yo\'q — tavsifdan, foto hisobga olinmaydi', () {
@@ -184,14 +176,13 @@ void twoLayerTests() {
     expect(FillingLook.hasPaletteColor(card), isFalse);
   });
 
-  test('TechCard: filling_color2 JSON\'da saqlanadi', () {
-    const card = TechCard(fillingColor: '#F8BBD0', fillingColor2: '#5A3420');
-    final back = TechCard.fromJson(card.toJson());
-    expect(card.toJson()['filling_color2'], '#5A3420');
-    expect(back.fillingColor2, '#5A3420');
-    expect(back.fillingColor, '#F8BBD0');
-    expect(TechCard.fromJson(const {}).fillingColor2, '');
-    expect(card.copyWith(bakeTimeMin: 5).fillingColor2, '#5A3420');
+  test('TechCard: eski filling_color2 JSON\'dan o\'qilmaydi va yuborilmaydi',
+      () {
+    final card = TechCard.fromJson(
+        const {'filling_color': '#F8BBD0', 'filling_color2': '#5A3420'});
+    expect(card.fillingColor, '#F8BBD0');
+    expect(card.toJson().containsKey('filling_color2'), isFalse);
+    expect(card.toJson()['filling_color'], '#F8BBD0');
   });
 }
 

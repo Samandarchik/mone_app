@@ -46,11 +46,13 @@ class FillingBand {
 // Nachinka rangi (тех картадан; tex kartada foto bo'lsa — fotodan).
 class FillingLook {
   // YUQORI nachinka qatlami rangi (bandsOf(0)); asosiy rang sifatida ham.
+  // Tex kartadagi YAGONA palitradan (fromTechCard) — u holda HAMMA qatlam
+  // shu rangda (color2 = null).
   final Color color;
   // PASTKI nachinka qatlami rangi (bandsOf(1); null — yuqorisi bilan bir
-  // xil). Tex karta palitrasidan (fromTechCard: 1-palitra — pastki qatlam)
-  // yoki fotodan (masalan «kaymoq + shokolad» — bir qatlam oqish, ikkinchisi
-  // jigarrang, filling_photo_look.dart).
+  // xil). FAQAT fotodan keladi (masalan «kaymoq + shokolad» — bir qatlam
+  // oqish, ikkinchisi jigarrang, filling_photo_look.dart); palitrada
+  // ikkinchi rang yo'q.
   final Color? color2;
   // Fotodagi kesimdan olingan yo'llar (tepadan pastga): 1-nachinka qatlami
   // va (boshqacha bo'lsa) 2-si. null — qatlam bitta rangda ([color]).
@@ -144,21 +146,14 @@ class FillingLook {
 
   // Tex kartada nachinka palitrasidan rang tanlanganmi.
   static bool hasPaletteColor(TechCard? card) =>
-      fillingColorFromHex(card?.fillingColor ?? '') != null ||
-      fillingColorFromHex(card?.fillingColor2 ?? '') != null;
+      fillingColorFromHex(card?.fillingColor ?? '') != null;
 
-  // Rang FAQAT tex kartadan (foto tahlili yo'q): palitra → tavsif (detect).
-  // Qatlamlar PASTDAN yuqoriga sanaladi: filling_color — 1-qatlam (PASTKI),
-  // filling_color2 — 2-qatlam (uning USTIDAGI). 2-si tanlanmasa u 1-si bilan
-  // bir xil; faqat 2-si tanlangan bo'lsa pastki qatlam nom/tarkibdan.
-  // Hech biri tanlanmasa — hammasi tavsifdan.
+  // Rang FAQAT tex kartadan (foto tahlili yo'q): YAGONA palitra (filling_color)
+  // → tavsif (detect). Tanlangan rang nachinkaning HAMMA qatlamlariga
+  // qo'llanadi; tanlanmagan bo'lsa — hammasi tavsifdan.
   static FillingLook fromTechCard(String name, TechCard? card) {
-    final bottom = fillingColorFromHex(card?.fillingColor ?? '');
-    final top = fillingColorFromHex(card?.fillingColor2 ?? '');
-    if (bottom == null && top == null) return detect(name, card);
-    // Faqat pastki tanlangan — ikkala qatlam bir xil (color2 = null).
-    if (top == null) return FillingLook(bottom!);
-    return FillingLook(top, bottom ?? detect(name, card).color);
+    final picked = fillingColorFromHex(card?.fillingColor ?? '');
+    return picked == null ? detect(name, card) : FillingLook(picked);
   }
 
   // «Покрытие» bo'limi: shu mahsulot tortni TASHQARIDAN qoplagandagi rang.

@@ -9,9 +9,8 @@
 //   2 — Nachinka: O'SHA biskvit (o'lchami va korj rangi tanlangan
 //       biskvitdan) ichida nachinka QATLAMLARI bilan — bo'lagi kesilgan,
 //       kesimda nachinka. Kartochka bosilsa tortda aynan shu tex kartaning
-//       nachinkasi (hamma qatlamda): qatlamlar PASTDAN sanaladi — 1-qatlam
-//       (eng pastki) tex kartadagi 1-palitra rangida, 2-qatlam (ustidagi) —
-//       2-palitra, keyin yana navbat bilan. «N-qatlam» chipi bosilsa keyingi
+//       nachinkasi (hamma qatlamda): har qatlam o'z mahsulotining tex
+//       kartasidagi YAGONA palitra rangida. «N-qatlam» chipi bosilsa keyingi
 //       kartochka FAQAT shu qatlamga qo'yiladi (har qatlam o'z mahsuloti);
 //       chip qayta bosilsa tanlov olinadi. Odatda 2 qatlam; «+ Qatlam»
 //       ustiga yana qo'shadi (5 tagacha), «×» olib tashlaydi (chipdagi
@@ -24,8 +23,8 @@
 // Biskvitlar — nomi «Бисквит» bo'lgan kategoriyalar, nachinka va qoplamalar —
 // «Начинка» kategoriyalari mahsulotlari (isBiskvitCategory /
 // isNachinkaCategory). Nachinka rangi FAQAT o'z tex kartasidan
-// (FillingLook.fromTechCard): tex kartadagi palitrada rang tanlangan bo'lsa
-// — o'sha (1-palitra — pastki qatlam, 2-si — yuqori); tanlanmagan bo'lsa —
+// (FillingLook.fromTechCard): tex kartadagi yagona palitrada rang tanlangan
+// bo'lsa — o'sha (hamma qatlam uchun bir rang); tanlanmagan bo'lsa —
 // mahsulot tavsifidan (nom / blok / masalliqlar, FillingLook.detect). Foto
 // tahlili konstruktorda ISHLATILMAYDI. Qoplama —
 // FillingLook.coatOf («Покрытие rangi» palitrasi → nom/tarkib). Tex karta
@@ -52,20 +51,17 @@ const Color _bgColor = Color(0xFFFAF6F1);
 const Color _accentColor = Color(0xFFC5A97B);
 const double _heroH = 205;
 
-// Nachinka mahsulotining rangi FAQAT o'z tex kartasidan: palitrada rang
-// tanlangan bo'lsa (filling_color / filling_color2) — o'sha; tanlanmagan
-// bo'lsa — tavsifidan (nom / blok / masalliqlar). Foto tahlili yo'q: rang
-// sinxron va aynan tex kartadagidek. null (qatlam bo'sh) — neytral.
+// Nachinka mahsulotining rangi FAQAT o'z tex kartasidan: yagona palitrada
+// rang tanlangan bo'lsa (filling_color) — o'sha; tanlanmagan bo'lsa —
+// tavsifidan (nom / blok / masalliqlar). Foto tahlili yo'q: rang sinxron va
+// aynan tex kartadagidek. null (qatlam bo'sh) — neytral.
 FillingLook _fillingLookOf(ProductModelAdmin? p) =>
     p == null ? FillingLook.neutral : FillingLook.fromTechCard(p.name, p.techCard);
 
-// [k]-qatlam (PASTDAN sanab, 0 — eng pastki) rang yo'llari — shu qatlam
-// mahsulotining tex kartasidan. Tex kartada 2 ta palitra: 1-si — pastki
-// qatlam (bandsOf(1)), 2-si — yuqori (bandsOf(0)). Qatlamlar pastdan
-// yuqoriga navbatlashadi: 1-qatlam — 1-palitra, 2-qatlam — 2-palitra,
-// 3-qatlam — yana 1-palitra ...
-List<FillingBand> _layerBands(int k, ProductModelAdmin? p) =>
-    _fillingLookOf(p).bandsOf(k.isEven ? 1 : 0);
+// Qatlam rang yo'llari — shu qatlam mahsulotining tex kartasidan. Tex
+// kartada YAGONA palitra: qaysi qatlam bo'lishidan qat'i nazar rang bitta.
+List<FillingBand> _layerBands(ProductModelAdmin? p) =>
+    _fillingLookOf(p).bandsOf(0);
 
 // Qadamlar: (tugma yozuvi, grid sarlavhasi).
 const List<(String, String)> _steps = [
@@ -89,9 +85,8 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
   // NACHINKA QATLAMLARI PASTDAN yuqoriga (0 — eng pastki, «1-qatlam») — har
   // birida nachinka mahsuloti (id; null — ro'yxatdagi birinchisi). Odatda 2
   // ta; «+ Qatlam» ustiga qo'shadi, «×» olib tashlaydi. N nachinka → N+1
-  // korj, hammasi biskvit balandligi ichida. Rang — mahsulot tex kartasidan
-  // (pastki qatlam — 1-palitra, ustidagi — 2-palitra, keyin navbat bilan);
-  // konstruktorda alohida palitra yo'q.
+  // korj, hammasi biskvit balandligi ichida. Rang — mahsulot tex kartasidagi
+  // yagona palitradan; konstruktorda alohida palitra yo'q.
   final List<int?> _fillingIds = [null, null];
   // Chip bilan tanlangan qatlam: kartochka bosilsa nachinka FAQAT shu
   // qatlamga yoziladi. null (chip tanlanmagan, odatiy) — kartochka bosilsa
@@ -117,7 +112,7 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
 
   // Mahsulotning тех картаси — bo'limlardagi bilan AYNAN bir xil rejimda
   // (narxsiz), hozirgi qadamga mos bo'limlar bilan: biskvit — foto; nachinka
-  // — foto + 2 ta nachinka palitrasi; qoplama — «Покрытие rangi» palitrasi.
+  // — foto + nachinka palitrasi; qoplama — «Покрытие rangi» palitrasi.
   // Saqlangach provider xotirada yangilanadi va 3D o'zi qayta chiziladi.
   void _openTechCard(ProductModelAdmin product) {
     Navigator.push(
@@ -316,8 +311,8 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
       );
     }
 
-    // Har qatlam rangi o'z mahsulotining tex kartasidan (sinxron, foto
-    // tahlili yo'q — _layerBands): pastki qatlam 1-palitra, yuqori — 2-si.
+    // Har qatlam rangi o'z mahsulotining tex kartasidagi yagona palitradan
+    // (sinxron, foto tahlili yo'q — _layerBands).
     return Filling3DView(
       height: _heroH,
       sponge: palette,
@@ -329,7 +324,7 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
       // yuqoriga — teskari tartibda beramiz (_layerBands).
       fillings: [
         for (var k = layers.length - 1; k >= 0; k--)
-          _layerBands(k, layers[k]),
+          _layerBands(layers[k]),
       ],
       // 3-qadam: tashqaridan qoplangan, lekin bo'lagi kesilgan — ichidagi
       // nachinka ham ko'rinadi.
@@ -343,8 +338,8 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
   }
 
   // Qatlamning asosiy rangi — chipdagi rangli nuqta uchun.
-  static Color _layerDot(int k, ProductModelAdmin? p) {
-    final bands = _layerBands(k, p);
+  static Color _layerDot(ProductModelAdmin? p) {
+    final bands = _layerBands(p);
     return bands.reduce((a, b) => b.part > a.part ? b : a).color;
   }
 
@@ -369,7 +364,7 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
                 avatar: Container(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: _layerDot(i, layers[i]),
+                    color: _layerDot(layers[i]),
                     border: Border.all(color: Colors.black26),
                   ),
                 ),

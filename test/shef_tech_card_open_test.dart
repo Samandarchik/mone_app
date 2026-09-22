@@ -122,7 +122,7 @@ void main() {
     expect(find.byType(TechCardEditorPage), findsOneWidget);
   });
 
-  testWidgets('constructor step 2: double tap opens both filling palettes',
+  testWidgets('constructor step 2: double tap opens the single filling palette',
       (t) async {
     await open(t, const ShefConstructorPage());
     expect(find.byIcon(Icons.menu_book_outlined), findsNothing);
@@ -130,8 +130,10 @@ void main() {
     await t.pump(const Duration(milliseconds: 400));
     await doubleTap(t, 'Начинка клубничная');
     expect(find.byType(TechCardEditorPage), findsOneWidget);
-    expect(find.textContaining('1-qatlam (pastki)'), findsOneWidget);
-    expect(find.textContaining('2-qatlam (yuqori)'), findsOneWidget);
+    // Nachinka uchun YAGONA palitra — qatlamlar bo'yicha ikkinchisi yo'q.
+    expect(find.text('Nachinka rangi'), findsOneWidget);
+    expect(find.textContaining('qatlam'), findsNothing);
+    expect(find.byType(FillingColorPalette), findsOneWidget);
   });
 
   testWidgets('constructor step 3: double tap opens the coating palette',
@@ -252,7 +254,7 @@ void main() {
     await t.pump(const Duration(milliseconds: 400));
 
     // 2-qadamda qatlam chiplari bor, lekin palitra YO'Q — rang faqat
-    // mahsulot tex kartasi ichida (2 ta nachinka palitrasi).
+    // mahsulot tex kartasi ichida (yagona nachinka palitrasi).
     expect(find.text('1-qatlam'), findsOneWidget);
     expect(find.textContaining('qatlam rangi'), findsNothing);
     expect(_swatches(), findsNothing);
