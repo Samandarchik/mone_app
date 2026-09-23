@@ -41,28 +41,28 @@ void main() {
   testWidgets('phone 360×640: no overflow, fixed-height cards', (t) async {
     await open(t, const Size(360, 640));
     expect(t.takeException(), isNull);
-    for (final title in ['Biskvit', 'Полуфабрикат', 'Готовый', 'Тех карта']) {
+    for (final title in ['Торты', 'Полуфабрикат', 'Готовый', 'Тех карта']) {
       expect(find.text(title), findsOneWidget);
     }
     // Kartalar balandligi qat'iy — ezilmaydi.
-    final biskvit = t.getRect(find.ancestor(
-      of: find.text('Biskvit'),
+    final tortlar = t.getRect(find.ancestor(
+      of: find.text('Торты'),
       matching: find.byType(Material),
     ).first);
-    expect(biskvit.height, 178);
-    // 2 ustun: «Полуфабрикат» «Biskvit» bilan bir qatorda.
+    expect(tortlar.height, 178);
+    // 2 ustun: «Полуфабрикат» «Торты» bilan bir qatorda.
     final pf = t.getRect(find.ancestor(
       of: find.text('Полуфабрикат'),
       matching: find.byType(Material),
     ).first);
-    expect(pf.top, biskvit.top);
+    expect(pf.top, tortlar.top);
   });
 
   testWidgets('very narrow 240px: cards go one below another', (t) async {
     await open(t, const Size(240, 700));
     expect(t.takeException(), isNull);
     final a = t.getRect(find.ancestor(
-      of: find.text('Biskvit'),
+      of: find.text('Торты'),
       matching: find.byType(Material),
     ).first);
     final b = t.getRect(find.ancestor(

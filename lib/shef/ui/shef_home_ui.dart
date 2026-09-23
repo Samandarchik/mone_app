@@ -1,6 +1,6 @@
 // shef/ui/shef_home_ui.dart — shef bosh ekrani: ShefHomeUi — menyu kartalari.
-// Menyuda to'rt bo'lim: «Biskvit» (rasmli), «Полуфабрикат» (qoldiq),
-// «Готовый» va «Тех карта». Buyurtmalar / yangi buyurtma / ishlab chiqarish rejasi kartalari
+// Menyuda to'rt bo'lim: «Торты» (rasmli, biskvit_page.dart), «Полуфабрикат»
+// (qoldiq), «Готовый» va «Тех карта». Buyurtmalar / yangi buyurtma / ishlab chiqarish rejasi kartalari
 // olib tashlandi (ShefOrdersPage klassi shu faylda qoldi — boshqa joydan
 // ochilishi mumkin). productionStatusChip shu yerdan eksport qilinadi (boshqa
 // rollar ham ishlatadi).
@@ -222,13 +222,14 @@ class _ShefHomeUiState extends State<ShefHomeUi> {
         mainAxisExtent: 178,
       ),
       children: [
-        // Biskvit — rasmli karta; ichida shakllar / nachinka / krem /
-        // bezaklar bo'limlari (biskvit_page.dart → BiskvitPage).
+        // «Торты» — rasmli karta; ichida hamma tortlar va shef qo'shgan
+        // kategoriyalar (biskvit_page.dart → BiskvitPage; sinf/fayl nomi
+        // eski, faqat KO'RINADIGAN nom o'zgargan).
         _MenuCard(
           icon: Icons.cake_outlined,
           image: 'assets/biskvit.png',
-          title: 'Biskvit',
-          subtitle: 'Biskvit · Nachinka · Krem · Bezaklar',
+          title: 'Торты',
+          subtitle: 'Tortlar · Biskvit · Nachinka · Krem',
           onTap: () => _open(context, const BiskvitPage()),
         ),
         // Полуфабрикат qoldig'i — qaysi pf bor, nechtasi band/mumkin.

@@ -1,5 +1,6 @@
-// shef/ui/biskvit_page.dart — shef bosh menyusidagi «Biskvit» bo'limi
-// (BiskvitPage): tepada HAMMA tortlar gridi (rasm YO'Q — biskvit.png faqat
+// shef/ui/biskvit_page.dart — shef bosh menyusidagi «Торты» bo'limi
+// (BiskvitPage — sinf/fayl nomi eski, KO'RINADIGAN nom «Торты»):
+// tepada HAMMA tortlar gridi (rasm YO'Q — biskvit.png faqat
 // bosh menyu kartasida), ostida shef QO'SHGAN kategoriyalar kartalari — har
 // birida kategoriyaning o'z rasmi, nomi va mahsulot soni (masalan Бисквит,
 // Начинка, Крем, Украшения). Tort kartasi BIR marta bosilsa — TORTNING O'Z
@@ -384,7 +385,7 @@ class _BiskvitPageState extends State<BiskvitPage> {
       context,
       exclude: {...BiskvitLinks.linkedIds, ...ShefHomeLinks.linkedIds},
       hint: '«Тех карта»dagi kategoriya hamma mahsulotlari bilan '
-          'Biskvit bo\'limiga o\'tadi',
+          '«Торты» bo\'limiga o\'tadi',
     );
     if (picked == null || !mounted) return;
     await BiskvitLinks.add(picked.id);
@@ -397,9 +398,9 @@ class _BiskvitPageState extends State<BiskvitPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Biskvit bo\'limidan olib tashlash'),
+        title: const Text('«Торты» bo\'limidan olib tashlash'),
         content: Text(
-          '«${category.name}» Biskvit bo\'limidan olinib, yana «Тех карта»da '
+          '«${category.name}» «Торты» bo\'limidan olinib, yana «Тех карта»da '
           'ko\'rinadi. Kategoriya va mahsulotlar o\'chmaydi.',
         ),
         actions: [
@@ -431,8 +432,9 @@ class _BiskvitPageState extends State<BiskvitPage> {
       appBar: AppBar(
         backgroundColor: _bgColor,
         elevation: 0,
+        // Bosh menyudagi karta bilan bir xil nom.
         title: const Text(
-          'Biskvit',
+          'Торты',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         actions: [
