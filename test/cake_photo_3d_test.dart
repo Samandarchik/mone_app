@@ -120,6 +120,64 @@ void main() {
     expect(s.sinE, closeTo(0.3, 0.08));
   });
 
+  // Regressiya: tort OQ PATNIS (podstavka) ustida — patnis tortdan keng va
+  // fon bilan deyarli bir xil. Ilgari siluet pastki qatorlarda patnisniki
+  // bo'lib, model TORTDAN emas, PATNISDAN qurilardi.
+  test('cake on a wide light board: the CAKE is the volume, not the board',
+      () async {
+    const cakeR = 90.0, boardR = 135.0;
+    final rec = ui.PictureRecorder();
+    final c = Canvas(rec);
+    c.drawRect(const Rect.fromLTWH(0, 0, 400, 400),
+        Paint()..color = const Color(0xFFFAFAFA));
+    const cx = 200.0, yBase = 300.0, sinE = 0.3;
+    // Patnis: oq, fondan arzimas darajada to'qroq + yumshoq soya.
+    c.drawOval(
+      Rect.fromCenter(
+          center: const Offset(cx, yBase + 10),
+          width: 2 * boardR,
+          height: 2 * boardR * sinE),
+      Paint()
+        ..color = const Color(0xFFEDEDEF)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+    );
+    c.drawOval(
+      Rect.fromCenter(
+          center: const Offset(cx, yBase),
+          width: 2 * boardR,
+          height: 2 * boardR * sinE),
+      Paint()..color = const Color(0xFFF2F2F4),
+    );
+    // Tort: to'q shokolad.
+    const dark = Color(0xFF2E1B10);
+    c.drawOval(
+      Rect.fromCenter(
+          center: const Offset(cx, yBase),
+          width: 2 * cakeR,
+          height: 2 * cakeR * sinE),
+      Paint()..color = dark,
+    );
+    c.drawRect(const Rect.fromLTRB(cx - cakeR, yBase - 100, cx + cakeR, yBase),
+        Paint()..color = dark);
+    c.drawOval(
+      Rect.fromCenter(
+          center: const Offset(cx, yBase - 100),
+          width: 2 * cakeR,
+          height: 2 * cakeR * sinE),
+      Paint()..color = const Color(0xFFB0651F),
+    );
+    final img = await rec.endRecording().toImage(400, 400);
+    final s = analyzeCakePhoto(await _rgba(img), img.width, img.height);
+
+    // Model radiusi TORTNIKI (90), patnisniki (135) emas.
+    expect(s.a, closeTo(cakeR, 6));
+    expect(s.sinE, closeTo(sinE, 0.1));
+    // Pastda keng disk (patnis) qolmadi: profil hamma joyda ~1.
+    for (final (_, r) in s.profile) {
+      expect(r, greaterThan(0.85));
+    }
+  });
+
   test('square cake detected from flat top contour', () async {
     final img = await _cakeImage(tiers: [(100, 100)], sinE: 0.3, square: true);
     final s = analyzeCakePhoto(await _rgba(img), img.width, img.height);
