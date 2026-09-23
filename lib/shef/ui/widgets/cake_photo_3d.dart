@@ -875,10 +875,6 @@ class CakePhotoPainter extends CustomPainter {
     final hW = model.shape.heightRatio;
     final cy = math.cos(yaw), sy = math.sin(yaw);
     final cp = math.cos(pitch), sp = math.sin(pitch);
-    // Ko'rinish radiusi — tort butunlay sig'sin.
-    final bound = math.sqrt(1 + hW * hW / 4) * 1.06;
-    final scale = math.min(size.width, size.height) / 2 / bound * 0.92 * zoom;
-    final ox = size.width / 2, oy = size.height / 2;
     const dist = 6.0; // perspektiva (radius birligida)
 
     // Kamera fazosi: avval Y atrofida (yaw), so'ng X atrofida (pitch).
@@ -920,13 +916,46 @@ class CakePhotoPainter extends CustomPainter {
     // Uzoqdan yaqinga (rassom algoritmi).
     order.sort((p, q) => depth[p].compareTo(depth[q]));
 
+    // --- BLOKKA SIG'DIRISH («contain» + markaz) --------------------------
+    // Model ekranga proyeksiya qilingandagi HAQIQIY chegaralari topiladi va
+    // shu to'rtburchak blokka sig'diriladi: masshtab X va Y uchun BIR XIL
+    // (proporsiya buzilmaydi — tort cho'zilmaydi/yassilanmaydi), so'ng
+    // markazga qo'yiladi. Ilgari masshtab min(kenglik, balandlik) dan
+    // olinardi va model doim balandlikka qarab kichrayib, blokning bir
+    // chekkasida turardi — keng ekranda «yassi va kichkina» ko'rinardi.
+    // Bu ekran o'lchami o'zgarganda ham o'z-o'zidan moslashadi.
+    var minX = double.infinity, maxX = double.negativeInfinity;
+    var minY = double.infinity, maxY = double.negativeInfinity;
+    final proj = Float32List(n * 6); // har uchburchak uchun 3 × (x, y)
+    for (var i = n - visible; i < n; i++) {
+      final t = order[i];
+      for (var k = 0; k < 3; k++) {
+        final o = t * 9 + k * 3;
+        final persp = dist / (dist - cam[o + 2]);
+        final px = cam[o] * persp, py = -cam[o + 1] * persp;
+        proj[t * 6 + k * 2] = px;
+        proj[t * 6 + k * 2 + 1] = py;
+        if (px < minX) minX = px;
+        if (px > maxX) maxX = px;
+        if (py < minY) minY = py;
+        if (py > maxY) maxY = py;
+      }
+    }
+    final spanX = math.max(1e-6, maxX - minX);
+    final spanY = math.max(1e-6, maxY - minY);
+    final scale =
+        math.min(size.width / spanX, size.height / spanY) * 0.92 * zoom;
+    final ox = size.width / 2 - (minX + maxX) / 2 * scale;
+    final oy = size.height / 2 - (minY + maxY) / 2 * scale;
+
     // Yerdagi yumshoq soya — tort emas, faqat «turgan joyi» hissi.
     if (pitch > 0.02) {
       final shadowR = scale * 1.05;
       final syFloor = -(-hW / 2) * cp; // y = 0 tekisligi kamera y'da
       canvas.drawOval(
         Rect.fromCenter(
-          center: Offset(ox, oy + syFloor * scale * (dist / (dist + hW / 2 * sp))),
+          center: Offset(size.width / 2,
+              oy + syFloor * scale * (dist / (dist + hW / 2 * sp))),
           width: shadowR * 2,
           height: shadowR * 2 * sp,
         ),
@@ -945,10 +974,8 @@ class CakePhotoPainter extends CustomPainter {
       final g = (255 * shade[t]).round().clamp(0, 255);
       final color = 0xFF000000 | (g << 16) | (g << 8) | g;
       for (var k = 0; k < 3; k++) {
-        final o = t * 9 + k * 3;
-        final persp = dist / (dist - cam[o + 2]);
-        positions[vi * 2] = ox + cam[o] * scale * persp;
-        positions[vi * 2 + 1] = oy - cam[o + 1] * scale * persp;
+        positions[vi * 2] = ox + proj[t * 6 + k * 2] * scale;
+        positions[vi * 2 + 1] = oy + proj[t * 6 + k * 2 + 1] * scale;
         tex[vi * 2] = mesh.uv[(t * 3 + k) * 2];
         tex[vi * 2 + 1] = mesh.uv[(t * 3 + k) * 2 + 1];
         colors[vi] = color;

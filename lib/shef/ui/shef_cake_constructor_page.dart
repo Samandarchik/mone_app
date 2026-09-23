@@ -823,13 +823,23 @@ class _PhotoCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
+              // Foto TO'LIQ ko'rinadi va cho'zilmaydi: nisbati saqlanib
+              // (contain) markazga qo'yiladi. Quti balandligi QAT'IY emas —
+              // 4:3 nisbatda kenglikdan hisoblanadi, shuning uchun ekran
+              // kengayganda rasm ham proporsional kattalashadi.
+              // (Ilgari qat'iy 160 px balandlik + cover edi: keng foto
+              // tepa-pastidan qirqilar, tort «yassi» ko'rinardi.)
               ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                child: AppNetworkImage(
-                  imageUrl: url,
-                  width: double.infinity,
-                  height: 160,
-                  fit: BoxFit.cover,
+                child: AspectRatio(
+                  aspectRatio: 4 / 3,
+                  child: ColoredBox(
+                    color: const Color(0xFFF7F5FC),
+                    child: AppNetworkImage(
+                      imageUrl: url,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -895,13 +905,19 @@ class _BlockCard extends StatelessWidget {
               ),
               if (url != null) ...[
                 const SizedBox(height: 8),
+                // Blok rasmi ham to'liq va cho'zilmasdan (yuqoridagi
+                // «Tort fotosi» bilan bir xil qoida).
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: AppNetworkImage(
-                    imageUrl: url,
-                    width: double.infinity,
-                    height: 140,
-                    fit: BoxFit.cover,
+                  child: AspectRatio(
+                    aspectRatio: 4 / 3,
+                    child: ColoredBox(
+                      color: const Color(0xFFF7F5FC),
+                      child: AppNetworkImage(
+                        imageUrl: url,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
                   ),
                 ),
               ],
