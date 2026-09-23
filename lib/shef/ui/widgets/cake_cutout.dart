@@ -57,7 +57,12 @@ class CakeCutout {
     final cached = _cache[url];
     if (cached != null) return cached;
     final future = (loader ?? _loadImage)(context, url).then(fromImage);
-    future.then((_) {}, onError: (_) {
+    // Xato ham, muvaffaqiyatsiz segmentatsiya ham keshda QOLMAYDI — tort
+    // qayta ochilganda yana uriniladi (rasm o'sha paytda to'liq yuklangan
+    // bo'lishi mumkin).
+    future.then((c) {
+      if (!c.ok) _cache.remove(url);
+    }, onError: (_) {
       _cache.remove(url);
     });
     _cache[url] = future;
@@ -194,56 +199,85 @@ Future<ui.Image>? _cutout(Uint8List px, int w, int h) {
     threshold = (6 + 2 * p90).clamp(8.0, 30.0);
   }
 
-  final bgLike = Uint8List(n);
-  for (var y = 0; y < h; y++) {
-    for (var x = 0; x < w; x++) {
-      final i = y * w + x;
-      if (px[i * 4 + 3] < 40 || bgDist(x, y) <= threshold) bgLike[i] = 1;
-    }
-  }
-
-  // --- fon CHETDAN suzib belgilanadi: tort ichidagi oq joylar fon emas.
+  // Fonni CHETDAN suzib belgilash: tort ichidagi oq joylar fon emas.
+  // Qaytaradi: (isBg, fg, x0, x1, y0, y1).
   final isBg = Uint8List(n);
   final queue = Int32List(n);
-  var qh = 0, qt = 0;
-  void seed(int i) {
-    if (isBg[i] == 0 && bgLike[i] == 1) {
+  (int, int, int, int, int) floodFrom(double t) {
+    isBg.fillRange(0, n, 0);
+    var qh = 0, qt = 0;
+    void seed(int i) {
+      if (isBg[i] != 0) return;
+      final x = i % w, y = i ~/ w;
+      if (px[i * 4 + 3] >= 40 && bgDist(x, y) > t) return;
       isBg[i] = 1;
       queue[qt++] = i;
     }
-  }
 
-  for (var x = 0; x < w; x++) {
-    seed(x);
-    seed((h - 1) * w + x);
-  }
-  for (var y = 0; y < h; y++) {
-    seed(y * w);
-    seed(y * w + w - 1);
-  }
-  while (qh < qt) {
-    final i = queue[qh++];
-    final x = i % w, y = i ~/ w;
-    if (x > 0) seed(i - 1);
-    if (x < w - 1) seed(i + 1);
-    if (y > 0) seed(i - w);
-    if (y < h - 1) seed(i + w);
-  }
-
-  // Old plan chegaralari.
-  var x0 = w, x1 = -1, y0 = h, y1 = -1, fg = 0;
-  for (var y = 0; y < h; y++) {
     for (var x = 0; x < w; x++) {
-      if (isBg[y * w + x] == 1) continue;
-      fg++;
-      if (x < x0) x0 = x;
-      if (x > x1) x1 = x;
-      if (y < y0) y0 = y;
-      if (y > y1) y1 = y;
+      seed(x);
+      seed((h - 1) * w + x);
+    }
+    for (var y = 0; y < h; y++) {
+      seed(y * w);
+      seed(y * w + w - 1);
+    }
+    while (qh < qt) {
+      final i = queue[qh++];
+      final x = i % w, y = i ~/ w;
+      if (x > 0) seed(i - 1);
+      if (x < w - 1) seed(i + 1);
+      if (y > 0) seed(i - w);
+      if (y < h - 1) seed(i + w);
+    }
+    var x0 = w, x1 = -1, y0 = h, y1 = -1, fg = 0;
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        if (isBg[y * w + x] == 1) continue;
+        fg++;
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+    }
+    return (fg, x0, x1, y0, y1);
+  }
+
+  // Chegarani IKKI TOMONGA moslash. Bitta qat'iy chegara haqiqiy fotolarda
+  // ikki xil buziladi:
+  //   • chegara TOR (JPEG shovqini, notekis studiya foni) — fon topilmaydi,
+  //     butun rasm «tort» bo'lib qoladi va foni kesilmaydi;
+  //   • chegara KENG — OQ tort (kokos, oq krem) oq fondan ajralmaydi va
+  //     suzish tortning ichiga kirib ketadi, tortdan deyarli hech narsa
+  //     qolmaydi.
+  // Shuning uchun bir nechta chegara sinaladi va old plan MA'QUL oraliqqa
+  // (rasmning 5–85%) tushgani olinadi.
+  const factors = [1.0, 2.5, 0.5, 0.25, 4.0];
+  var bestF = 1.0;
+  var bestScore = double.infinity;
+  var fg = 0, x0 = 0, x1 = 0, y0 = 0, y1 = 0;
+  for (final f in factors) {
+    final r = floodFrom(threshold * f);
+    final frac = r.$1 / n;
+    if (frac >= 0.05 && frac <= 0.85) {
+      bestF = f;
+      bestScore = 0;
+      break;
+    }
+    // Oraliqdan qancha uzoq — shuncha yomon.
+    final miss = frac < 0.05 ? 0.05 - frac : frac - 0.85;
+    if (miss < bestScore) {
+      bestScore = miss;
+      bestF = f;
     }
   }
-  // Ishonchsiz: fon topilmadi (deyarli butun rasm) yoki bo'lak juda kichik.
-  if (fg > n * 0.92 || fg < n * 0.02 || x1 - x0 < 8 || y1 - y0 < 8) return null;
+  (fg, x0, x1, y0, y1) = floodFrom(threshold * bestF);
+  // Ishonchsiz FAQAT bo'lak juda kichik bo'lsa — u holda asl foto qoladi.
+  if (fg < n * 0.03 || x1 - x0 < 8 || y1 - y0 < 8) {
+    debugPrint('CakeCutout: segmentatsiya ishonchsiz (fg=$fg / $n)');
+    return null;
+  }
 
   // Alfa: fon — 0, qolgani — 255; chetini 3×3 o'rtacha bilan yumshatamiz
   // (qaychi bilan qirqilgandek keskin chet qolmasin).
