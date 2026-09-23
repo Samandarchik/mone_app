@@ -263,7 +263,6 @@ class Filling3DView extends StatelessWidget {
         displayWidth: height * 2,
         builder: (context, sidePhoto) => Rotating3DView(
           height: height,
-          manual: true,
           painter: (tilt, rotation) => FillingCakePainter(
             look: photoLook ?? look,
             coat: coat,

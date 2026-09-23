@@ -18,12 +18,11 @@
 //      orqa tomon uchun ko'rinadigan (old) tomon ko'zgu qilinadi — bu eng kam
 //      «o'ylab topish». Tepa yuzasining orqa yarmi fotoda bor (ellipsning
 //      yuqori qismi) — u ko'zgusiz olinadi.
-//   4. Aylantirish — barmoq/sichqoncha: yon tomonga — atrofida (360°),
-//      tepa/past — qarash burchagi (yondan ↔ tepadan); pinch / g'ildirak —
-//      masshtab. Mesh BIR MARTA quriladi, har kadrda faqat buriladi va
-//      chuqurlik bo'yicha saralanadi — burchak o'zgarganda detallar yo'qolmaydi
-//      va qayta «chizilmaydi». Yorug'lik juda yumshoq (0.8–1.0), rang
-//      o'zgarmasin deb.
+//   4. Ko'rinish QAT'IY: model bitta rakursda qotib turadi — o'zi
+//      aylanmaydi, barmoq bilan burilmaydi, masshtablanmaydi va burchak
+//      tugmalari yo'q (foydalanuvchi talabi). Mesh bir marta quriladi,
+//      chuqurlik bo'yicha saralanib chiziladi. Yorug'lik juda yumshoq
+//      (0.8–1.0), rang o'zgarmasin deb.
 // Chegara: bitta fotodan haqiqiy orqa tomon va dekorning hajmiy geometriyasi
 // tiklanmaydi (bu neyro-rekonstruksiya servisi talab qiladi) — dekor tekstura
 // sifatida yuzada saqlanadi. Fon murakkab bo'lsa (tort fon bilan bir rangda,
@@ -37,7 +36,6 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 
@@ -935,27 +933,14 @@ class CakePhoto3DView extends StatefulWidget {
   State<CakePhoto3DView> createState() => _CakePhoto3DViewState();
 }
 
-// Tez burchaklar: (yozuv, yaw, pitch).
-const List<(String, double, double)> _views = [
-  ('Old', 0, 0.32),
-  ('Yon', math.pi / 2, 0.32),
-  ('Orqa', math.pi, 0.32),
-  ('Tepa', 0, 1.45),
-];
+// QAT'IY rakurs — model shu holatda qotib turadi (burish/masshtab yo'q).
+const double _fixedYaw = 0;
+const double _fixedPitch = 0.32;
 
-class _CakePhoto3DViewState extends State<CakePhoto3DView>
-    with TickerProviderStateMixin {
+class _CakePhoto3DViewState extends State<CakePhoto3DView> {
   CakePhotoModel? _model;
   // Yuklash/tahlil xatosi matni (null — xato yo'q).
   String? _error;
-  double _yaw = 0;
-  double _pitch = 0.32;
-  double _zoom = 1;
-  // Tugma bosilganda burchakka silliq o'tish. O'zi aylanish YO'Q — model
-  // bir holatda turadi, faqat barmoq / tugmalar buradi.
-  AnimationController? _move;
-  double _fromYaw = 0, _fromPitch = 0, _toYaw = 0, _toPitch = 0;
-  double _startZoom = 1;
 
   @override
   void initState() {
@@ -974,12 +959,6 @@ class _CakePhoto3DViewState extends State<CakePhoto3DView>
     }
   }
 
-  @override
-  void dispose() {
-    _move?.dispose();
-    super.dispose();
-  }
-
   Future<void> _load() async {
     final url = widget.imageUrl;
     try {
@@ -991,30 +970,6 @@ class _CakePhoto3DViewState extends State<CakePhoto3DView>
       if (!mounted || url != widget.imageUrl) return;
       setState(() => _error = '$e');
     }
-  }
-
-  void _goTo(double yaw, double pitch) {
-    _move?.dispose();
-    _fromYaw = _yaw;
-    _fromPitch = _pitch;
-    // Eng qisqa yo'l bilan burish.
-    var dy = (yaw - _yaw) % (2 * math.pi);
-    if (dy > math.pi) dy -= 2 * math.pi;
-    _toYaw = _yaw + dy;
-    _toPitch = pitch;
-    final c = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 450),
-    );
-    final curve = CurvedAnimation(parent: c, curve: Curves.easeInOut);
-    c.addListener(() {
-      if (!mounted) return;
-      setState(() {
-        _yaw = _fromYaw + (_toYaw - _fromYaw) * curve.value;
-        _pitch = _fromPitch + (_toPitch - _fromPitch) * curve.value;
-      });
-    });
-    _move = c..forward();
   }
 
   // Foto yuklanmadi / model qurilmadi — sabab va qayta urinish. Umumiy
@@ -1058,48 +1013,26 @@ class _CakePhoto3DViewState extends State<CakePhoto3DView>
   @override
   Widget build(BuildContext context) {
     final model = _model;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ClipRRect(
-          borderRadius: widget.borderRadius,
-          child: Container(
-            height: widget.height,
-            width: double.infinity,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [_heroTop, _heroBottom],
-              ),
-            ),
-            child: _error != null
-                ? _errorView()
-                : model == null
-                    ? _loading()
-                    : _viewer(model),
+    // Faqat rasmning o'zi: burchak tugmalari («Old / Yon / Orqa / Tepa»)
+    // OLIB TASHLANGAN, jestlar ham yo'q.
+    return ClipRRect(
+      borderRadius: widget.borderRadius,
+      child: Container(
+        height: widget.height,
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [_heroTop, _heroBottom],
           ),
         ),
-        if (model != null) ...[
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 6,
-            alignment: WrapAlignment.center,
-            children: [
-              for (final v in _views)
-                ActionChip(
-                  label: Text(v.$1, style: const TextStyle(fontSize: 11.5)),
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                  backgroundColor: Colors.white,
-                  side: BorderSide(color: Colors.grey.shade300),
-                  onPressed: () => _goTo(v.$2, v.$3),
-                ),
-            ],
-          ),
-        ],
-      ],
+        child: _error != null
+            ? _errorView()
+            : model == null
+                ? _loading()
+                : _viewer(model),
+      ),
     );
   }
 
@@ -1114,41 +1047,16 @@ class _CakePhoto3DViewState extends State<CakePhoto3DView>
     );
   }
 
+  // Model QAT'IY burchakda chiziladi: jest ham, g'ildirak ham yo'q —
+  // foydalanuvchi uni hech qanday yo'l bilan siljita olmaydi.
   Widget _viewer(CakePhotoModel model) {
-    return Listener(
-      // Sichqoncha g'ildiragi — masshtab.
-      onPointerSignal: (e) {
-        if (e is PointerScrollEvent) {
-          setState(() {
-            _zoom = (_zoom * (e.scrollDelta.dy > 0 ? 0.9 : 1.1)).clamp(0.5, 3.0);
-          });
-        }
-      },
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        // Bitta detektor: surish — burish, ikki barmoq — masshtab.
-        onScaleStart: (d) {
-          _move?.dispose();
-          _move = null;
-          _startZoom = _zoom;
-        },
-        onScaleUpdate: (d) => setState(() {
-          _yaw += d.focalPointDelta.dx * 0.012;
-          _pitch = (_pitch + d.focalPointDelta.dy * 0.008).clamp(-0.35, 1.5);
-          if (d.pointerCount > 1) {
-            _zoom = (_startZoom * d.scale).clamp(0.5, 3.0);
-          }
-        }),
-        child: RepaintBoundary(
-          child: CustomPaint(
-            size: Size.infinite,
-            painter: CakePhotoPainter(
-              model: model,
-              yaw: _yaw,
-              pitch: _pitch,
-              zoom: _zoom,
-            ),
-          ),
+    return RepaintBoundary(
+      child: CustomPaint(
+        size: Size.infinite,
+        painter: CakePhotoPainter(
+          model: model,
+          yaw: _fixedYaw,
+          pitch: _fixedPitch,
         ),
       ),
     );
