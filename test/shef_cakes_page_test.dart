@@ -22,7 +22,7 @@ import 'package:uz_ai_dev/shef/ui/shef_constructor_page.dart';
 import 'package:uz_ai_dev/shef/ui/shef_tech_card_page.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/cake_illustration.dart';
-import 'package:uz_ai_dev/shef/ui/widgets/cake_photo_view.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/cake_photo_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
 
 ProductModelAdmin _product(int id, String name, int cat, String catName,
@@ -392,10 +392,10 @@ void main() {
     expect(find.text('Начинка фисташковая'), findsOneWidget);
     expect(find.text('Начинка клубничная'), findsNothing);
 
-    // 3 — foto yo'q: tex kartadan illyustratsiya (foto ko'rinishi emas).
+    // 3 — foto yo'q: tex kartadan illyustratsiya, 3D foto modeli yo'q.
     await t.tap(find.text('3'));
     await settle(t);
     expect(find.byType(CakeIllustrationView), findsOneWidget);
-    expect(find.byType(CakePhotoView), findsNothing);
+    expect(find.byType(CakePhoto3DView), findsNothing);
   });
 }
