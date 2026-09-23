@@ -36,17 +36,21 @@ $ErrorActionPreference = 'Stop'
 
 $Dir     = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Desktop = Join-Path $env:USERPROFILE 'Desktop'
+# Hamma loyihalar bitta ildizda: C:\samandar_app (bot uz_ai_dev ichida, ildiz = bir pog'ona yuqori).
+# Eski joylashuv (Desktop / C:\) zaxira sifatida qoladi: yangi yo'l bo'lmasa eskisi olinadi.
+$Root = Split-Path -Parent $Dir
+function Pick-Path([string[]]$cands) { foreach ($p in $cands) { if (Test-Path $p) { return $p } }; return $cands[0] }
 
 # --- Loyihalar: nom -> papka (build_windows.bat shu papkada bo'lishi kerak) ---
 $Projects = [ordered]@{
-    'uz_ai_dev'          = (Join-Path $Desktop 'uz_ai_dev')
-    'workly_app'         = (Join-Path $Desktop 'workly_app')
-    'timekivi_app'       = (Join-Path $env:USERPROFILE 'timekivi_app')
-    'qilinadigan_ishlar' = (Join-Path $Desktop 'qilinadigan_ishlar')
-    'pos_flutter'        = 'C:\pos_flutter'
-    'taxi'               = (Join-Path $Desktop 'mone-taxi-mobile')
+    'uz_ai_dev'          = $Dir
+    'workly_app'         = (Pick-Path @((Join-Path $Root 'apps\workly_app'),          (Join-Path $Desktop 'workly_app')))
+    'timekivi_app'       = (Pick-Path @((Join-Path $Root 'apps\timekivi_app'),        (Join-Path $env:USERPROFILE 'timekivi_app')))
+    'qilinadigan_ishlar' = (Pick-Path @((Join-Path $Root 'apps\qilinadigan_ishlar'),  (Join-Path $Desktop 'qilinadigan_ishlar')))
+    'pos_flutter'        = (Pick-Path @((Join-Path $Root 'pos\pos_flutter'),          'C:\pos_flutter'))
+    'taxi'               = (Pick-Path @((Join-Path $Root 'apps\mone-taxi-mobile'),    (Join-Path $Desktop 'mone-taxi-mobile')))
     # Flutter loyihasi repo ichidagi papkada: web_end_bot_app_hr\hr_mobile_app
-    'hr_mobile_app'      = (Join-Path $Desktop 'web_end_bot_app_hr\hr_mobile_app')
+    'hr_mobile_app'      = (Pick-Path @((Join-Path $Root 'apps\web_end_bot_app_hr\hr_mobile_app'), (Join-Path $Desktop 'web_end_bot_app_hr\hr_mobile_app')))
 }
 
 # --- Loyiha -> GitHub repo (owner/name). Auto update shu ro'yxatni kuzatadi. ---
@@ -302,7 +306,7 @@ function Show-Menu([string]$ChatId) {
 # SH5 (StoreHouse) dan qoldiqlarni o'qib Mone'ga push qiladi - ilovadagi
 # "Ostatka (SH5)" ekrani yangi raqamlarni ko'radi. Bridge config'i o'z
 # papkasidan o'qiladi, shuning uchun Push-Location shart.
-$Sh5BridgeDir = 'C:\112233\rk7_bridge'
+$Sh5BridgeDir = Pick-Path @((Join-Path $Root 'rk7_bridge'), 'C:\112233\rk7_bridge')
 
 function Invoke-Sh5Refresh([string]$ChatId) {
     $r = Send-Msg $ChatId "Ostatka yangilanmoqda (SH5 -> Mone)..."
