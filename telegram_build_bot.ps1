@@ -176,7 +176,46 @@ function Invoke-GitPull([string]$Path) {
     $ok = Invoke-GitPullOnce $Path
     if ($ok) { return $true }
 
-    # --- Avto-tuzatish: "local changes would be overwritten by merge" ---
+    # --- Avto-tuzatish 1: "untracked working tree files would be overwritten" ---
+    # Kimdir repoga build artefaktini (masalan mone-taxi_v0.6.10_windows.zip)
+    # commit qilib yuborsa, bu kompyuterda esa bot xuddi shu nomli faylni o'zi
+    # yaratgan bo'lsa, git pull "untracked ... would be overwritten" bilan
+    # to'xtaydi (taxi, 22-23.09.2026). Bunday fayl hech qachon commit
+    # qilinmagan (untracked) - remote'dagi nusxa asosiy. *.zip (build artefakti)
+    # o'chiriladi, boshqa fayllar repo YONIDAGI <repo>_pull_backup\ ga
+    # ko'chiriladi (repo ichida qolsa robocopy build'ga olib ketadi), keyin
+    # pull qayta uriladi.
+    $m = [regex]::Match($script:LastPullOut, '(?s)untracked working tree files would be overwritten by merge:\s*\r?\n(.*?)\r?\nPlease move or remove')
+    if ($m.Success) {
+        $files = @($m.Groups[1].Value -split "\r?\n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+        $moved = 0
+        foreach ($f in $files) {
+            $full = Join-Path $Path $f
+            if (-not (Test-Path -LiteralPath $full)) { continue }
+            try {
+                if ($f -match '\.zip$') {
+                    Remove-Item -LiteralPath $full -Force
+                    Write-Log "    git pull: untracked '$f' remote bilan to'qnashdi - build artefakti, o'chirildi." 'DarkGray'
+                } else {
+                    $bak = Join-Path (Split-Path $Path -Parent) ((Split-Path $Path -Leaf) + '_pull_backup')
+                    if (-not (Test-Path $bak)) { New-Item -ItemType Directory -Path $bak | Out-Null }
+                    $dest = Join-Path $bak ('{0}_{1}' -f (Get-Date -Format 'yyyyMMdd_HHmmss'), ($f -replace '[\/]', '_'))
+                    Move-Item -LiteralPath $full -Destination $dest -Force
+                    Write-Log "    git pull: untracked '$f' remote bilan to'qnashdi - '$dest' ga ko'chirildi." 'DarkGray'
+                }
+                $moved++
+            } catch {
+                Write-Log "    git pull: untracked '$f' ni chetga olib bo'lmadi: $($_.Exception.Message)" 'DarkYellow'
+                return $false
+            }
+        }
+        if ($moved -gt 0) {
+            $ok = Invoke-GitPullOnce $Path
+            if ($ok) { return $true }
+        }
+    }
+
+    # --- Avto-tuzatish 2: "local changes would be overwritten by merge" ---
     # Flutter generated fayllarni (GeneratedPluginRegistrant.swift va h.k.) LF
     # bilan qayta yozadi; autocrlf=true da git ularni "o'zgargan" deb ko'radi,
     # mazmun esa HEAD bilan bir xil. Bunday fayl pull'ni butunlay to'sib qo'yardi.
@@ -190,6 +229,9 @@ function Invoke-GitPull([string]$Path) {
     # PS 5.1 da ErrorActionPreference='Stop' + "2>$null" bo'lsa git'ning oddiy
     # "LF will be replaced by CRLF" ogohlantirishi ham istisnoga aylanadi.
     foreach ($f in $files) {
+        # Tracked *.zip = repoga adashib commit qilingan build artefakti; bot uni
+        # har build'da qayta yozadi. Mazmuni farq qilsa ham tiklash xavfsiz.
+        if ($f -match '\.zip$') { continue }
         & $env:ComSpec /c "git -C `"$Path`" diff --quiet -- `"$f`" >nul 2>nul"
         if ($LASTEXITCODE -ne 0) {
             Write-Log "    git pull: '$f' da HAQIQIY lokal o'zgarish bor - avto-tuzatilmaydi." 'DarkYellow'
