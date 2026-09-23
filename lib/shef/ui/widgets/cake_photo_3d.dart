@@ -919,14 +919,8 @@ class _CakePhoto3DViewState extends State<CakePhoto3DView>
   double _yaw = 0;
   double _pitch = 0.32;
   double _zoom = 1;
-  bool _touched = false;
-  late final AnimationController _spin = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 16),
-  )..addListener(() {
-      if (!_touched && mounted) setState(() {});
-    });
-  // Tugma bosilganda burchakka silliq o'tish.
+  // Tugma bosilganda burchakka silliq o'tish. O'zi aylanish YO'Q — model
+  // bir holatda turadi, faqat barmoq / tugmalar buradi.
   AnimationController? _move;
   double _fromYaw = 0, _fromPitch = 0, _toYaw = 0, _toPitch = 0;
   double _startZoom = 1;
@@ -934,7 +928,6 @@ class _CakePhoto3DViewState extends State<CakePhoto3DView>
   @override
   void initState() {
     super.initState();
-    _spin.repeat();
     _load();
   }
 
@@ -951,7 +944,6 @@ class _CakePhoto3DViewState extends State<CakePhoto3DView>
 
   @override
   void dispose() {
-    _spin.dispose();
     _move?.dispose();
     super.dispose();
   }
@@ -969,17 +961,7 @@ class _CakePhoto3DViewState extends State<CakePhoto3DView>
     }
   }
 
-  void _stopAuto() {
-    if (_touched) return;
-    _touched = true;
-    _spin.stop();
-    _yaw = _currentYaw;
-  }
-
-  double get _currentYaw => _touched ? _yaw : _yaw + _spin.value * 2 * math.pi;
-
   void _goTo(double yaw, double pitch) {
-    _stopAuto();
     _move?.dispose();
     _fromYaw = _yaw;
     _fromPitch = _pitch;
@@ -1082,22 +1064,6 @@ class _CakePhoto3DViewState extends State<CakePhoto3DView>
                   side: BorderSide(color: Colors.grey.shade300),
                   onPressed: () => _goTo(v.$2, v.$3),
                 ),
-              ActionChip(
-                avatar: const Icon(Icons.threed_rotation, size: 14),
-                label: const Text('360°', style: TextStyle(fontSize: 11.5)),
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                backgroundColor: Colors.white,
-                side: const BorderSide(color: _accentColor),
-                onPressed: () => setState(() {
-                  _move?.dispose();
-                  _move = null;
-                  _touched = false;
-                  _zoom = 1;
-                  _spin.repeat();
-                }),
-              ),
             ],
           ),
         ],
@@ -1130,7 +1096,6 @@ class _CakePhoto3DViewState extends State<CakePhoto3DView>
         behavior: HitTestBehavior.opaque,
         // Bitta detektor: surish — burish, ikki barmoq — masshtab.
         onScaleStart: (d) {
-          _stopAuto();
           _move?.dispose();
           _move = null;
           _startZoom = _zoom;
@@ -1147,7 +1112,7 @@ class _CakePhoto3DViewState extends State<CakePhoto3DView>
             size: Size.infinite,
             painter: CakePhotoPainter(
               model: model,
-              yaw: _currentYaw,
+              yaw: _yaw,
               pitch: _pitch,
               zoom: _zoom,
             ),

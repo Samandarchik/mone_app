@@ -3,9 +3,9 @@
 // rangi, bezaklari (marvarid, rezavor, makaron, shokolad oqimi, sepma, gul,
 // sham, topper) va yozuvi CakeLook'dan (model/cake_design.dart) olinadi.
 // Model/plagin YO'Q — hammasi CustomPainter bilan chiziladi.
-// Cake3DView — katta ko'rinish: sekin o'zi aylanadi, yon tomonga surilsa
-// buriladi; bosish / nuqtalar — 3 ta burchak (yondan, tepadan, past).
-// [faceFront] — yozuv o'qilishi uchun aylanish to'xtab, tepadan ko'rinadi.
+// Cake3DView — katta ko'rinish: BIR HOLATDA turadi (o'zi aylanmaydi), yon
+// tomonga surilsa buriladi; bosish / nuqtalar — 3 ta burchak (yondan,
+// tepadan, past). [faceFront] — yozuv o'qilishi uchun old tomondan, tepadan.
 // Cake3D — kichik statik variant (kartalar uchun).
 // Rotating3DView — umumiy qobiq (biskvit ham shuni ishlatadi: biscuit_3d.dart).
 import 'dart:math' as math;
@@ -61,8 +61,7 @@ class Rotating3DView extends StatefulWidget {
   final BorderRadius borderRadius;
   final bool faceFront;
   // true — qo'lda boshqarish: nuqtalar yo'q; barmoq yon tomonga — burish,
-  // tepaga/pastga — qarash burchagi (yondan ↔ tepadan). Birinchi tegishda
-  // o'zi aylanish to'xtaydi.
+  // tepaga/pastga — qarash burchagi (yondan ↔ tepadan).
   final bool manual;
 
   const Rotating3DView({
@@ -78,6 +77,11 @@ class Rotating3DView extends StatefulWidget {
   State<Rotating3DView> createState() => _Rotating3DViewState();
 }
 
+// O'ZI AYLANMAYDI: model bir holatda turadi (_restRotation), faqat barmoq
+// bilan buriladi. [_spin] doim 0 da — painter'lar uchun burilish manbai
+// o'zgarmasin deb saqlangan (repeat() chaqirilmaydi).
+const double _restRotation = 0.6;
+
 class _Rotating3DViewState extends State<Rotating3DView>
     with SingleTickerProviderStateMixin {
   late final AnimationController _spin = AnimationController(
@@ -85,27 +89,10 @@ class _Rotating3DViewState extends State<Rotating3DView>
     duration: const Duration(seconds: 14),
   );
   int _page = 0;
-  // Barmoq bilan surilgan qo'shimcha burilish (radian).
-  double _drag = 0;
+  // Burilish (radian): boshlanishida tinch holat, barmoq bilan o'zgaradi.
+  double _drag = _restRotation;
   // Qo'lda rejimdagi qarash burchagi (manual).
   double _tilt = _tilts.first;
-  bool _touched = false;
-
-  @override
-  void initState() {
-    super.initState();
-    if (!widget.faceFront) _spin.repeat();
-  }
-
-  @override
-  void didUpdateWidget(Rotating3DView old) {
-    super.didUpdateWidget(old);
-    if (widget.faceFront || _touched) {
-      _spin.stop();
-    } else if (!_spin.isAnimating) {
-      _spin.repeat();
-    }
-  }
 
   @override
   void dispose() {
@@ -186,11 +173,6 @@ class _Rotating3DViewState extends State<Rotating3DView>
     );
   }
 
-  void _stopAuto() {
-    _touched = true;
-    _spin.stop();
-  }
-
   Widget _buildManual() {
     return ClipRRect(
       borderRadius: widget.borderRadius,
@@ -207,10 +189,8 @@ class _Rotating3DViewState extends State<Rotating3DView>
         // scroll'idan ustun turadi (ko'rinish scroll ichida bo'lsa ham
         // burchakni o'zgartiradi).
         child: GestureDetector(
-          onHorizontalDragStart: (_) => _stopAuto(),
           onHorizontalDragUpdate: (d) =>
               setState(() => _drag += d.delta.dx * 0.015),
-          onVerticalDragStart: (_) => _stopAuto(),
           // Pastga surish — tepadan ko'proq qarash.
           onVerticalDragUpdate: (d) => setState(
             () => _tilt = (_tilt + d.delta.dy * 0.004).clamp(0.06, 0.95),

@@ -125,7 +125,7 @@ void main() {
     expect(t.takeException(), isNull);
     expect(find.byType(CustomPaint), findsWidgets);
     expect(find.text('Qayta urinish'), findsNothing);
-    for (final label in ['Old', 'Yon', 'Orqa', 'Tepa', '360°']) {
+    for (final label in ['Old', 'Yon', 'Orqa', 'Tepa']) {
       expect(find.text(label), findsOneWidget);
     }
 
