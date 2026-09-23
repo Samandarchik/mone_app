@@ -183,15 +183,13 @@ class TechCardEditorPage extends StatefulWidget {
   /// rang saqlangach shef «П/Ф Начинка» 3D tortida nachinka shu rangda
   /// chiziladi. Faqat «П/Ф Начинка» oynasidan ochganda.
   final bool showFillingColor;
-
-  /// true — BISKVIT rejimi («Бисквит» kategoriyasi tex kartasi): karta ENG
-  /// BOSHIDA pishirish vaqti (мин) va harorati (°C) maydonlari
-  /// (tech_card.bake_time_min / bake_temp_c, karta bilan saqlanadi);
-  /// sarlavha jadvalida «Вес 1 шт» ustuni — BITTA biskvitning og'irligi
-  /// (masalliqlar yig'indisi ÷ partiya donasi, пф hissasi bilan); partiya
-  /// faqat ШТ'da hisoblanadi — «Общее количество» = nechta biskvit, гр
-  /// almashtirgichi yo'q (гр'da saqlangan eski karta ochilganda 1 шт ga
-  /// o'giriladi va saqlash so'raladi).
+  /// true — BISKVIT rejimi («Бисквит» kategoriyasi tex kartasi): karta
+  /// boshidagi vaqt/harorat qatori «Выпечка» deb ataladi (qolganida
+  /// «Приготовление» — qator HAMMA kartada bor, bake_time_min / bake_temp_c);
+  /// partiya faqat ШТ'da hisoblanadi — «Общее количество» = nechta biskvit,
+  /// гр almashtirgichi yo'q (гр'da saqlangan eski karta ochilganda 1 шт ga
+  /// o'giriladi va saqlash so'raladi). Sarlavha jadvalidagi «Вес всех
+  /// ингредиентов» ustuni rejimga BOG'LIQ EMAS — hamma kartada bor.
   final bool biscuitMode;
 
   // Tex kartada YAGONA rang palitrasi — «Nachinka rangi» (showFillingColor).
@@ -284,7 +282,7 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
     _initialJson = jsonEncode(_controller.build().toJson());
     // Biskvit rejimi: partiya faqat ШТ'da. Гр'da saqlangan eski karta
     // (masalan «302 гр» — masalliqlar yig'indisi) 1 ta biskvitga o'giriladi:
-    // «Общее количество» = 1 шт, «Вес 1 шт» = o'sha 302 г. _initialJson
+    // «Общее количество» = 1 шт, masalliqlar og'irligi o'sha 302 г. _initialJson
     // o'girishdan OLDIN olingan — chiqishda saqlash so'raladi.
     if (widget.biscuitMode && _controller.batchUnit == 'g') {
       _controller
@@ -1781,9 +1779,9 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Biskvit: pishirish vaqti va harorati — kartaning ENG
-                  // BOSHIDA.
-                  if (widget.biscuitMode) _bakingRow(),
+                  // HAMMA tex kartada: tayyorlash vaqti va harorati —
+                  // kartaning ENG BOSHIDA («Выпечка» / «Приготовление»).
+                  _bakingRow(),
                   // Rasm + TO'LIQ kesish sxemasi — hammasi eng tepada,
                   // jadvaldan oldin. Sxema yo'q bo'lsa (shakl kiritilmagan
                   // yoki Штук = 1 — kesish yo'q) faqat mahsulot rasmi chiqadi.
@@ -1815,6 +1813,11 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
                   // Shef rejimida og'irlik/tannarx/narx jadvali SHU YERDA —
                   // tex kartaning oxirida (adminda u tepada turadi).
                   _footerSummaryTable(),
+                  const SizedBox(height: 16),
+                  // Tex karta OXIRIDA «Сохранить» — AppBar'dagi «✓» bilan
+                  // bir xil amal: pastgacha scroll qilgan foydalanuvchi
+                  // saqlash uchun tepaga qaytmasin.
+                  _saveButton(),
                   // Klaviatura ochilganda oxirgi maydon ostida joy qolsin.
                   const SizedBox(height: 48),
                 ],
@@ -1825,6 +1828,38 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
       ),
     );
   }
+
+  // Tex karta oxiridagi katta «Сохранить» tugmasi — AppBar'dagi «✓» ning
+  // AYNAN o'zi (_save). Saqlash ketayotganda o'chirilgan va spinner bilan.
+  Widget _saveButton() => SizedBox(
+        height: 48,
+        child: ElevatedButton.icon(
+          onPressed: _saving ? null : _save,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green.shade700,
+            foregroundColor: Colors.white,
+            disabledBackgroundColor: Colors.green.shade200,
+            disabledForegroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          icon: _saving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Icon(Icons.check),
+          label: Text(
+            _saving ? 'Сохранение…' : 'Сохранить',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
 
   // Sahifadagi «ko'rinmas» gestlar eslatmasi. Telefonda uzoq bosish /
   // ikki marta bosish hech qanday belgi bermaydi — foydalanuvchi bu
@@ -2137,7 +2172,12 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
         children: [
           Icon(Icons.local_fire_department_outlined, size: 18, color: color),
           const SizedBox(width: 6),
-          const Expanded(child: Text('Выпечка', style: _kCellBold)),
+          Expanded(
+            child: Text(
+              widget.biscuitMode ? 'Выпечка' : 'Приготовление',
+              style: _kCellBold,
+            ),
+          ),
           field(Icons.timer_outlined, c.bakeTimeMin, 'мин',
               (v) => setState(() => c.bakeTimeMin = v)),
           const SizedBox(width: 8),
@@ -2146,6 +2186,37 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
         ],
       ),
     );
+  }
+
+  // «Вес всех ингредиентов» QO'LDA yozilganda — retseptni shu og'irlikka
+  // MUTANOSIB qayta hisoblash: har masalliq miqdori bitta koeffitsientga
+  // (yangi / joriy) ko'paytiriladi, ya'ni nisbatlar o'zgarmaydi. Shu bilan
+  // katakdagi son «masalliqlar yig'indisi» bo'lib qolaveradi (alohida
+  // saqlanadigan maydon YO'Q — server kontrakti o'zgarmaydi).
+  // Miqdorlar butun гр bo'lgani uchun yaxlitlashdan jami 1–2 г farq qilishi
+  // mumkin; katak qayta hisoblab ko'rsatadi. Nolga tushib ketmasin deb
+  // miqdori bor qator kamida 1 bo'lib qoladi.
+  void _setTotalIngredientWeight(int target) {
+    final current = techBatchWeightG(c.build(), _productById);
+    if (target <= 0 || current <= 0 || target == current) return;
+    final k = target / current;
+    setState(() {
+      for (var i = 0; i < c.bases.length; i++) {
+        final base = c.bases[i];
+        c.bases[i] = base.copyWith(
+          ingredients: [
+            for (final it in base.ingredients)
+              it.copyWith(
+                amount: it.amount > 0
+                    ? ((it.amount * k).round() < 1
+                        ? 1
+                        : (it.amount * k).round())
+                    : 0,
+              ),
+          ],
+        );
+      }
+    });
   }
 
   Widget _headerLeftTable() {
@@ -2173,14 +2244,13 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
               flex: _compact ? 3 : 2,
               leftBorder: true,
             ),
-            // Biskvit: BITTA biskvitning og'irligi (hisoblanadi).
-            if (widget.biscuitMode)
-              _flexCell(
-                const Text('Вес 1 шт',
-                    style: _kCellBold, textAlign: TextAlign.center),
-                flex: _compact ? 3 : 2,
-                leftBorder: true,
-              ),
+            // HAMMA kartada: masalliqlarning JAMI og'irligi (tahrirlanadi).
+            _flexCell(
+              const Text('Вес всех ингредиентов',
+                  style: _kCellBold, textAlign: TextAlign.center),
+              flex: _compact ? 4 : 3,
+              leftBorder: true,
+            ),
           ]),
           // 2-qator: qiymatlar. Размер bosilganda dialog; Штук — JOYIDA
           // tahrirlanadi (inline maydon, dialog yo'q).
@@ -2232,21 +2302,20 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
               leftBorder: true,
               padded: false,
             ),
-            // «Вес 1 шт» — masalliqlar (пф hissasi bilan) ÷ partiya JAMI
-            // donasi; qo'lda kiritilmaydi, masalliq/dona o'zgarsa o'zi
-            // qayta hisoblanadi.
-            if (widget.biscuitMode)
-              _flexCell(
-                Center(
-                  child: Text(
-                    '${techPieceWeightG(c.build(), _productById)} г',
-                    style: _kCellStyle,
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                flex: _compact ? 3 : 2,
-                leftBorder: true,
+            // «Вес всех ингредиентов» — masalliqlar YIG'INDISI (пф hissasi
+            // bilan). Masalliq o'zgarsa o'zi qayta hisoblanadi; QO'LDA
+            // yozilsa retsept shu og'irlikka mutanosib qayta hisoblanadi.
+            _flexCell(
+              _InlineIntCell(
+                value: techBatchWeightG(c.build(), _productById),
+                suffixText: 'г',
+                zeroAsEmpty: true,
+                onValue: _setTotalIngredientWeight,
               ),
+              flex: _compact ? 4 : 3,
+              leftBorder: true,
+              padded: false,
+            ),
           ]),
         ],
       ),

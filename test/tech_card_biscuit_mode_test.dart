@@ -1,7 +1,8 @@
 // Tex karta muharriri BISKVIT rejimi (TechCardEditorPage.biscuitMode):
-// karta boshida «Выпечка» (vaqt/harorat) maydonlari, sarlavha jadvalida
-// «Вес 1 шт» (bitta biskvit og'irligi), partiya faqat шт'da — гр'da
-// saqlangan karta 1 шт ga o'giriladi, гр almashtirgichi yo'q.
+// karta boshida «Выпечка» (vaqt/harorat) maydonlari, partiya faqat шт'da —
+// гр'da saqlangan karta 1 шт ga o'giriladi, гр almashtirgichi yo'q.
+// Sarlavha jadvalidagi «Вес всех ингредиентов» ustuni rejimga bog'liq emas:
+// hamma kartada bor, tahrirlanadi va retseptni mutanosib qayta hisoblaydi.
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -77,11 +78,11 @@ void main() {
     expect(bakingY, lessThan(t.getTopLeft(find.text('Наименование')).dy));
 
     // Гр'da saqlangan karta → шт: sarlavhada «Штук» (Грамм emas), 1 шт,
-    // «Вес 1 шт» = masalliqlar yig'indisi 302 г.
+    // «Вес всех ингредиентов» = masalliqlar yig'indisi 302 г.
     expect(find.text('Грамм'), findsNothing);
     expect(find.text('Штук'), findsOneWidget);
-    expect(find.text('Вес 1 шт'), findsOneWidget);
-    expect(find.text('302 г'), findsOneWidget);
+    expect(find.text('Вес всех ингредиентов'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '302'), findsOneWidget);
     expect(find.text('Общее количество:'), findsOneWidget);
     // Гр almashtirgichi yo'q — faqat «шт» yozuvi.
     expect(find.byIcon(Icons.swap_horiz), findsNothing);
@@ -103,14 +104,57 @@ void main() {
     expect(card.listQty, 1);
   });
 
-  testWidgets('without biscuit mode nothing changes', (t) async {
+  testWidgets('without biscuit mode: cooking row stays, biscuit extras go',
+      (t) async {
     await open(
       t,
       TechCardEditorPage(product: _biscuit(), canEditPrices: false),
     );
+    // Vaqt/harorat qatori HAMMA kartada — «Приготовление» nomi bilan.
     expect(find.text('Выпечка'), findsNothing);
-    expect(find.text('Вес 1 шт'), findsNothing);
+    expect(find.text('Приготовление'), findsOneWidget);
+    expect(find.text('мин'), findsOneWidget);
+    expect(find.text('°C'), findsOneWidget);
+    // Og'irlik ustuni bu yerda ham bor.
+    expect(find.text('Вес всех ингредиентов'), findsOneWidget);
     expect(find.text('Грамм'), findsOneWidget);
     expect(find.byIcon(Icons.swap_horiz), findsOneWidget);
+  });
+
+  testWidgets('total ingredient weight is editable → recipe scales', (t) async {
+    await open(
+      t,
+      TechCardEditorPage(
+        product: _biscuit(),
+        canEditPrices: false,
+        biscuitMode: true,
+      ),
+    );
+    // Мука 200 + Сахар 102 = 302 г.
+    final weightField = find.widgetWithText(TextField, '302');
+    expect(weightField, findsOneWidget);
+
+    // 604 г — ikki barobar: har masalliq ham ikki barobar bo'ladi.
+    await t.enterText(weightField, '604');
+    await t.pump(const Duration(milliseconds: 300));
+    final state = t.state(find.byType(TechCardEditorPage)) as dynamic;
+    final TechCard card = state.c.build();
+    expect(card.bases.first.ingredients[0].amount, 400); // Мука
+    expect(card.bases.first.ingredients[1].amount, 204); // Сахар
+    expect(card.computedBatchWeightG, 604);
+  });
+
+  testWidgets('tech card ends with a Сохранить button', (t) async {
+    await open(
+      t,
+      TechCardEditorPage(product: _biscuit(), canEditPrices: false),
+    );
+    final button = find.widgetWithText(ElevatedButton, 'Сохранить');
+    expect(button, findsOneWidget);
+    // Kartaning OXIRIDA — masalliqlar jadvalidan pastda.
+    expect(
+      t.getTopLeft(button).dy,
+      greaterThan(t.getTopLeft(find.text('Наименование')).dy),
+    );
   });
 }

@@ -367,7 +367,7 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
           // mahsulot bilan qoplangan tort) shu rangda chiziladi.
           showFillingColor: widget.showFillingCake || widget.showCoating,
           // «Бисквит» kategoriyasi: karta boshida pishirish vaqti/harorati,
-          // «Вес 1 шт» ustuni, partiya faqat шт'da.
+          // partiya faqat шт'da.
           biscuitMode: widget.showCakeConstructor || widget.showBaking,
         ),
       ),
