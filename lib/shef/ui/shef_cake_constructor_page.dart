@@ -251,6 +251,7 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
           canEditPrices: false,
           showBiscuitPhoto: true,
           showFillingColor: role == CakeBlockRole.filling,
+          biscuitMode: role == CakeBlockRole.biscuit,
         ),
       ),
     );

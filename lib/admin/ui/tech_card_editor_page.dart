@@ -184,6 +184,16 @@ class TechCardEditorPage extends StatefulWidget {
   /// chiziladi. Faqat «П/Ф Начинка» oynasidan ochganda.
   final bool showFillingColor;
 
+  /// true — BISKVIT rejimi («Бисквит» kategoriyasi tex kartasi): karta ENG
+  /// BOSHIDA pishirish vaqti (мин) va harorati (°C) maydonlari
+  /// (tech_card.bake_time_min / bake_temp_c, karta bilan saqlanadi);
+  /// sarlavha jadvalida «Вес 1 шт» ustuni — BITTA biskvitning og'irligi
+  /// (masalliqlar yig'indisi ÷ partiya donasi, пф hissasi bilan); partiya
+  /// faqat ШТ'da hisoblanadi — «Общее количество» = nechta biskvit, гр
+  /// almashtirgichi yo'q (гр'da saqlangan eski karta ochilganda 1 шт ga
+  /// o'giriladi va saqlash so'raladi).
+  final bool biscuitMode;
+
   // Tex kartada YAGONA rang palitrasi — «Nachinka rangi» (showFillingColor).
   // Biskvit / qoplama uchun alohida palitra YO'Q: biskvit rangi nom/tarkibdan
   // (BiscuitPalette.detect), qoplama rangi — shu nachinka palitrasidan
@@ -195,6 +205,7 @@ class TechCardEditorPage extends StatefulWidget {
     this.canEditPrices = true,
     this.showBiscuitPhoto = false,
     this.showFillingColor = false,
+    this.biscuitMode = false,
   });
 
   @override
@@ -271,6 +282,16 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
     super.initState();
     _controller = TechCardController(widget.product.techCard);
     _initialJson = jsonEncode(_controller.build().toJson());
+    // Biskvit rejimi: partiya faqat ШТ'da. Гр'da saqlangan eski karta
+    // (masalan «302 гр» — masalliqlar yig'indisi) 1 ta biskvitga o'giriladi:
+    // «Общее количество» = 1 шт, «Вес 1 шт» = o'sha 302 г. _initialJson
+    // o'girishdan OLDIN olingan — chiqishda saqlash so'raladi.
+    if (widget.biscuitMode && _controller.batchUnit == 'g') {
+      _controller
+        ..batchUnit = ''
+        ..batchQty = 1
+        ..listQty = 1;
+    }
     _loadPrices();
   }
 
@@ -1760,6 +1781,9 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // Biskvit: pishirish vaqti va harorati — kartaning ENG
+                  // BOSHIDA.
+                  if (widget.biscuitMode) _bakingRow(),
                   // Rasm + TO'LIQ kesish sxemasi — hammasi eng tepada,
                   // jadvaldan oldin. Sxema yo'q bo'lsa (shakl kiritilmagan
                   // yoki Штук = 1 — kesish yo'q) faqat mahsulot rasmi chiqadi.
@@ -2072,6 +2096,58 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
     });
   }
 
+  // Biskvit rejimi: tex karta boshidagi «Выпечка» qatori — vaqt (мин) va
+  // harorat (°C) inline maydonlari; 0 — kiritilmagan (bo'sh ko'rinadi).
+  // Karta bilan birga saqlanadi (c.bakeTimeMin / c.bakeTempC).
+  Widget _bakingRow() {
+    final color = Colors.deepOrange.shade700;
+    Widget field(IconData icon, int value, String suffix,
+            ValueChanged<int> onValue) =>
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 2),
+            Container(
+              width: 82,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: Colors.grey.shade400),
+              ),
+              child: _InlineIntCell(
+                value: value,
+                suffixText: suffix,
+                zeroAsEmpty: true,
+                onValue: onValue,
+              ),
+            ),
+          ],
+        );
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        border: Border.all(color: Colors.orange.shade200),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.local_fire_department_outlined, size: 18, color: color),
+          const SizedBox(width: 6),
+          const Expanded(child: Text('Выпечка', style: _kCellBold)),
+          field(Icons.timer_outlined, c.bakeTimeMin, 'мин',
+              (v) => setState(() => c.bakeTimeMin = v)),
+          const SizedBox(width: 8),
+          field(Icons.thermostat, c.bakeTempC, '°C',
+              (v) => setState(() => c.bakeTempC = v)),
+        ],
+      ),
+    );
+  }
+
   Widget _headerLeftTable() {
     return Container(
       decoration: const BoxDecoration(
@@ -2097,6 +2173,14 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
               flex: _compact ? 3 : 2,
               leftBorder: true,
             ),
+            // Biskvit: BITTA biskvitning og'irligi (hisoblanadi).
+            if (widget.biscuitMode)
+              _flexCell(
+                const Text('Вес 1 шт',
+                    style: _kCellBold, textAlign: TextAlign.center),
+                flex: _compact ? 3 : 2,
+                leftBorder: true,
+              ),
           ]),
           // 2-qator: qiymatlar. Размер bosilganda dialog; Штук — JOYIDA
           // tahrirlanadi (inline maydon, dialog yo'q).
@@ -2148,6 +2232,21 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
               leftBorder: true,
               padded: false,
             ),
+            // «Вес 1 шт» — masalliqlar (пф hissasi bilan) ÷ partiya JAMI
+            // donasi; qo'lda kiritilmaydi, masalliq/dona o'zgarsa o'zi
+            // qayta hisoblanadi.
+            if (widget.biscuitMode)
+              _flexCell(
+                Center(
+                  child: Text(
+                    '${techPieceWeightG(c.build(), _productById)} г',
+                    style: _kCellStyle,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                flex: _compact ? 3 : 2,
+                leftBorder: true,
+              ),
           ]),
         ],
       ),
@@ -2730,8 +2829,9 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
               ),
               const SizedBox(width: 6),
               // Birlik yozuvi katakdan TASHQARIDA; полуфабрикатda bosilsa
-              // шт ↔ гр almashadi.
-              if (widget.product.isSemiFinished)
+              // шт ↔ гр almashadi (biskvit rejimida faqat шт — biskvit
+              // donada sanaladi).
+              if (widget.product.isSemiFinished && !widget.biscuitMode)
                 _unitToggle()
               else
                 Text(_unitShort, style: _kCellStyle),
@@ -3801,11 +3901,15 @@ class _InlineIntCell extends StatefulWidget {
   final int value;
   final ValueChanged<int> onValue;
   final String? suffixText;
+  // true — 0 qiymat bo'sh maydon bo'lib ko'rinadi (kiritilmagan), maydon
+  // tozalansa 0 yuboriladi (pishirish vaqti/harorati uchun).
+  final bool zeroAsEmpty;
 
   const _InlineIntCell({
     required this.value,
     required this.onValue,
     this.suffixText,
+    this.zeroAsEmpty = false,
   });
 
   @override
@@ -3816,7 +3920,8 @@ class _InlineIntCellState extends State<_InlineIntCell> {
   late final TextEditingController _controller;
   final FocusNode _focus = FocusNode();
 
-  String get _canonical => widget.value.toString();
+  String get _canonical =>
+      (widget.zeroAsEmpty && widget.value == 0) ? '' : widget.value.toString();
 
   @override
   void initState() {
@@ -3839,6 +3944,10 @@ class _InlineIntCellState extends State<_InlineIntCell> {
   }
 
   void _onText(String raw) {
+    if (widget.zeroAsEmpty && raw.trim().isEmpty) {
+      if (widget.value != 0) widget.onValue(0);
+      return;
+    }
     final v = int.tryParse(raw.trim());
     if (v == null || v < 0) return;
     if (v != widget.value) widget.onValue(v);
