@@ -1,30 +1,31 @@
 // shef/ui/widgets/cake_photo_view.dart — TAYYOR TORTNI KO'RSATISH
 // (CakePhotoView): tort konstruktori 3-qadami («Tort»). Bu yerda HECH QANDAY
-// 3D qurilmaydi va foto qayta chizilmaydi — tortning O'Z fotosi shundayligicha
-// ko'rsatiladi, faqat EKRANDAGI O'LCHAMI tex kartadagi diametrga qarab
-// beriladi: Ø 30 sm tort blokni to'ldiradi, Ø 16 sm esa ancha kichik chiqadi.
-// Shunday qilib turli tortlar bir-biriga nisbatan to'g'ri kattalikda ko'rinadi.
+// 3D qurilmaydi va tort qayta chizilmaydi — tortning O'Z fotosi ko'rsatiladi,
+// lekin:
+//   • FONI OLIB TASHLANADI va rasm tortning chetlarigacha QIRQILADI
+//     (cake_cutout.dart) — tort blok foniga «yotqizilgan» va yaqinroq
+//     ko'rinadi, atrofida bo'sh oq joy qolmaydi;
+//   • EKRANDAGI O'LCHAMI tex kartadagi o'lchamdan olinadi: barcha tortlar
+//     uchun BITTA sm→piksel masshtabi. Ø 30 sm tort blokni to'ldiradi,
+//     Ø 16 sm esa taxminan yarmini egallaydi — tortlar bir-biriga nisbatan
+//     to'g'ri kattalikda ko'rinadi. Yozuv bilan emas, RASMNING O'ZI bilan.
+// Yumaloq tortda diametr, to'rtburchakda eng uzun tomon (uzunlik) olinadi.
+// Tex kartada o'lcham yo'q bo'lsa — rasm blokka to'liq sig'adi.
 //
-// NEGA SHUNDAY: avval foto siluetidan 3D model qurilardi
-// (cake_photo_3d.dart). Mone fotolarida tort OQ patnis ustida, fon ham oq —
-// siluet patnis bilan qo'shilib ketardi va model goh patnisdan qurilar, goh
-// tortning oq qismlari kesilib «bel» hosil bo'lardi. Bitta fotodan ishonchli
-// geometriya chiqmadi, shuning uchun bu yo'l butunlay olib tashlandi.
-//
-// O'lcham: yumaloq tortda diametr, to'rtburchakda eng uzun tomon.
-// Tex kartada o'lcham yo'q bo'lsa foto to'liq kenglikda ko'rsatiladi va
-// ostida «o'lchamni tex kartaga kiriting» eslatmasi chiqadi.
+// NEGA 3D YO'Q: avval foto siluetidan model qurilardi (cake_photo_3d.dart).
+// Mone fotolarida tort OQ patnis ustida, fon ham oq — siluet patnis bilan
+// qo'shilib ketardi va model goh patnisdan qurilardi. Bitta fotodan
+// ishonchli geometriya chiqmadi, shuning uchun bu yo'l tashlandi.
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:uz_ai_dev/admin/model/tech_card.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/cake_cutout.dart';
 
-const Color _heroTop = Color(0xFFFFFFFF);
-const Color _heroBottom = Color(0xFFE6DDF3);
-
-// Blokni to'ldiradigan o'lcham (sm). Bundan kattasi ham to'liq kenglikda.
-const double _fullSizeCm = 30;
-// Eng kichik ko'rsatish ulushi — Ø 10 sm tort ham ko'rinib tursin.
-const double _minFraction = 0.42;
+// Blok kengligiga to'g'ri keladigan o'lcham (sm): shu masshtab HAMMA tort
+// uchun bir xil, shuning uchun tortlar o'zaro solishtirib ko'rinadi.
+const double _fullWidthCm = 32;
 
 /// Tex kartadagi o'lcham (sm): yumaloq — diametr, to'rtburchak — eng uzun
 /// tomon. 0 — kiritilmagan.
@@ -38,31 +39,15 @@ int cakeSizeCm(TechCard? card) {
   return m > 0 ? m : 0;
 }
 
-/// Fotoning blok kengligidagi ulushi (0.42 … 1.0). O'lcham yo'q — 1.0.
+/// Rasmning blok kengligidagi ulushi. O'lcham yo'q — 1.0 (to'liq sig'adi).
+/// Katta tort blokdan oshmaydi, juda kichigi ham ko'rinib turadi.
 double cakeSizeFraction(TechCard? card) {
   final cm = cakeSizeCm(card);
   if (cm <= 0) return 1;
-  return (cm / _fullSizeCm).clamp(_minFraction, 1.0);
+  return (cm / _fullWidthCm).clamp(0.22, 1.0);
 }
 
-/// «Ø 26 sm · 8 sm» / «30×40 sm · 5 sm» — bo'lgan qismlaridan; yo'q — ''.
-String cakeSizeLabel(TechCard? card) {
-  if (card == null) return '';
-  final parts = <String>[];
-  final d = card.diameterCm ?? 0;
-  final w = card.widthCm ?? 0;
-  final l = card.lengthCm ?? 0;
-  final h = card.heightCm ?? 0;
-  if (d > 0) {
-    parts.add('Ø $d sm');
-  } else if (w > 0 && l > 0) {
-    parts.add('$w×$l sm');
-  }
-  if (h > 0) parts.add('balandligi $h sm');
-  return parts.join(' · ');
-}
-
-class CakePhotoView extends StatelessWidget {
+class CakePhotoView extends StatefulWidget {
   final String imageUrl;
   final TechCard? card;
   final double height;
@@ -77,75 +62,90 @@ class CakePhotoView extends StatelessWidget {
   });
 
   @override
+  State<CakePhotoView> createState() => _CakePhotoViewState();
+}
+
+class _CakePhotoViewState extends State<CakePhotoView> {
+  ui.Image? _cut;
+  // true — fonni olib tashlab bo'lmadi (yoki rasm yuklanmadi): ASL foto
+  // ko'rsatiladi, tort baribir ko'rinib tursin.
+  bool _raw = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // context (MediaQuery) birinchi kadrdan keyin ishonchli.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void didUpdateWidget(CakePhotoView old) {
+    super.didUpdateWidget(old);
+    if (old.imageUrl != widget.imageUrl) {
+      setState(() {
+        _cut = null;
+        _raw = false;
+      });
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    final url = widget.imageUrl;
+    if (!mounted) return;
+    try {
+      final c = await CakeCutout.load(context, url);
+      if (!mounted || url != widget.imageUrl) return;
+      setState(() {
+        if (c.ok) {
+          _cut = c.image;
+        } else {
+          _raw = true;
+        }
+      });
+    } catch (e) {
+      debugPrint('CakePhotoView: $url — $e');
+      if (!mounted || url != widget.imageUrl) return;
+      setState(() => _raw = true);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final label = cakeSizeLabel(card);
-    final fraction = cakeSizeFraction(card);
+    final fraction = cakeSizeFraction(widget.card);
+    final cut = _cut;
     return ClipRRect(
-      borderRadius: borderRadius,
-      child: Container(
-        height: height,
+      borderRadius: widget.borderRadius,
+      child: SizedBox(
+        height: widget.height,
         width: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [_heroTop, _heroBottom],
-          ),
-        ),
-        child: Stack(
-          children: [
-            // Foto — markazda, nisbati saqlanib (contain), o'lchami tex
-            // kartadagi diametrga qarab.
-            Positioned.fill(
-              child: LayoutBuilder(
-                builder: (context, box) {
-                  final side = box.maxWidth * fraction;
-                  return Center(
-                    child: SizedBox(
-                      width: side,
-                      // Yozuv qatoriga joy qoldiramiz.
-                      height: (box.maxHeight - 26).clamp(24.0, box.maxHeight),
-                      child: AppNetworkImage(
-                        imageUrl: imageUrl,
+        child: LayoutBuilder(
+          builder: (context, box) {
+            // Kenglik — tex kartadagi o'lchamdan; balandlik rasmning O'Z
+            // nisbatidan (cho'zilmaydi) va blokdan oshmaydi.
+            final wantW = box.maxWidth * fraction;
+            return Center(
+              child: SizedBox(
+                width: wantW,
+                height: box.maxHeight,
+                child: cut != null
+                    ? RawImage(
+                        image: cut,
                         fit: BoxFit.contain,
-                      ),
-                    ),
-                  );
-                },
+                        filterQuality: FilterQuality.medium,
+                      )
+                    // Fonni olib tashlab bo'lmadi — asl foto.
+                    : _raw
+                        ? AppNetworkImage(
+                            imageUrl: widget.imageUrl,
+                            fit: BoxFit.contain,
+                          )
+                        // Tayyorlanmoqda (odatda < 1 s) — ikki marta
+                        // yuklamaslik uchun asl foto chizilmaydi.
+                        : const SizedBox.shrink(),
               ),
-            ),
-            // O'lcham yozuvi (yoki eslatma) — pastda.
-            Positioned(
-              left: 8,
-              right: 8,
-              bottom: 6,
-              child: Center(
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.85),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: Text(
-                    label.isEmpty
-                        ? 'O\'lcham tex kartada ko\'rsatilmagan'
-                        : label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: label.isEmpty
-                          ? Colors.grey.shade600
-                          : Colors.brown.shade800,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
