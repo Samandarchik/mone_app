@@ -834,18 +834,13 @@ class _BlockCard extends StatelessWidget {
               ),
               if (url != null) ...[
                 const SizedBox(height: 8),
-                // Blok rasmi to'liq va cho'zilmasdan (contain, 4:3).
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: AspectRatio(
-                    aspectRatio: 4 / 3,
-                    child: ColoredBox(
-                      color: const Color(0xFFF7F5FC),
-                      child: AppNetworkImage(
-                        imageUrl: url,
-                        fit: BoxFit.contain,
-                      ),
-                    ),
+                  child: AppNetworkImage(
+                    imageUrl: url,
+                    width: double.infinity,
+                    height: 140,
+                    fit: BoxFit.cover,
                   ),
                 ),
               ],

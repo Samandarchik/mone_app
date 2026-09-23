@@ -277,31 +277,70 @@ CakePhotoShape analyzeCakePhoto(Uint8List px, int w, int h) {
   // butun rasm tort.
   final wholeImage = bestSize < n * 0.06;
 
-  // --- ustun/qator konturlari ------------------------------------------
-  // DIQQAT: siluet BUTUN bo'lakdan olinadi, rang bo'yicha «tortga o'xshash»
-  // piksellar ajratilmaydi. Ilgari shunday qilingandi (oq patnisni chiqarib
-  // tashlash uchun) va tortning O'ZIDAGI oq qismlar — oq bisquit belbog'i,
-  // oq krem — ham kesilib ketardi: o'sha qatorlarda faqat qizil lenta qolib,
-  // modelda «BEL» hosil bo'lardi va tort shaffof shishadek ko'rinardi.
-  // Patnis endi kenglik bo'yicha kesiladi (pastroqda, gardish topilgach).
+  // --- PATNIS / PODSTAVKA / SOYANI SILUETDAN CHIQARIB TASHLASH ---------
+  // Tort oq patnis (karton podstavka, tarelka) ustida turadi va patnis fon
+  // bilan deyarli bir xil oq bo'lgani uchun segmentatsiya uni TORTGA qo'shib
+  // yuboradi. Oqibati: patnis tortdan KENGROQ, shuning uchun tortning pastki
+  // qatorlarida siluet kengligi patnisniki bo'lib qoladi — kenglik profili
+  // pastga qarab o'sib boraveradi, gardish topilmaydi va model TORTDAN emas,
+  // PATNISDAN quriladi (foydalanuvchi ko'rgan xato: «tarelka hajmda ketyapti,
+  // tortning o'zi emas»).
+  //
+  // Yechim: siluet faqat FONDAN ANIQ FARQ QILADIGAN piksellardan olinadi.
+  // Har piksel uchun bgDist bor; bo'lakdagi qiymatlarning 70-protsentili —
+  // «tort darajasi», undan 30% chegara. Oq patnis va soya fonga yaqin, demak
+  // chiqib ketadi; shokolad/krem/glazur qoladi. Oq tortda daraja ham past
+  // bo'ladi — chegara ham pasayadi; agar shunda ham juda ko'p narsa yo'qolsa
+  // (bo'lakning 25% idan kam qolsa), eski xatti-harakatga qaytamiz.
+  final blobDist = <double>[];
+  for (var i = 0; i < n; i++) {
+    if (wholeImage || label[i] == best) {
+      blobDist.add(bgDist(i % w, i ~/ w));
+    }
+  }
+  blobDist.sort();
+  final cakeLevel = blobDist.isEmpty
+      ? 0.0
+      : blobDist[(blobDist.length * 0.7).floor().clamp(0, blobDist.length - 1)];
+  final cakeMin = math.max(threshold * 1.6, 0.30 * cakeLevel);
+
   final topY = List<double>.filled(w, double.nan);
   final botY = List<double>.filled(w, double.nan);
   final left = List<int>.filled(h, -1);
   final right = List<int>.filled(h, -1);
   var x0 = w, x1 = -1, y0 = h, y1 = -1;
-  for (var y = 0; y < h; y++) {
-    for (var x = 0; x < w; x++) {
-      if (!wholeImage && label[y * w + x] != best) continue;
-      if (topY[x].isNaN) topY[x] = y.toDouble();
-      botY[x] = y.toDouble();
-      if (left[y] < 0) left[y] = x;
-      right[y] = x;
-      if (x < x0) x0 = x;
-      if (x > x1) x1 = x;
-      if (y < y0) y0 = y;
-      if (y > y1) y1 = y;
+  var kept = 0;
+  void scan(bool strict) {
+    topY.fillRange(0, w, double.nan);
+    botY.fillRange(0, w, double.nan);
+    left.fillRange(0, h, -1);
+    right.fillRange(0, h, -1);
+    x0 = w;
+    x1 = -1;
+    y0 = h;
+    y1 = -1;
+    kept = 0;
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        if (!wholeImage && label[y * w + x] != best) continue;
+        if (strict && bgDist(x, y) < cakeMin) continue;
+        kept++;
+        if (topY[x].isNaN) topY[x] = y.toDouble();
+        botY[x] = y.toDouble();
+        if (left[y] < 0) left[y] = x;
+        right[y] = x;
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
     }
   }
+
+  scan(true);
+  // Juda ko'p yo'qoldi (masalan tortning o'zi oq) — chegarasiz qaytamiz.
+  final blobSize = wholeImage ? n : bestSize;
+  if (kept < blobSize * 0.25 || x1 - x0 < 4 || y1 - y0 < 4) scan(false);
   if (x1 - x0 < 4 || y1 - y0 < 4) return _fallbackShape(w, h);
 
   double halfAt(int y) {
@@ -310,107 +349,8 @@ CakePhotoShape analyzeCakePhoto(Uint8List px, int w, int h) {
     return (right[yy] - left[yy] + 1) / 2;
   }
 
-  // --- PATNIS / PODSTAVKA / TARELKA -----------------------------------
-  // Tort oq patnis ustida turadi; patnis fon bilan deyarli bir xil oq
-  // bo'lgani uchun segmentatsiya uni tortga qo'shib yuboradi. Patnis
-  // TORTDAN KENG, shuning uchun u tortning pastki qatorlarini ham
-  // «kengaytirib» qo'yadi va model tortdan emas, patnisdan qurilardi.
-  //
-  // Ikki belgining HAR IKKISI kerak — bittasi yetmaydi:
-  //   • RANG bilan tortning O'Z kengligi (rCake) o'lchanadi: fondan aniq
-  //     farq qiladigan piksellar. Buni siluet sifatida ISHLATIB BO'LMAYDI —
-  //     tortdagi oq belbog' (oq bisquit, oq krem) ham fonga yaqin va
-  //     o'sha qatorlar torayib, modelda «bel» hosil bo'lardi.
-  //   • KENGLIK bilan patnis bor-yo'qligi aniqlanadi: siluet tortning
-  //     kengligidan 10% dan ko'p oshsa — patnis bor.
-  // Patnis bor bo'lsa: qatorlar tortning kengligiga QIRQILADI (tepa yoyi
-  // torroq bo'lsa — tegilmaydi) va pastdan patnis KESILADI. Patnis yo'q
-  // bo'lsa hech narsa o'zgarmaydi — ko'p yarusli tort buzilmaydi.
-  {
-    final aRaw = math.max(2.0, (x1 - x0) / 2);
-    final rowContrast = List<double>.filled(y1 - y0 + 1, 0);
-    for (var y = y0; y <= y1; y++) {
-      if (left[y] < 0) continue;
-      final d = <double>[];
-      for (var x = left[y]; x <= right[y]; x++) {
-        if (!wholeImage && label[y * w + x] != best) continue;
-        d.add(bgDist(x, y));
-      }
-      final m = _median(d);
-      rowContrast[y - y0] = m.isNaN ? 0 : m;
-    }
-    final levels = <double>[
-      for (var y = y0; y <= y1; y++)
-        if (halfAt(y) > 0.3 * aRaw) rowContrast[y - y0],
-    ]..sort();
-    if (levels.length >= 4) {
-      final ref =
-          levels[(levels.length * 0.75).floor().clamp(0, levels.length - 1)];
-      // Har qatorda TORT rangidagi piksellarning yarim kengligi.
-      final cakeW = List<double>.filled(y1 - y0 + 1, 0);
-      for (var y = y0; y <= y1; y++) {
-        if (left[y] < 0) continue;
-        var lo = -1, hi = -1;
-        for (var x = left[y]; x <= right[y]; x++) {
-          if (!wholeImage && label[y * w + x] != best) continue;
-          if (bgDist(x, y) < 0.45 * ref) continue;
-          if (lo < 0) lo = x;
-          hi = x;
-        }
-        if (lo >= 0) cakeW[y - y0] = (hi - lo + 1) / 2;
-      }
-      final pool = <double>[
-        for (final v in cakeW)
-          if (v > 0.15 * aRaw) v,
-      ]..sort();
-      if (pool.length >= 4) {
-        final rCake =
-            pool[(pool.length * 0.85).floor().clamp(0, pool.length - 1)];
-        var rawMax = 0.0;
-        for (var y = y0; y <= y1; y++) {
-          rawMax = math.max(rawMax, halfAt(y));
-        }
-        if (rCake > 2 && rawMax > 1.10 * rCake) {
-          // 1) Tortning pastki cheti: tort rangi tugagan joy, so'ng
-          //    kenglik oshmaguncha pastga (oq belbog' tortniki bo'lib
-          //    qolsin).
-          var yCakeBot = y0;
-          for (var y = y1; y >= y0; y--) {
-            if (cakeW[y - y0] >= 0.5 * rCake) {
-              yCakeBot = y;
-              break;
-            }
-          }
-          var cut = yCakeBot;
-          while (cut + 1 <= y1 &&
-              left[cut + 1] >= 0 &&
-              halfAt(cut + 1) <= 1.05 * rCake) {
-            cut++;
-          }
-          if (cut < y1 && (cut - y0) > 0.3 * (y1 - y0 + 1)) y1 = cut;
-          // 2) Qolgan qatorlarni tortning kengligiga qirqish.
-          for (var y = y0; y <= y1; y++) {
-            if (left[y] < 0) continue;
-            if (halfAt(y) <= rCake) continue;
-            final c = (left[y] + right[y]) / 2;
-            left[y] = (c - rCake).round().clamp(0, w - 1);
-            right[y] = (c + rCake).round().clamp(0, w - 1);
-          }
-          x0 = w;
-          x1 = -1;
-          for (var y = y0; y <= y1; y++) {
-            if (left[y] < 0) continue;
-            if (left[y] < x0) x0 = left[y];
-            if (right[y] > x1) x1 = right[y];
-          }
-          if (x1 - x0 < 4 || y1 - y0 < 4) return _fallbackShape(w, h);
-        }
-      }
-    }
-  }
-
-  var cx = (x0 + x1) / 2;
-  var a = math.max(2.0, (x1 - x0) / 2);
+  final cx = (x0 + x1) / 2;
+  final a = math.max(2.0, (x1 - x0) / 2);
 
   // --- ENG TEPADAGI YARUS va uning GARDISHI — KENGLIK PROFILIDAN.
   // Tepadan pastga kenglik tepa ellipsi yoyi bo'ylab o'sadi va gardishda
@@ -421,37 +361,33 @@ CakePhotoShape analyzeCakePhoto(Uint8List px, int w, int h) {
   // (Ilgari «±4% ichida qat'iy tekis» talab qilinardi — gumbazsimon tort
   // bunga tushmay, tekislik PATNISDA topilardi.)
   // Qidiruv faqat yuqori 70% da: pastdagi kengayish — yarus yoki patnis.
-  var hh0 = y1 - y0 + 1;
+  final hh0 = y1 - y0 + 1;
+  final hwRaw = [for (var y = y0; y <= y1; y++) halfAt(y)];
   // 3-median filtr — JPEG shovqini va bezak chetlari.
-  List<double> widths() {
-    final raw = [for (var y = y0; y <= y1; y++) halfAt(y)];
-    return List<double>.generate(raw.length, (i) {
-      final v = [
-        raw[math.max(0, i - 1)],
-        raw[i],
-        raw[math.min(raw.length - 1, i + 1)],
-      ]..sort();
-      return v[1];
-    });
-  }
-
-  var hw = widths();
-  var win = math.max(3, (0.08 * hh0).round());
-  var searchEnd = math.min(hw.length - 1, (0.7 * hh0).round());
+  final hw = List<double>.generate(hwRaw.length, (i) {
+    final v = [
+      hwRaw[math.max(0, i - 1)],
+      hwRaw[i],
+      hwRaw[math.min(hwRaw.length - 1, i + 1)],
+    ]..sort();
+    return v[1];
+  });
+  final win = math.max(3, (0.08 * hh0).round());
+  final searchEnd = math.min(hw.length - 1, (0.7 * hh0).round());
   var r1 = 0.0;
   var yPlateau = y0;
-  void findRim() {
-    r1 = 0;
-    yPlateau = y0;
-    for (var k = 0; k + win <= searchEnd; k++) {
-      final w0 = hw[k];
-      if (w0 < 0.25 * a) continue;
-      if (hw[k + win] - w0 < 0.025 * w0) {
-        r1 = w0;
-        yPlateau = y0 + k;
-        return;
-      }
+  var found = false;
+  for (var k = 0; k + win <= searchEnd; k++) {
+    final w0 = hw[k];
+    if (w0 < 0.25 * a) continue;
+    if (hw[k + win] - w0 < 0.025 * w0) {
+      r1 = w0;
+      yPlateau = y0 + k;
+      found = true;
+      break;
     }
+  }
+  if (!found) {
     // Topilmadi — yuqori qismdagi ENG KENG qator (patnisga tushib
     // ketmaslik uchun baribir yuqori 70% ichida).
     for (var k = 0; k <= searchEnd; k++) {
@@ -461,13 +397,10 @@ CakePhotoShape analyzeCakePhoto(Uint8List px, int w, int h) {
       }
     }
   }
-
-  findRim();
   if (r1 < 2) {
     r1 = a;
     yPlateau = y0;
   }
-
   // Gardish qatori (θ = 90°): kenglik birinchi marta r1'ning 95% ga yetgan joy.
   var yCi = yPlateau;
   for (var k = 0; k <= yPlateau - y0; k++) {
@@ -942,6 +875,10 @@ class CakePhotoPainter extends CustomPainter {
     final hW = model.shape.heightRatio;
     final cy = math.cos(yaw), sy = math.sin(yaw);
     final cp = math.cos(pitch), sp = math.sin(pitch);
+    // Ko'rinish radiusi — tort butunlay sig'sin.
+    final bound = math.sqrt(1 + hW * hW / 4) * 1.06;
+    final scale = math.min(size.width, size.height) / 2 / bound * 0.92 * zoom;
+    final ox = size.width / 2, oy = size.height / 2;
     const dist = 6.0; // perspektiva (radius birligida)
 
     // Kamera fazosi: avval Y atrofida (yaw), so'ng X atrofida (pitch).
@@ -983,46 +920,13 @@ class CakePhotoPainter extends CustomPainter {
     // Uzoqdan yaqinga (rassom algoritmi).
     order.sort((p, q) => depth[p].compareTo(depth[q]));
 
-    // --- BLOKKA SIG'DIRISH («contain» + markaz) --------------------------
-    // Model ekranga proyeksiya qilingandagi HAQIQIY chegaralari topiladi va
-    // shu to'rtburchak blokka sig'diriladi: masshtab X va Y uchun BIR XIL
-    // (proporsiya buzilmaydi — tort cho'zilmaydi/yassilanmaydi), so'ng
-    // markazga qo'yiladi. Ilgari masshtab min(kenglik, balandlik) dan
-    // olinardi va model doim balandlikka qarab kichrayib, blokning bir
-    // chekkasida turardi — keng ekranda «yassi va kichkina» ko'rinardi.
-    // Bu ekran o'lchami o'zgarganda ham o'z-o'zidan moslashadi.
-    var minX = double.infinity, maxX = double.negativeInfinity;
-    var minY = double.infinity, maxY = double.negativeInfinity;
-    final proj = Float32List(n * 6); // har uchburchak uchun 3 × (x, y)
-    for (var i = n - visible; i < n; i++) {
-      final t = order[i];
-      for (var k = 0; k < 3; k++) {
-        final o = t * 9 + k * 3;
-        final persp = dist / (dist - cam[o + 2]);
-        final px = cam[o] * persp, py = -cam[o + 1] * persp;
-        proj[t * 6 + k * 2] = px;
-        proj[t * 6 + k * 2 + 1] = py;
-        if (px < minX) minX = px;
-        if (px > maxX) maxX = px;
-        if (py < minY) minY = py;
-        if (py > maxY) maxY = py;
-      }
-    }
-    final spanX = math.max(1e-6, maxX - minX);
-    final spanY = math.max(1e-6, maxY - minY);
-    final scale =
-        math.min(size.width / spanX, size.height / spanY) * 0.92 * zoom;
-    final ox = size.width / 2 - (minX + maxX) / 2 * scale;
-    final oy = size.height / 2 - (minY + maxY) / 2 * scale;
-
     // Yerdagi yumshoq soya — tort emas, faqat «turgan joyi» hissi.
     if (pitch > 0.02) {
       final shadowR = scale * 1.05;
       final syFloor = -(-hW / 2) * cp; // y = 0 tekisligi kamera y'da
       canvas.drawOval(
         Rect.fromCenter(
-          center: Offset(size.width / 2,
-              oy + syFloor * scale * (dist / (dist + hW / 2 * sp))),
+          center: Offset(ox, oy + syFloor * scale * (dist / (dist + hW / 2 * sp))),
           width: shadowR * 2,
           height: shadowR * 2 * sp,
         ),
@@ -1041,8 +945,10 @@ class CakePhotoPainter extends CustomPainter {
       final g = (255 * shade[t]).round().clamp(0, 255);
       final color = 0xFF000000 | (g << 16) | (g << 8) | g;
       for (var k = 0; k < 3; k++) {
-        positions[vi * 2] = ox + proj[t * 6 + k * 2] * scale;
-        positions[vi * 2 + 1] = oy + proj[t * 6 + k * 2 + 1] * scale;
+        final o = t * 9 + k * 3;
+        final persp = dist / (dist - cam[o + 2]);
+        positions[vi * 2] = ox + cam[o] * scale * persp;
+        positions[vi * 2 + 1] = oy - cam[o + 1] * scale * persp;
         tex[vi * 2] = mesh.uv[(t * 3 + k) * 2];
         tex[vi * 2 + 1] = mesh.uv[(t * 3 + k) * 2 + 1];
         colors[vi] = color;
