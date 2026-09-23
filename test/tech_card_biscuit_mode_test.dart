@@ -157,4 +157,25 @@ void main() {
       greaterThan(t.getTopLeft(find.text('Наименование')).dy),
     );
   });
+
+  testWidgets('shef mode: no cost/price summary block at all', (t) async {
+    await open(
+      t,
+      TechCardEditorPage(product: _biscuit(), canEditPrices: false),
+    );
+    expect(find.textContaining('Себестоимость'), findsNothing);
+    expect(find.textContaining('Общий вес'), findsNothing);
+    expect(find.textContaining('Доп. расходы'), findsNothing);
+    expect(find.textContaining('Прибыль'), findsNothing);
+    expect(find.textContaining('Цена продажи'), findsNothing);
+  });
+
+  testWidgets('admin mode keeps the cost/price block on top', (t) async {
+    await open(t, TechCardEditorPage(product: _biscuit()));
+    expect(find.textContaining('Себестоимость'), findsWidgets);
+    expect(find.textContaining('Цена продажи'), findsWidgets);
+    // Tepada — masalliqlar jadvalidan yuqorida emas, lekin retsept
+    // bloklaridan oldin (sarlavha jadvallari yonida).
+    expect(find.textContaining('Общий вес'), findsWidgets);
+  });
 }

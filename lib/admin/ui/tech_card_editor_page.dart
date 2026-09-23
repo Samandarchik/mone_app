@@ -54,8 +54,8 @@ import 'package:uz_ai_dev/production/ui/widgets/price_history_sheet.dart';
 // + umumiy og'irliklar) → «Kesish sxemasi» diagrammasi (shakl kiritilganda) →
 // rangli sarlavhali baza bloklari → to'q sariq «Расходник» bloki.
 // Keng ekranda bloklar 2 ustunda, telefonda 1 ustunda.
-// SHEF rejimida (canEditPrices: false) tartib boshqacha: og'irlik/tannarx/
-// narx jadvali tepada emas, sahifaning ENG OXIRIDA chiqadi.
+// SHEF rejimida (canEditPrices: false) og'irlik/tannarx/narx jadvali UMUMAN
+// yo'q — sahifa retsept bilan tugaydi, ostida «Сохранить» tugmasi.
 // Полуфабрикат qatori: «ПФ» chipi bosilsa tarkibi shu yerda ochiladi, qator
 // IKKI MARTA bosilsa (double-tap) esa o'sha пф'ning tex kartasi shu
 // muharrirda ochilib, tahrirlanadi va saqlanadi (`_openPfCard`).
@@ -1812,7 +1812,6 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
                   _gestureHint(),
                   // Shef rejimida og'irlik/tannarx/narx jadvali SHU YERDA —
                   // tex kartaning oxirida (adminda u tepada turadi).
-                  _footerSummaryTable(),
                   const SizedBox(height: 16),
                   // Tex karta OXIRIDA «Сохранить» — AppBar'dagi «✓» bilan
                   // bir xil amal: pastgacha scroll qilgan foydalanuvchi
@@ -2074,9 +2073,11 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
 
   Widget _headerTables(bool wide) {
     final left = _headerLeftTable();
-    // Shef rejimida (canEditPrices: false) o'ng jadval — og'irlik / tannarx /
-    // narx bloki — tepada CHIQMAYDI: u tex karta OXIRIGA ko'chirilgan
-    // (`_footerSummaryTable`), shef avval retseptni ko'rsin.
+    // Shef rejimida (canEditPrices: false) o'ng jadval — og'irlik /
+    // себестоимость / доп. расходы / прибыль / цена продажи bloki UMUMAN
+    // chiqmaydi (na tepada, na oxirida): shefga retseptning o'zi kerak,
+    // masalliqlar og'irligi sarlavha jadvalida turibdi. Admin-bugalterda
+    // esa bu blok tepada qoladi — narx/foyda faqat shu yerda kiritiladi.
     if (!widget.canEditPrices) return left;
     final right = _headerRightTable(c.build());
     if (wide) {
@@ -2092,18 +2093,6 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [left, const SizedBox(height: 8), right],
-    );
-  }
-
-  // Shef rejimidagi PASTKI jadval: og'irlik / tannarx / доп. расходы /
-  // прибыль / цена продажи bloki tex kartaning eng oxirida chiqadi.
-  // Admin-bugalter rejimida bu jadval tepada (`_headerTables` ichida) —
-  // shuning uchun bu yerda hech narsa chizilmaydi.
-  Widget _footerSummaryTable() {
-    if (widget.canEditPrices) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: _headerRightTable(c.build()),
     );
   }
 
