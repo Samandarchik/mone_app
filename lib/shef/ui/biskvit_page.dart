@@ -1,7 +1,13 @@
 // shef/ui/biskvit_page.dart — shef bosh menyusidagi «Biskvit» bo'limi
-// (BiskvitPage): tepada biskvit rasmi (assets/biskvit.png), ostida shef
-// QO'SHGAN kategoriyalar kartalari — har birida kategoriyaning o'z rasmi,
-// nomi va mahsulot soni (masalan Бисквит, Начинка, Крем, Украшения).
+// (BiskvitPage): tepada HAMMA tortlar gridi (rasm YO'Q — biskvit.png faqat
+// bosh menyu kartasida), ostida shef QO'SHGAN kategoriyalar kartalari — har
+// birida kategoriyaning o'z rasmi, nomi va mahsulot soni (masalan Бисквит,
+// Начинка, Крем, Украшения). Tort kartasi BIR marta bosilsa — TORTNING O'Z
+// TO'LIQ konstruktori (ShefCakeConstructorPage: biskvit, kesim va tayyor
+// tort — shu tortning tex kartasi va undagi пф'larning tex kartalari
+// bo'yicha, 3-qadamda fotosidan 3D model); IKKI marta — tortning tex
+// kartasi. Umumiy konstruktor (kategoriyalardan tanlash,
+// ShefConstructorPage) bu bo'limda YO'Q — u faqat «Готовый» ekranida.
 // AppBar'dagi «+» — «Тех карта»dagi kategoriyalardan birini tanlab qo'shish;
 // kartani bosib turish — bo'limdan olib tashlash (kategoriya o'chmaydi,
 // «Тех карта»ga qaytadi). Ro'yxat ID bo'yicha, qurilmada saqlanadi
@@ -32,8 +38,6 @@ import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
 
 const Color _bgColor = Color(0xFFFAF6F1);
 const Color _accentColor = Color(0xFFC5A97B);
-
-const String _biskvitImage = 'assets/biskvit.png';
 
 // Biskvit bo'limidagi kategoriyalar (id'lar, qo'shilgan tartibida).
 // Qurilmada saqlanadi; logout o'chirmaydi (session.dart faqat o'z
@@ -363,6 +367,14 @@ class _BiskvitPageState extends State<BiskvitPage> {
     );
   }
 
+  // Tort bosilsa — tortning o'z to'liq konstruktori (tex kartasidan).
+  void _openCakeConstructor(ProductModelAdmin cake) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ShefCakeConstructorPage(cake: cake)),
+    );
+  }
+
   // «+» — hali qo'shilmagan kategoriyalardan birini tanlash. Tanlangani
   // darhol karta bo'lib chiqadi. Bosh ekranga qo'shilganlar ham chiqmaydi.
   Future<void> _addCategory() async {
@@ -437,22 +449,6 @@ class _BiskvitPageState extends State<BiskvitPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         children: [
-          // Tepada guruh rasmi — qaysi bo'limda turganini ko'rsatib turadi.
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              height: 150,
-              color: Colors.white,
-              alignment: Alignment.center,
-              child: Image.asset(
-                _biskvitImage,
-                height: 130,
-                cacheHeight: 390,
-                fit: BoxFit.contain,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
           // Kartalar soni kichik — ikkala provider'ni kuzatish arzon.
           Consumer2<CategoryProviderAdmin, ProductProviderAdmin>(
             builder: (context, cats, products, _) {
@@ -497,15 +493,11 @@ class _BiskvitPageState extends State<BiskvitPage> {
                       physics: const NeverScrollableScrollPhysics(),
                       gridDelegate: kCakeGridDelegate,
                       itemCount: cakes.length,
+                      // Bir marta bosish — tortning o'z to'liq konstruktori;
+                      // IKKI marta — tortning tex kartasi.
                       itemBuilder: (context, i) => CakeCard(
                         cake: cakes[i],
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                ShefCakeConstructorPage(cake: cakes[i]),
-                          ),
-                        ),
+                        onTap: () => _openCakeConstructor(cakes[i]),
                         onDoubleTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(

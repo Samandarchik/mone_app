@@ -22,6 +22,7 @@ import 'package:uz_ai_dev/shef/ui/shef_constructor_page.dart';
 import 'package:uz_ai_dev/shef/ui/shef_tech_card_page.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/cake_illustration.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/cake_photo_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
 
 ProductModelAdmin _product(int id, String name, int cat, String catName,
@@ -300,5 +301,101 @@ void main() {
     await settle(t);
     expect(find.text('Крем клубничный'), findsOneWidget);
     expect(find.text('Крем кокосовый'), findsNothing);
+  });
+
+  // Tort tex kartasida masalliq qatori product_id bilan ПФ'ga bog'langan:
+  // 1-qadam — biskvit пф'ning O'Z tex kartasi (rangi, o'lchami, bloklari),
+  // 2-qadam — nachinka пф'lari o'z tex kartalari bo'yicha, navbat bilan.
+  testWidgets('cake parts: biscuit and filling пф from their own tech cards',
+      (t) async {
+    products.products.addAll([
+      _product(
+        10,
+        'Бисквит шоколадный',
+        1,
+        'П/Ф Бисквит',
+        card: const TechCard(
+          diameterCm: 18,
+          heightCm: 6,
+          shape: 'round',
+          bakeTimeMin: 35,
+          bakeTempC: 170,
+          bases: [
+            TechBase(name: 'Тесто', ingredients: [
+              TechItem(name: 'Какао', unit: 'g', amount: 60),
+            ]),
+          ],
+        ),
+      ),
+      _product(
+        21,
+        'Начинка фисташковая',
+        2,
+        'П/Ф Начинка',
+        card: const TechCard(fillingColor: '#A5D6A7'),
+      ),
+    ]);
+    final cake = _product(
+      35,
+      'Торт Фисташка',
+      3,
+      'Торты',
+      card: const TechCard(
+        bases: [
+          TechBase(name: 'Сборка', ingredients: [
+            TechItem(productId: 10, name: 'Бисквит шоколадный', unit: 'g', amount: 800),
+            TechItem(productId: 20, name: 'Начинка клубничная', unit: 'g', amount: 300),
+            TechItem(productId: 21, name: 'Начинка фисташковая', unit: 'g', amount: 300),
+          ]),
+        ],
+      ),
+    );
+    final parts = CakeParts.resolve(
+        cake.techCard!, {for (final p in products.products) p.id: p});
+    expect(parts.biscuit?.id, 10);
+    expect([for (final f in parts.fillings) f.id], [20, 21]);
+
+    await open(t, ShefCakeConstructorPage(cake: cake));
+    // 1 — biskvit пф: shokoladli, o'lchami пф tex kartasidan (tortda yo'q).
+    final b = t.widget<Biscuit3DView>(find.byType(Biscuit3DView));
+    expect(b.palette, BiscuitPalette.chocolate);
+    expect(b.dims, const BiscuitDims(diameterCm: 18, heightCm: 6));
+    expect(find.text('Бисквит шоколадный'), findsOneWidget);
+    expect(find.textContaining('35 daq · 170 °C'), findsOneWidget);
+    expect(find.text('Тесто'), findsOneWidget);
+    expect(find.text('Какао'), findsOneWidget);
+    // Пф sarlavhasi bosilsa — uning o'z tex kartasi (foto bo'limi bilan).
+    await t.tap(find.text('Бисквит шоколадный'));
+    await settle(t);
+    final editor = t.widget<TechCardEditorPage>(find.byType(TechCardEditorPage));
+    expect(editor.product.id, 10);
+    expect(editor.showBiscuitPhoto, isTrue);
+    await t.pageBack();
+    await settle(t);
+
+    // 2 — 2 ta nachinka пф → 2 qatlam; 2-qatlam (fisitashka) palitradan,
+    // 1-qatlam (qulupnay) nomidan — korjlar o'sha shokoladli biskvit.
+    await t.tap(find.text('2'));
+    await settle(t);
+    expect(find.text('1-qatlam'), findsOneWidget);
+    expect(find.text('2-qatlam'), findsOneWidget);
+    final f = t.widget<Filling3DView>(find.byType(Filling3DView));
+    expect(f.sponge, BiscuitPalette.chocolate);
+    expect(f.fillings!.length, 2);
+    // Painter tepadan pastga: birinchisi — 2-qatlam (fisitashka palitrasi).
+    expect(f.fillings!.first.single.color, const Color(0xFFA5D6A7));
+    expect(find.text('Начинка клубничная'), findsOneWidget);
+    expect(find.text('Начинка фисташковая'), findsOneWidget);
+    // Chip bosilsa — faqat shu qatlamning пф'i.
+    await t.tap(find.text('2-qatlam'));
+    await settle(t);
+    expect(find.text('Начинка фисташковая'), findsOneWidget);
+    expect(find.text('Начинка клубничная'), findsNothing);
+
+    // 3 — foto yo'q: tex kartadan illyustratsiya, 3D foto modeli yo'q.
+    await t.tap(find.text('3'));
+    await settle(t);
+    expect(find.byType(CakeIllustrationView), findsOneWidget);
+    expect(find.byType(CakePhoto3DView), findsNothing);
   });
 }

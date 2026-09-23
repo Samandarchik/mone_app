@@ -1,33 +1,40 @@
-// shef/ui/shef_cake_constructor_page.dart — TORTNING O'Z konstruktori
-// (ShefCakeConstructorPage): «Торты» bo'limida (shef_cakes_page.dart) tort
-// bosilganda ochiladi. Umumiy konstruktordan (shef_constructor_page.dart —
-// kategoriyalardan biskvit/nachinka/qoplama TANLASH) farqi: bu yerda hech
-// narsa tanlanmaydi — hammasi shu tortning TEX KARTASIDAN (masalan Рафаэлло)
-// chiziladi. 3 qadam (rasm ostidagi tugmalar):
-//   1 — Biskvit: tortning biskvitining o'zi (3D) — rangi/turi tex kartadagi
-//       biskvit blokidan (nomi/masalliqlari), o'lchami tex kartadan.
-//   2 — Kesim: shu tortning BO'LAGI kesilgan holda — kesimda nachinka
-//       qatlamlari (hammasi bir rangda). Qatlamlar soni — umumiy
-//       konstruktordagi kabi chiplar bilan: boshlanishida tex kartadagi
-//       nachinka bloklari soni, «+ Qatlam» qo'shadi, «×» olib tashlaydi; chip
-//       bosilsa ostida faqat shu qatlamning bloki. Nachinka bloki bo'lmasa —
-//       faqat biskvit.
-//   3 — Tort: TAYYOR TORT — vektor ILLYUSTRATSIYA (cake_illustration.dart,
-//       referens: Mone'ning yassi grafikasi — patnis, lenta va bant, glazur,
-//       dekor doirasi). Qoplama/glazur rangi, kokos/yong'oq fakturasi va
-//       dekor (Рафаэлло, безе, миндаль, mevalar ...) — tex karta
-//       bloklaridan (CakeIllustrationSpec.fromTechCard).
-// Qadam ostida shu qadamga tegishli tex karta BLOKLARI: nomi, rol chipi,
-// rasmi (tex kartadagi blok rasmi), og'irligi, bo'limi va masalliqlar.
+// shef/ui/shef_cake_constructor_page.dart — TORTNING O'Z TO'LIQ konstruktori
+// (ShefCakeConstructorPage): Biskvit bo'limi / «Торты» bo'limida
+// (biskvit_page.dart, shef_cakes_page.dart) tort bosilganda ochiladi.
+// Umumiy konstruktordan (shef_constructor_page.dart — kategoriyalardan
+// biskvit/nachinka/qoplama TANLASH) farqi: bu yerda hech narsa tanlanmaydi
+// — hammasi SHU TORTNING TEX KARTASIDAN va undagi ПОЛУФАБРИКАТЛАРНИНГ o'z
+// tex kartalaridan chiziladi. 3 qadam (rasm ostidagi tugmalar):
+//   1 — Biskvit: tortning biskviti O'Z TEX KARTASI bo'yicha. Tort tex
+//       kartasidagi masalliq qatori product_id bilan «Бисквит»
+//       kategoriyasidagi (yoki nomi biskvit bo'lgan tex kartali) пф'ga
+//       bog'langan bo'lsa — o'sha пф: rangi («Biskvit rangi» palitrasi /
+//       nom-tarkib), mevalari, tex kartadagi fotosi (yon tomonga o'raladi),
+//       pishirish vaqti/harorati — xuddi «П/Ф Бисквит» sahifasidagidek.
+//       Ostida пф'ning o'z tex kartasi (bloklari, masalliqlari) — bosilsa
+//       muharrirda ochiladi. Пф topilmasa — tortning o'z biskvit bloki.
+//   2 — Kesim: O'SHA biskvit (rangi/o'lchami 1-qadamdan) ichida nachinka
+//       qatlamlari, bo'lagi kesilgan — kesimda nachinka. Har qatlam —
+//       tort tex kartasidagi nachinka ПФ'ining o'z tex kartasi bo'yicha
+//       (FillingLook.resolve: «Nachinka rangi» palitrasi → пф fotosidagi
+//       kesim qatlamlari → nom/tarkib), tartib bilan: 1-qatlam (pastki) —
+//       1-пф, 2-qatlam — 2-пф ... Qatlam soni — chiplar: boshlanishida
+//       пф'lar soni, «+ Qatlam» qo'shadi, «×» olib tashlaydi; chip bosilsa
+//       ostida faqat shu qatlamning пф tex kartasi. Пф bo'lmasa — tortning
+//       nachinka bloklari, hammasi «Nachinka rangi» palitrasida.
+//   3 — Tort: TAYYOR TORT — TORTNING O'Z FOTOSIDAN 3D model
+//       (cake_photo_3d.dart, CakePhoto3DView: shakl fotodagi siluetdan,
+//       tekstura — fotoning o'zi, barmoq bilan buriladi); yuklanmasa —
+//       xato + «Qayta urinish» (illyustratsiyaga O'TILMAYDI: u boshqa tort
+//       bo'lib ko'rinardi). Foto YO'Q bo'lsagina — vektor ILLYUSTRATSIYA
+//       tex kartadan (cake_illustration.dart: qoplama rangi, faktura,
+//       dekor). Ostida fotoning o'zi va qoplama/dekor bloklari.
 // Blok roli nomidan (CakeBlockRole.of): бисквит/корж → biskvit; покрытие/
 // глазурь/выравнивание → qoplama; декор/украшение → bezak; пропитка/сироп/
-// сборка → bosqich (qatlam qo'shmaydi); qolgani (крем, начинка, конфи, мусс)
-// → nachinka. Ranglar — boshqa bo'limlardagi kabi tortning tex kartasidagi
-// palitralardan: «Biskvit rangi» (korjlar), «Nachinka rangi» (hamma nachinka
-// qatlami bir rangda), «Покрытие rangi» (qoplama); tanlanmagan bo'lsa —
-// avtomatik, tort nomi/bloklari/masalliqlaridan (BiscuitPalette.of /
-// FillingLook.fromTechCard / coatOf). Tex karta AppBar tugmasidan
-// tahrirlanadi — saqlangach (provider) konstruktor o'zi yangilanadi.
+// сборка → bosqich; qolgani (крем, начинка, конфи, мусс) → nachinka.
+// Пф'lar (CakeParts.resolve) — mahsulotlar ProductProviderAdmin (YAGONA
+// manba) dan; tex karta AppBar tugmasidan tahrirlanadi — saqlangach
+// (provider) konstruktor o'zi yangilanadi.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/admin/model/product_model.dart';
@@ -36,9 +43,12 @@ import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
+import 'package:uz_ai_dev/shef/ui/shef_tech_card_page.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/cake_illustration.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/cake_photo_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/filling_photo_look.dart';
 
 const Color _bgColor = Color(0xFFFAF6F1);
 const Color _accentColor = Color(0xFFC5A97B);
@@ -65,12 +75,124 @@ const List<(String, String, String)> _steps = [
   ),
 ];
 
-// Tex kartadagi blok rasmi to'liq URL'i (yo'q — null).
-String? _blockImageUrl(TechBase b) {
-  final raw = b.imageUrl;
-  if (raw.isEmpty) return null;
+// Nisbiy yo'l → to'liq URL (bo'sh — null).
+String? _fullUrl(String? raw) {
+  if (raw == null || raw.isEmpty) return null;
   return raw.startsWith('http') ? raw : '${AppUrls.baseUrl}$raw';
 }
+
+// Tex kartada o'lcham kiritilganmi (diametr / eni / balandlik).
+bool _hasSize(TechCard? c) =>
+    c != null &&
+    ((c.diameterCm ?? 0) > 0 ||
+        (c.widthCm ?? 0) > 0 ||
+        (c.lengthCm ?? 0) > 0 ||
+        (c.heightCm ?? 0) > 0);
+
+// «Ø 22 sm · 6 sm» / «30×40 sm · 5 sm» (bo'lgan qismlari); yo'q — ''.
+String _sizeLine(TechCard? c) {
+  if (c == null) return '';
+  final parts = <String>[];
+  final d = c.diameterCm ?? 0;
+  final w = c.widthCm ?? 0;
+  final l = c.lengthCm ?? 0;
+  final h = c.heightCm ?? 0;
+  if (d > 0) {
+    parts.add('Ø $d sm');
+  } else if (w > 0 && l > 0) {
+    parts.add('$w×$l sm');
+  }
+  if (h > 0) parts.add('$h sm');
+  return parts.join(' · ');
+}
+
+// Tort tex kartasining qismlari: undagi ПОЛУФАБРИКАТЛАР (biskvit пф va
+// nachinka пф'lari — o'z tex kartalari bilan) va tortning o'z bloklari
+// rol bo'yicha.
+class CakeParts {
+  // Biskvit пф (birinchi topilgani); null — пф yo'q, tortning o'z bloki.
+  final ProductModelAdmin? biscuit;
+  // Nachinka пф'lari — tex kartadagi tartibda (1-qatlam = birinchisi).
+  final List<ProductModelAdmin> fillings;
+  final List<TechBase> biscuitBlocks;
+  final List<TechBase> fillingBlocks;
+  // Qoplama, bezak va boshqa bosqichlar (tartib saqlanadi).
+  final List<TechBase> finishBlocks;
+
+  const CakeParts({
+    this.biscuit,
+    this.fillings = const [],
+    this.biscuitBlocks = const [],
+    this.fillingBlocks = const [],
+    this.finishBlocks = const [],
+  });
+
+  // Tort tex kartasi + mahsulotlar xaritasi (id → mahsulot). Masalliq qatori
+  // product_id bilan mahsulotga bog'langan va u mahsulot пф bo'lsa (pfRoleOf)
+  // — ro'yxatga (takrorsiz, blok/masalliq tartibida).
+  factory CakeParts.resolve(TechCard card, Map<int, ProductModelAdmin> byId) {
+    ProductModelAdmin? biscuit;
+    final fillings = <ProductModelAdmin>[];
+    final seen = <int>{};
+    final biscuitBlocks = <TechBase>[];
+    final fillingBlocks = <TechBase>[];
+    final finishBlocks = <TechBase>[];
+    for (final b in card.bases) {
+      switch (CakeBlockRole.of(b)) {
+        case CakeBlockRole.biscuit:
+          biscuitBlocks.add(b);
+        case CakeBlockRole.filling:
+          fillingBlocks.add(b);
+        case CakeBlockRole.coat:
+        case CakeBlockRole.decor:
+        case CakeBlockRole.other:
+          finishBlocks.add(b);
+      }
+      for (final i in b.ingredients) {
+        if (i.productId <= 0) continue;
+        final p = byId[i.productId];
+        if (p == null || !seen.add(p.id)) continue;
+        switch (pfRoleOf(p)) {
+          case CakeBlockRole.biscuit:
+            biscuit ??= p;
+          case CakeBlockRole.filling:
+            fillings.add(p);
+          default:
+            break;
+        }
+      }
+    }
+    return CakeParts(
+      biscuit: biscuit,
+      fillings: fillings,
+      biscuitBlocks: biscuitBlocks,
+      fillingBlocks: fillingBlocks,
+      finishBlocks: finishBlocks,
+    );
+  }
+
+  // Mahsulot tortda qaysi пф: «Бисквит» kategoriyasi → biskvit, «Начинка»
+  // kategoriyasi → nachinka; boshqa kategoriyada — faqat tex kartali
+  // полуфабрикат bo'lsa, nomidan (CakeBlockRole.of). null — пф emas.
+  static CakeBlockRole? pfRoleOf(ProductModelAdmin p) {
+    if (isBiskvitCategory(p.categoryName)) return CakeBlockRole.biscuit;
+    if (isNachinkaCategory(p.categoryName)) return CakeBlockRole.filling;
+    final card = p.techCard;
+    if (!p.isSemiFinished || card == null || card.bases.isEmpty) return null;
+    final role = CakeBlockRole.of(TechBase(name: p.name));
+    return (role == CakeBlockRole.biscuit || role == CakeBlockRole.filling)
+        ? role
+        : null;
+  }
+}
+
+// 1-qadam biskviti: o'lchami, rangi, mevalari, fotosi.
+typedef _BiscuitLook = ({
+  BiscuitDims dims,
+  BiscuitPalette palette,
+  List<BiscuitFruit> fruits,
+  String? photoUrl,
+});
 
 class ShefCakeConstructorPage extends StatefulWidget {
   final ProductModelAdmin cake;
@@ -84,25 +206,23 @@ class ShefCakeConstructorPage extends StatefulWidget {
 
 class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
   int _step = 0;
-  // 2-qadam: nachinka QATLAMLARI soni (umumiy konstruktordagi kabi chiplar:
-  // «1-qatlam», «2-qatlam» ..., «+ Qatlam», «×»). null — hali
-  // o'zgartirilmagan: tex kartadagi nachinka bloklari soni. Hamma qatlam
-  // bir rangda («Nachinka rangi» palitrasi / avtomatik).
+  // 2-qadam: nachinka QATLAMLARI soni (chiplar: «1-qatlam», «2-qatlam» ...,
+  // «+ Qatlam», «×»). null — hali o'zgartirilmagan: nachinka пф'lari soni
+  // (пф yo'q — tortning nachinka bloklari soni).
   int? _layerCount;
-  // Chip bilan tanlangan qatlam — ostidagi panelda faqat shu qatlamga mos
-  // nachinka bloki (k-qatlam → k-blok, navbat bilan). null — hammasi.
+  // Chip bilan tanlangan qatlam — ostidagi panelda faqat shu qatlamning
+  // пф tex kartasi / bloki. null — hammasi.
   int? _activeLayer;
 
   static const int _maxLayers = 5;
 
-  int _layersOf(List<TechBase> blocks) {
+  int _layersOf(CakeParts parts) {
     final n = _layerCount;
     if (n != null) return n.clamp(1, _maxLayers);
-    var fillCount = 0;
-    for (final b in blocks) {
-      if (CakeBlockRole.of(b) == CakeBlockRole.filling) fillCount++;
+    if (parts.fillings.isNotEmpty) {
+      return parts.fillings.length.clamp(1, _maxLayers);
     }
-    return fillCount;
+    return parts.fillingBlocks.length.clamp(0, _maxLayers);
   }
 
   // Tort tex kartasi — boshqa bo'limlardagi kabi yagona «Nachinka rangi»
@@ -120,20 +240,79 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
     );
   }
 
+  // Пф'ning o'z tex kartasi — «П/Ф Бисквит» / «П/Ф Начинка» sahifalaridagi
+  // rejimda (foto; nachinkada palitra ham). Saqlangach 3D o'zi yangilanadi.
+  void _openPfCard(ProductModelAdmin pf, CakeBlockRole role) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TechCardEditorPage(
+          product: pf,
+          canEditPrices: false,
+          showBiscuitPhoto: true,
+          showFillingColor: role == CakeBlockRole.filling,
+        ),
+      ),
+    );
+  }
+
+  // 1-qadam biskviti: пф bo'lsa — uning tex kartasidan (rang palitrasi /
+  // nom-tarkib, mevalar nomidan, foto); o'lcham — tortniki (kiritilgan
+  // bo'lsa), aks holda пф'niki. Пф yo'q — tort nomi/bloklaridan.
+  _BiscuitLook _biscuitLook(
+      ProductModelAdmin cake, TechCard card, CakeParts parts) {
+    final pf = parts.biscuit;
+    if (pf == null) {
+      return (
+        dims: BiscuitDims.fromTechCard(card),
+        palette: BiscuitPalette.detect(cake.name, card),
+        fruits: BiscuitFruit.detect(cake.name),
+        photoUrl: null,
+      );
+    }
+    final pc = pf.techCard;
+    return (
+      dims: BiscuitDims.fromTechCard(_hasSize(card) ? card : pc),
+      palette: BiscuitPalette.of(pf.name, pc),
+      fruits: BiscuitFruit.detect(pf.name),
+      photoUrl: biscuitPhotoUrlOf(pc),
+    );
+  }
+
+  // Nachinka qatlamlari (PASTDAN yuqoriga): har biri (ko'rinish, foto URL).
+  // Пф bo'lsa — k-qatlam → k-пф (navbat bilan), o'z tex kartasidan
+  // (palitra → foto → nom/tarkib); пф yo'q — tortning «Nachinka rangi».
+  List<(FillingLook, String?)> _layerSources(
+      ProductModelAdmin cake, TechCard card, CakeParts parts) {
+    final n = _layersOf(parts);
+    if (parts.fillings.isEmpty) {
+      final look = FillingLook.fromTechCard(cake.name, card);
+      return [for (var k = 0; k < n; k++) (look, null)];
+    }
+    return [
+      for (var k = 0; k < n; k++)
+        () {
+          final pf = parts.fillings[k % parts.fillings.length];
+          return FillingLook.resolve(pf.name, pf.techCard);
+        }(),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Tex karta saqlangach provider xotirada yangilanadi — eng yangi nusxa.
-    final cake = context.select<ProductProviderAdmin, ProductModelAdmin>(
-      (p) => p.products.firstWhere(
-        (x) => x.id == widget.cake.id,
-        orElse: () => widget.cake,
-      ),
+    // Tex karta saqlangach provider xotirada yangilanadi — eng yangi nusxa;
+    // пф'lar ham shu ro'yxatdan (YAGONA manba).
+    final products = context.select<ProductProviderAdmin,
+        List<ProductModelAdmin>>((p) => p.products);
+    final cake = products.firstWhere(
+      (x) => x.id == widget.cake.id,
+      orElse: () => widget.cake,
     );
     final card = cake.techCard;
     final blocks = card?.bases ?? const <TechBase>[];
-    // Nachinka rangi — «Nachinka rangi» palitrasi (filling_color), hamma
-    // qatlam bir xil; tanlanmagan bo'lsa avtomatik (nom/bloklar/masalliqlar).
-    final fillingLook = FillingLook.fromTechCard(cake.name, card);
+    final parts = card == null
+        ? const CakeParts()
+        : CakeParts.resolve(card, {for (final p in products) p.id: p});
 
     return Scaffold(
       backgroundColor: _bgColor,
@@ -162,7 +341,7 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                  child: _hero(cake, card!, blocks),
+                  child: _hero(cake, card!, parts),
                 ),
                 // Qadam tugmalari — rasmning OSTIDA, bir qatorda.
                 Padding(
@@ -181,14 +360,20 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
                   ),
                 ),
                 // 2-qadam: qatlam chiplari (sarlavha o'rniga — joy tejash).
-                if (_step == 1) _layerBar(blocks, fillingLook),
+                if (_step == 1) _layerBar(cake, card, parts),
                 Expanded(
-                  child: _BlocksPanel(
-                    // 2-qadamda sarlavha yo'q — chiplar o'zi aytib turadi.
-                    title: _step == 1 ? null : '${_step + 1}. ${_steps[_step].$2}',
-                    blocks: _blocksOfStep(blocks),
-                    emptyHint: _steps[_step].$3,
-                    card: card,
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+                    children: [
+                      // 2-qadamda sarlavha yo'q — chiplar o'zi aytib turadi.
+                      if (_step != 1)
+                        Text(
+                          '${_step + 1}. ${_steps[_step].$2}',
+                          style: const TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.bold),
+                        ),
+                      ..._panel(cake, card, parts),
+                    ],
                   ),
                 ),
               ],
@@ -196,32 +381,69 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
     );
   }
 
-  // Qadamga tegishli bloklar: 1 — biskvit; 2 — nachinka (chip tanlangan
-  // bo'lsa — faqat shu qatlamning bloki); 3 — qoplama, bezak va boshqa
-  // bosqichlar (tartib saqlanadi).
-  List<TechBase> _blocksOfStep(List<TechBase> blocks) {
-    bool keep(CakeBlockRole r) => switch (_step) {
-          0 => r == CakeBlockRole.biscuit,
-          1 => r == CakeBlockRole.filling,
-          _ => r == CakeBlockRole.coat ||
-              r == CakeBlockRole.decor ||
-              r == CakeBlockRole.other,
-        };
-    final list = [for (final b in blocks) if (keep(CakeBlockRole.of(b))) b];
-    final k = _activeLayer;
-    if (_step == 1 && k != null && list.isNotEmpty) {
-      return [list[k % list.length]];
+  Widget _hint(String text) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        child: Text(text, style: TextStyle(color: Colors.grey.shade600)),
+      );
+
+  // Qadam paneli: 1 — biskvit пф tex kartasi (+ tortning biskvit bloklari);
+  // 2 — nachinka пф tex kartalari (chip tanlangan bo'lsa — faqat shu
+  // qatlamniki) yoki tortning nachinka bloklari; 3 — tort fotosi va
+  // qoplama/bezak/bosqich bloklari.
+  List<Widget> _panel(ProductModelAdmin cake, TechCard card, CakeParts parts) {
+    switch (_step) {
+      case 0:
+        final pf = parts.biscuit;
+        return [
+          if (pf != null)
+            _PfSection(
+              pf: pf,
+              role: CakeBlockRole.biscuit,
+              dims: _biscuitLook(cake, card, parts).dims,
+              onOpen: () => _openPfCard(pf, CakeBlockRole.biscuit),
+            ),
+          for (final b in parts.biscuitBlocks) _BlockCard(block: b, card: card),
+          if (pf == null && parts.biscuitBlocks.isEmpty) _hint(_steps[0].$3),
+        ];
+      case 1:
+        final k = _activeLayer;
+        if (parts.fillings.isNotEmpty) {
+          final n = parts.fillings.length;
+          final list = k == null
+              ? parts.fillings
+              : [parts.fillings[k % n]];
+          return [
+            for (final pf in list)
+              _PfSection(
+                pf: pf,
+                role: CakeBlockRole.filling,
+                dims: _biscuitLook(cake, card, parts).dims,
+                onOpen: () => _openPfCard(pf, CakeBlockRole.filling),
+              ),
+          ];
+        }
+        final blocks = parts.fillingBlocks;
+        if (blocks.isEmpty) return [_hint(_steps[1].$3)];
+        final list = k == null ? blocks : [blocks[k % blocks.length]];
+        return [for (final b in list) _BlockCard(block: b, card: card)];
+      default:
+        final url = _fullUrl(cake.imageUrl);
+        return [
+          if (url != null) _PhotoCard(url: url),
+          for (final b in parts.finishBlocks) _BlockCard(block: b, card: card),
+          if (parts.finishBlocks.isEmpty) _hint(_steps[2].$3),
+        ];
     }
-    return list;
   }
 
   // Nachinka qatlamlari qatori — umumiy konstruktordagi bilan bir xil
-  // ko'rinish: «1-qatlam» (pastki) ... rangli nuqta bilan, «×» olib
-  // tashlaydi, «+ Qatlam» ustiga qo'shadi. Chip bosilsa shu qatlam tanlanadi
-  // (panelda uning bloki), qayta bosilsa tanlov olinadi.
-  Widget _layerBar(List<TechBase> blocks, FillingLook look) {
-    final n = _layersOf(blocks);
-    final dot = look.bandsOf(0).first.color;
+  // ko'rinish: «1-qatlam» (pastki) ... rangli nuqta bilan (qatlam пф'ining
+  // rangi), «×» olib tashlaydi, «+ Qatlam» ustiga qo'shadi. Chip bosilsa
+  // shu qatlam tanlanadi (panelda uning пф tex kartasi), qayta bosilsa
+  // tanlov olinadi.
+  Widget _layerBar(ProductModelAdmin cake, TechCard card, CakeParts parts) {
+    final n = _layersOf(parts);
+    final sources = _layerSources(cake, card, parts);
     const chipText = TextStyle(fontSize: 12);
     return SizedBox(
       height: 34,
@@ -236,7 +458,7 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
                 avatar: Container(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: dot,
+                    color: sources[i].$1.color,
                     border: Border.all(color: Colors.black26),
                   ),
                 ),
@@ -282,43 +504,53 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
     );
   }
 
-  // 3D: qadamga qarab biskvit / kesilgan bo'lakli tort / butun tort.
-  Widget _hero(ProductModelAdmin cake, TechCard card, List<TechBase> blocks) {
-    final dims = BiscuitDims.fromTechCard(card);
-    // Korjlar — avtomatik, tort nomi/bloklari/masalliqlaridan (biskvit uchun
-    // palitra yo'q). Nachinka — «Nachinka rangi» palitrasi yoki avtomatik,
-    // qatlamlar soni — chiplardan (boshlanishida nachinka bloklari soni).
-    final sponge = BiscuitPalette.detect(cake.name, card);
-    final fillingLook = FillingLook.fromTechCard(cake.name, card);
-    final fillings = [
-      for (var i = 0; i < _layersOf(blocks); i++) fillingLook.bandsOf(0),
-    ];
+  // Rasm: qadamga qarab biskvit (пф tex kartasi bo'yicha) / kesilgan
+  // bo'lakli tort (пф nachinkalari) / tayyor tort illyustratsiyasi (fotodan).
+  Widget _hero(ProductModelAdmin cake, TechCard card, CakeParts parts) {
+    final biscuit = _biscuitLook(cake, card, parts);
 
-    // 1 — biskvitning o'zi; 2 — nachinka bloki bo'lmasa ham biskvit.
-    if (_step == 0 || (_step == 1 && fillings.isEmpty)) {
+    // 1 — biskvitning o'zi; 2 — nachinka bo'lmasa ham biskvit.
+    if (_step == 0 || (_step == 1 && _layersOf(parts) == 0)) {
       return Biscuit3DView(
         height: _heroH,
-        dims: dims,
-        palette: sponge,
-        fruits: BiscuitFruit.detect(cake.name),
+        dims: biscuit.dims,
+        palette: biscuit.palette,
+        fruits: biscuit.fruits,
+        photoUrl: biscuit.photoUrl,
       );
     }
-    // 3 — TAYYOR TORT: vektor illyustratsiya (cake_illustration.dart) —
-    // qoplama/glazur rangi, faktura va dekor tex kartadan.
+    // 3 — TAYYOR TORT: fotosi bo'lsa — fotodan 3D model (shakl siluetdan,
+    // tekstura fotoning o'zi); foto yo'q — vektor illyustratsiya tex kartadan.
     if (_step == 2) {
-      return CakeIllustrationView(
-        height: _heroH + 30,
-        spec: CakeIllustrationSpec.fromTechCard(cake.name, card),
-      );
+      final url = _fullUrl(cake.imageUrl);
+      // Foto YO'Q — faqat shunda tex kartadan chizilgan illyustratsiya.
+      if (url == null) {
+        return CakeIllustrationView(
+          height: _heroH + 30,
+          spec: CakeIllustrationSpec.fromTechCard(cake.name, card),
+        );
+      }
+      // Foto bor — 3D faqat SHU fotodan; yuklanmasa xato ko'rsatiladi,
+      // illyustratsiyaga o'tilmaydi (u boshqa tort bo'lib ko'rinardi).
+      return CakePhoto3DView(imageUrl: url, height: _heroH + 30);
     }
-    // 2 — bo'lagi kesilgan «yalang'och» tort, kesimda nachinka. Painter
-    // qatlamlarni TEPADAN pastga oladi — teskari tartib.
-    return Filling3DView(
-      height: _heroH,
-      sponge: sponge,
-      dims: dims,
-      fillings: fillings.reversed.toList(),
-      look: FillingLook.neutral,
+    // 2 — bo'lagi kesilgan «yalang'och» tort, kesimda nachinka. Har qatlam
+    // o'z пф'ining tex kartasidan; пф fotosi bo'lsa — kesim qatlamlari
+    // fotodan (FillingPhotoLooksBuilder). Painter qatlamlarni TEPADAN
+    // pastga oladi — teskari tartib.
+    final sources = _layerSources(cake, card, parts);
+    return FillingPhotoLooksBuilder(
+      urls: [for (final s in sources) s.$2],
+      builder: (context, photoLooks) => Filling3DView(
+        height: _heroH,
+        sponge: biscuit.palette,
+        dims: biscuit.dims,
+        fillings: [
+          for (var k = sources.length - 1; k >= 0; k--)
+            (photoLooks[k] ?? sources[k].$1).bandsOf(0),
+        ],
+        look: FillingLook.neutral,
+      ),
     );
   }
 }
@@ -426,48 +658,189 @@ class _StepButton extends StatelessWidget {
   }
 }
 
-// Qadamning bloklari: sarlavha, so'ng har blok — nomi + rol chipi, rasmi,
-// og'irligi/bo'limi va masalliqlar (miqdor — tex kartadagidek, butun partiya
-// uchun). Blok yo'q — izoh.
-class _BlocksPanel extends StatelessWidget {
-  // null — sarlavhasiz (2-qadam: chiplar o'rnida).
-  final String? title;
-  final List<TechBase> blocks;
-  final String emptyHint;
-  final TechCard card;
+// Полуфабрикатнинг O'Z TEX KARTASI bo'limi: sarlavha kartasi (kichik
+// rasm — biskvit / nachinkali bo'lak, nomi, «Полуфабрикат», o'lchami,
+// pishirish rejimi; bosilsa tex kartasi muharrirda) va ostida uning
+// bloklari masalliqlari bilan.
+class _PfSection extends StatelessWidget {
+  final ProductModelAdmin pf;
+  final CakeBlockRole role;
+  // Biskvit rasmi uchun tort o'lchami (1-qadamdagi bilan bir xil).
+  final BiscuitDims dims;
+  final VoidCallback onOpen;
 
-  const _BlocksPanel({
-    required this.title,
-    required this.blocks,
-    required this.emptyHint,
-    required this.card,
+  const _PfSection({
+    required this.pf,
+    required this.role,
+    required this.dims,
+    required this.onOpen,
   });
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+    final card = pf.techCard;
+    final bases = card?.bases ?? const <TechBase>[];
+    final Widget thumb;
+    if (role == CakeBlockRole.biscuit) {
+      thumb = BiscuitThumb(
+        dims: dims,
+        palette: BiscuitPalette.of(pf.name, card),
+        fruits: BiscuitFruit.detect(pf.name),
+        photoUrl: biscuitPhotoUrlOf(card),
+      );
+    } else {
+      final (look, photoUrl) = FillingLook.resolve(pf.name, card);
+      thumb = FillingThumb(look: look, photoUrl: photoUrl);
+    }
+    final info = <String>[
+      'Полуфабрикат',
+      if (_sizeLine(card).isNotEmpty) _sizeLine(card),
+      if (card != null && (card.bakeTimeMin > 0 || card.bakeTempC > 0))
+        [
+          if (card.bakeTimeMin > 0) '${card.bakeTimeMin} daq',
+          if (card.bakeTempC > 0) '${card.bakeTempC} °C',
+        ].join(' · '),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (title != null)
-          Text(
-            title!,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+        Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Material(
+            color: _accentColor.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(14),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: onOpen,
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _accentColor),
+                ),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: SizedBox(width: 72, height: 60, child: thumb),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            pf.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              height: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            info.join(' · '),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: Colors.brown.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Icon(
+                      Icons.menu_book_outlined,
+                      size: 20,
+                      color: Colors.brown.shade700,
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-        if (blocks.isEmpty)
+        ),
+        if (bases.isEmpty)
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 14),
+            padding: const EdgeInsets.symmetric(vertical: 10),
             child: Text(
-              emptyHint,
+              'Пф tex kartasida blok yo\'q',
               style: TextStyle(color: Colors.grey.shade600),
             ),
           )
         else
-          for (final b in blocks) _BlockCard(block: b, card: card),
+          for (final b in bases) _BlockCard(block: b, card: card!),
       ],
     );
   }
 }
 
+// 3-qadam: tortning o'z fotosi — 3D model shundan.
+class _PhotoCard extends StatelessWidget {
+  final String url;
+
+  const _PhotoCard({required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Tort fotosi',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '3D model shundan',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: Colors.brown.shade700,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: AppNetworkImage(
+                  imageUrl: url,
+                  width: double.infinity,
+                  height: 160,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Tex karta bloki: nomi + rol chipi, rasmi (blok rasmi), og'irligi/bo'limi
+// va masalliqlar (miqdor — tex kartadagidek, butun partiya uchun).
 class _BlockCard extends StatelessWidget {
   final TechBase block;
   final TechCard card;
@@ -477,7 +850,7 @@ class _BlockCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final role = CakeBlockRole.of(block);
-    final url = _blockImageUrl(block);
+    final url = _fullUrl(block.imageUrl);
     final weight = block.weightG > 0 ? block.weightG : block.computedWeightG;
     final stages = card.stages;
     final stageName = (stages.isNotEmpty &&
