@@ -22,13 +22,15 @@
 //       пф'lar soni, «+ Qatlam» qo'shadi, «×» olib tashlaydi; chip bosilsa
 //       ostida faqat shu qatlamning пф tex kartasi. Пф bo'lmasa — tortning
 //       nachinka bloklari, hammasi «Nachinka rangi» palitrasida.
-//   3 — Tort: TAYYOR TORT — TORTNING O'Z FOTOSIDAN 3D model
-//       (cake_photo_3d.dart, CakePhoto3DView: shakl fotodagi siluetdan,
-//       tekstura — fotoning o'zi, barmoq bilan buriladi); yuklanmasa —
-//       xato + «Qayta urinish» (illyustratsiyaga O'TILMAYDI: u boshqa tort
-//       bo'lib ko'rinardi). Foto YO'Q bo'lsagina — vektor ILLYUSTRATSIYA
-//       tex kartadan (cake_illustration.dart: qoplama rangi, faktura,
-//       dekor). Ostida fotoning o'zi va qoplama/dekor bloklari.
+//   3 — Tort: TAYYOR TORT — tortning O'Z FOTOSI, ekrandagi o'lchami tex
+//       kartadagi DIAMETRGA qarab (cake_photo_view.dart, CakePhotoView):
+//       Ø 30 sm blokni to'ldiradi, Ø 16 sm kichik chiqadi — tortlar
+//       bir-biriga nisbatan to'g'ri kattalikda ko'rinadi. 3D qurish YO'Q:
+//       fotodan siluet bo'yicha model qurish tashlandi (Mone fotolarida
+//       tort oq patnis ustida, fon ham oq — siluet patnis bilan qo'shilib
+//       ketardi). Foto YO'Q bo'lsagina — vektor ILLYUSTRATSIYA tex kartadan
+//       (cake_illustration.dart). Ostida fotoning o'zi va qoplama/dekor
+//       bloklari.
 // Blok roli nomidan (CakeBlockRole.of): бисквит/корж → biskvit; покрытие/
 // глазурь/выравнивание → qoplama; декор/украшение → bezak; пропитка/сироп/
 // сборка → bosqich; qolgani (крем, начинка, конфи, мусс) → nachinka.
@@ -46,7 +48,7 @@ import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:uz_ai_dev/shef/ui/shef_tech_card_page.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/cake_illustration.dart';
-import 'package:uz_ai_dev/shef/ui/widgets/cake_photo_3d.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/cake_photo_view.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/filling_photo_look.dart';
 
@@ -520,20 +522,20 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
         photoUrl: biscuit.photoUrl,
       );
     }
-    // 3 — TAYYOR TORT: fotosi bo'lsa — fotodan 3D model (shakl siluetdan,
-    // tekstura fotoning o'zi); foto yo'q — vektor illyustratsiya tex kartadan.
+    // 3 — TAYYOR TORT: tortning O'Z fotosi, ekrandagi o'lchami tex
+    // kartadagi diametrga qarab (cake_photo_view.dart). 3D qurish YO'Q:
+    // Mone fotolarida tort oq patnis ustida, fon ham oq — siluet patnis
+    // bilan qo'shilib ketar va model goh patnisdan qurilardi.
+    // Foto YO'Q — tex kartadan chizilgan vektor illyustratsiya.
     if (_step == 2) {
       final url = _fullUrl(cake.imageUrl);
-      // Foto YO'Q — faqat shunda tex kartadan chizilgan illyustratsiya.
       if (url == null) {
         return CakeIllustrationView(
           height: _heroH + 30,
           spec: CakeIllustrationSpec.fromTechCard(cake.name, card),
         );
       }
-      // Foto bor — 3D faqat SHU fotodan; yuklanmasa xato ko'rsatiladi,
-      // illyustratsiyaga o'tilmaydi (u boshqa tort bo'lib ko'rinardi).
-      return CakePhoto3DView(imageUrl: url, height: _heroH + 30);
+      return CakePhotoView(imageUrl: url, card: card, height: _heroH + 30);
     }
     // 2 — bo'lagi kesilgan «yalang'och» tort, kesimda nachinka. Har qatlam
     // o'z пф'ining tex kartasidan; пф fotosi bo'lsa — kesim qatlamlari
