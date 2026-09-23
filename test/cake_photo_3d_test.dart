@@ -9,11 +9,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/cake_photo_3d.dart';
 
 // Oq fonda tort: [tiers] — (yarim kenglik, balandlik) pastdan tepaga, ellips
-// tepa/past gardishlari bilan (kamera balandligi sinE).
+// tepa/past gardishlari bilan (kamera balandligi sinE). [decorH] — eng tepa
+// yarus USTIDAGI bezak (makaron/rezavor/shokolad «yelpig'ich»): markazda
+// shuncha px ko'tarilgan, kenglikning ~65% ini egallaydi.
 Future<ui.Image> _cakeImage({
   required List<(double, double)> tiers,
   double sinE = 0.3,
   bool square = false,
+  double decorH = 0,
   int w = 320,
   int h = 320,
   Color color = const Color(0xFF8B5A2B),
@@ -46,6 +49,25 @@ Future<ui.Image> _cakeImage({
           Rect.fromCenter(center: Offset(cx, yBase - height), width: 2 * r, height: 2 * b), top);
     }
     yBase -= height;
+  }
+  // Bezak: tepa yuzasining markazida, gardishdan ancha baland — silueti
+  // markazda «cho'qqi» beradi (yumaloq tort kvadrat bo'lib ko'rinmasin).
+  if (decorH > 0 && tiers.isNotEmpty) {
+    final rTop = tiers.last.$1;
+    final dR = 0.65 * rTop;
+    final decor = Paint()..color = const Color(0xFFD8B26A);
+    for (var i = -2; i <= 2; i++) {
+      final dx = i * dR / 2.4;
+      final hh = decorH * (1 - 0.25 * i.abs());
+      c.drawOval(
+        Rect.fromCenter(
+          center: Offset(cx + dx, yBase - hh / 2),
+          width: dR / 2.6,
+          height: hh,
+        ),
+        decor,
+      );
+    }
   }
   return rec.endRecording().toImage(w, h);
 }
@@ -85,6 +107,17 @@ void main() {
     // Pastki yarus radius 1, tepa yarus ≈ 70/120.
     expect(s.profile.first.$2, closeTo(1.0, 0.06));
     expect(s.profile.last.$2, closeTo(70 / 120, 0.06));
+  });
+
+  // Regressiya: qizil yumaloq tort (ustida makaron/rezavor/shokolad
+  // «yelpig'ich») 3D'da KVADRAT bo'lib chiqardi — markazdagi baland bezak
+  // silueti «tom» (^) shaklini taqlid qilardi.
+  test('round cake with tall centre decor is NOT square', () async {
+    final img = await _cakeImage(tiers: [(110, 90)], sinE: 0.3, decorH: 55);
+    final s = analyzeCakePhoto(await _rgba(img), img.width, img.height);
+    expect(s.square, isFalse);
+    // Bezak kamera burchagini ham shishirmasligi kerak.
+    expect(s.sinE, closeTo(0.3, 0.08));
   });
 
   test('square cake detected from flat top contour', () async {

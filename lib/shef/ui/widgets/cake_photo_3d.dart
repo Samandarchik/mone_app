@@ -346,61 +346,93 @@ CakePhotoShape analyzeCakePhoto(Uint8List px, int w, int h) {
 
   final cxTop = (left[yPlateau] + right[yPlateau]) / 2;
 
-  // --- kvadrat: 3/4 rakursdan olingan kvadrat tortning tepa konturi ellips
-  // emas, «tom» (^): ikki to'g'ri chiziq. Tepa yarus ustunlari bo'yicha
-  // ikkala model eng kichik kvadratlar bilan solishtiriladi — «tom» aniq
-  // yaxshiroq mos kelsagina kvadrat. Old tomondan olingan kvadrat siluetda
-  // silindrdan farq qilmaydi — yumaloq deb olinadi (ko'proq uchraydi).
+  // --- kvadrat / yumaloq: 3/4 rakursdagi kvadrat tortning tepa konturi
+  // ellips emas, «tom» (^) — ikki to'g'ri chiziq. Ikkala model tepa
+  // konturiga (topY) eng kichik kvadratlar bilan moslanadi va SSE'lari
+  // solishtiriladi.
+  //
+  // MUHIM: tortning USTIDAGI bezak (makaron, rezavor, shokolad «yelpig'ich»,
+  // безе) konturni MARKAZDA yuqoriga ko'taradi va «tom» shaklini TAQLID
+  // qiladi — shu sababli yumaloq tort kvadrat bo'lib chiqardi. Ikki himoya:
+  //   • faqat TASHQI belbog' (0.45 ≤ |t| ≤ 0.97) olinadi — bezak gardishdan
+  //     ichkarida turadi, chetga deyarli yetmaydi;
+  //   • ellipsga moslangach, undan YUQORIDA qolgan nuqtalar (bezak
+  //     cho'qqilari) tashlanadi va IKKALA model o'sha bitta to'plamda qayta
+  //     moslanadi (halol solishtirish). Kvadrat tortning konturi ellipsdan
+  //     PASTDA yotadi — u tashlanmaydi.
+  // Kvadrat deb faqat ANIQ dalilda aytiladi (SSE 3 barobar kichik): yumaloq
+  // tortni kvadrat qilib qo'yish — eng ko'zga tashlanadigan xato, teskarisi
+  // esa ancha yumshoq.
   var square = false;
   {
-    final gEll = <double>[], gRoof = <double>[], ys = <double>[];
+    final ts = <double>[], ys = <double>[];
     for (var x = (cxTop - r1).ceil(); x <= (cxTop + r1).floor(); x++) {
       if (x < 0 || x >= w || topY[x].isNaN) continue;
       final t = ((x - cxTop) / r1).abs();
-      if (t > 0.97) continue;
-      gEll.add(math.sqrt(1 - t * t));
-      gRoof.add(1 - t);
+      if (t < 0.45 || t > 0.97) continue;
+      ts.add(t);
       ys.add(topY[x]);
     }
-    // y = c − b·g uchun (c, b, SSE).
-    (double, double, double)? fit(List<double> gs) {
+    // y = c − b·g(t) uchun eng kichik kvadratlar: (c, b, SSE).
+    (double, double, double)? fit(
+      double Function(double) g,
+      List<bool> use,
+    ) {
       double n = 0, sg = 0, sgg = 0, sy = 0, sgy = 0;
-      for (var i = 0; i < gs.length; i++) {
+      for (var i = 0; i < ts.length; i++) {
+        if (!use[i]) continue;
+        final gi = g(ts[i]);
         n++;
-        sg += gs[i];
-        sgg += gs[i] * gs[i];
+        sg += gi;
+        sgg += gi * gi;
         sy += ys[i];
-        sgy += gs[i] * ys[i];
+        sgy += gi * ys[i];
       }
       final det = n * sgg - sg * sg;
-      if (n < 6 || det.abs() < 1e-9) return null;
+      if (n < 8 || det.abs() < 1e-9) return null;
       final bb = (sg * sy - n * sgy) / det;
       final c = (sy + bb * sg) / n;
       var sse = 0.0;
-      for (var i = 0; i < gs.length; i++) {
-        final d = ys[i] - (c - bb * gs[i]);
+      for (var i = 0; i < ts.length; i++) {
+        if (!use[i]) continue;
+        final d = ys[i] - (c - bb * g(ts[i]));
         sse += d * d;
       }
       return (c, bb, sse);
     }
 
-    final e = fit(gEll), r = fit(gRoof);
-    if (e != null && r != null && r.$2 > 0.05 * r1 && r.$3 < 0.5 * e.$3) {
-      square = true;
+    double ell(double t) => math.sqrt(1 - t * t);
+    double roof(double t) => 1 - t;
+
+    var use = List<bool>.filled(ts.length, true);
+    final first = fit(ell, use);
+    if (first != null) {
+      // Bezak cho'qqilari: ellipsdan YUQORIDA (y kichikroq) qolganlar.
+      final tol = math.max(2.0, 0.06 * r1);
+      use = [
+        for (var i = 0; i < ts.length; i++)
+          ys[i] - (first.$1 - first.$2 * ell(ts[i])) >= -tol,
+      ];
+      final e = fit(ell, use);
+      final r = fit(roof, use);
+      if (e != null && r != null && r.$2 > 0.05 * r1 && r.$3 < e.$3 / 3) {
+        square = true;
+      }
     }
   }
 
   // --- gardish qatori (yC) va kamera balandligi (b = r1·sinE) — gardish
   // USTIDAGI yoy qatorlaridan, eng kichik kvadratlar: yumaloq —
   // y = yC − b·√(1 − (w/r1)²); kvadrat («tom») — y = yC − b·(1 − w/r1).
-  // Kenglik 0.3–0.97·r1 bo'lgan qatorlar (tepadagi tor bezak tashlanadi).
+  // Faqat KENG qatorlar (0.7–0.97·r1): tepadagi bezak qatorni kengaytirib,
+  // yoyni balandroq ko'rsatardi va kamera burchagi (sinE) oshib ketardi.
   var yC = yCi.toDouble();
   var b = 0.0;
   {
     double n = 0, sg = 0, sgg = 0, sy = 0, sgy = 0;
     for (var k = 0; k <= yPlateau - y0; k++) {
       final t = hw[k] / r1;
-      if (t < 0.3 || t > 0.97) continue;
+      if (t < 0.7 || t > 0.97) continue;
       final g = square ? 1 - t : math.sqrt(1 - t * t);
       final y = (y0 + k).toDouble();
       n++;
