@@ -18,11 +18,12 @@
 //      orqa tomon uchun ko'rinadigan (old) tomon ko'zgu qilinadi — bu eng kam
 //      «o'ylab topish». Tepa yuzasining orqa yarmi fotoda bor (ellipsning
 //      yuqori qismi) — u ko'zgusiz olinadi.
-//   4. Ko'rinish QAT'IY: model bitta rakursda qotib turadi — o'zi
-//      aylanmaydi, barmoq bilan burilmaydi, masshtablanmaydi va burchak
-//      tugmalari yo'q (foydalanuvchi talabi). Mesh bir marta quriladi,
-//      chuqurlik bo'yicha saralanib chiziladi. Yorug'lik juda yumshoq
-//      (0.8–1.0), rang o'zgarmasin deb.
+//   4. Aylantirish — barmoq/sichqoncha: yon tomonga — atrofida (360°),
+//      tepa/past — qarash burchagi (yondan ↔ tepadan); pinch / g'ildirak —
+//      masshtab. Mesh BIR MARTA quriladi, har kadrda faqat buriladi va
+//      chuqurlik bo'yicha saralanadi — burchak o'zgarganda detallar yo'qolmaydi
+//      va qayta «chizilmaydi». Yorug'lik juda yumshoq (0.8–1.0), rang
+//      o'zgarmasin deb.
 // Chegara: bitta fotodan haqiqiy orqa tomon va dekorning hajmiy geometriyasi
 // tiklanmaydi (bu neyro-rekonstruksiya servisi talab qiladi) — dekor tekstura
 // sifatida yuzada saqlanadi. Fon murakkab bo'lsa (tort fon bilan bir rangda,
@@ -36,6 +37,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 
@@ -101,21 +103,6 @@ double _median(List<double> v) {
   final s = [...v]..sort();
   return s[s.length ~/ 2];
 }
-
-// Siluet aniqlanmadi (bo'sh / degenerat) — butun rasm oddiy silindrga
-// qo'yiladi. Foto baribir ko'rsatiladi, faqat shakli taxminiy.
-CakePhotoShape _fallbackShape(int w, int h) => CakePhotoShape(
-      square: false,
-      sinE: 0.3,
-      heightRatio: 0.7,
-      profile: const [(0, 1), (1, 1)],
-      cx: w / 2,
-      a: w / 2,
-      yTop: h * 0.25,
-      yBottom: h * 0.95,
-      imageW: w,
-      imageH: h,
-    );
 
 /// RGBA piksellardan tort shaklini aniqlaydi. Tahlil uchun rasm kichik
 /// (≈256 px) bo'lgani ma'qul — BFS va profil uchun yetarli va tez.
@@ -277,71 +264,44 @@ CakePhotoShape analyzeCakePhoto(Uint8List px, int w, int h) {
   // butun rasm tort.
   final wholeImage = bestSize < n * 0.06;
 
-  // --- PATNIS / PODSTAVKA / SOYANI SILUETDAN CHIQARIB TASHLASH ---------
-  // Tort oq patnis (karton podstavka, tarelka) ustida turadi va patnis fon
-  // bilan deyarli bir xil oq bo'lgani uchun segmentatsiya uni TORTGA qo'shib
-  // yuboradi. Oqibati: patnis tortdan KENGROQ, shuning uchun tortning pastki
-  // qatorlarida siluet kengligi patnisniki bo'lib qoladi — kenglik profili
-  // pastga qarab o'sib boraveradi, gardish topilmaydi va model TORTDAN emas,
-  // PATNISDAN quriladi (foydalanuvchi ko'rgan xato: «tarelka hajmda ketyapti,
-  // tortning o'zi emas»).
-  //
-  // Yechim: siluet faqat FONDAN ANIQ FARQ QILADIGAN piksellardan olinadi.
-  // Har piksel uchun bgDist bor; bo'lakdagi qiymatlarning 70-protsentili —
-  // «tort darajasi», undan 30% chegara. Oq patnis va soya fonga yaqin, demak
-  // chiqib ketadi; shokolad/krem/glazur qoladi. Oq tortda daraja ham past
-  // bo'ladi — chegara ham pasayadi; agar shunda ham juda ko'p narsa yo'qolsa
-  // (bo'lakning 25% idan kam qolsa), eski xatti-harakatga qaytamiz.
-  final blobDist = <double>[];
-  for (var i = 0; i < n; i++) {
-    if (wholeImage || label[i] == best) {
-      blobDist.add(bgDist(i % w, i ~/ w));
-    }
-  }
-  blobDist.sort();
-  final cakeLevel = blobDist.isEmpty
-      ? 0.0
-      : blobDist[(blobDist.length * 0.7).floor().clamp(0, blobDist.length - 1)];
-  final cakeMin = math.max(threshold * 1.6, 0.30 * cakeLevel);
-
+  // --- ustun/qator konturlari ------------------------------------------
   final topY = List<double>.filled(w, double.nan);
   final botY = List<double>.filled(w, double.nan);
   final left = List<int>.filled(h, -1);
   final right = List<int>.filled(h, -1);
   var x0 = w, x1 = -1, y0 = h, y1 = -1;
-  var kept = 0;
-  void scan(bool strict) {
-    topY.fillRange(0, w, double.nan);
-    botY.fillRange(0, w, double.nan);
-    left.fillRange(0, h, -1);
-    right.fillRange(0, h, -1);
-    x0 = w;
-    x1 = -1;
-    y0 = h;
-    y1 = -1;
-    kept = 0;
-    for (var y = 0; y < h; y++) {
-      for (var x = 0; x < w; x++) {
-        if (!wholeImage && label[y * w + x] != best) continue;
-        if (strict && bgDist(x, y) < cakeMin) continue;
-        kept++;
-        if (topY[x].isNaN) topY[x] = y.toDouble();
-        botY[x] = y.toDouble();
-        if (left[y] < 0) left[y] = x;
-        right[y] = x;
-        if (x < x0) x0 = x;
-        if (x > x1) x1 = x;
-        if (y < y0) y0 = y;
-        if (y > y1) y1 = y;
-      }
+  for (var y = 0; y < h; y++) {
+    for (var x = 0; x < w; x++) {
+      final inCake = wholeImage || label[y * w + x] == best;
+      if (!inCake) continue;
+      if (topY[x].isNaN) topY[x] = y.toDouble();
+      botY[x] = y.toDouble();
+      if (left[y] < 0) left[y] = x;
+      right[y] = x;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
     }
   }
+  if (x1 - x0 < 4 || y1 - y0 < 4) {
+    // Bo'sh/degenerat — standart silindr, butun rasm tekstura.
+    return CakePhotoShape(
+      square: false,
+      sinE: 0.3,
+      heightRatio: 0.7,
+      profile: const [(0, 1), (1, 1)],
+      cx: w / 2,
+      a: w / 2,
+      yTop: h * 0.25,
+      yBottom: h * 0.95,
+      imageW: w,
+      imageH: h,
+    );
+  }
 
-  scan(true);
-  // Juda ko'p yo'qoldi (masalan tortning o'zi oq) — chegarasiz qaytamiz.
-  final blobSize = wholeImage ? n : bestSize;
-  if (kept < blobSize * 0.25 || x1 - x0 < 4 || y1 - y0 < 4) scan(false);
-  if (x1 - x0 < 4 || y1 - y0 < 4) return _fallbackShape(w, h);
+  final cx = (x0 + x1) / 2;
+  final a = math.max(2.0, (x1 - x0) / 2);
 
   double halfAt(int y) {
     final yy = y.clamp(0, h - 1);
@@ -349,57 +309,31 @@ CakePhotoShape analyzeCakePhoto(Uint8List px, int w, int h) {
     return (right[yy] - left[yy] + 1) / 2;
   }
 
-  final cx = (x0 + x1) / 2;
-  final a = math.max(2.0, (x1 - x0) / 2);
-
-  // --- ENG TEPADAGI YARUS va uning GARDISHI — KENGLIK PROFILIDAN.
-  // Tepadan pastga kenglik tepa ellipsi yoyi bo'ylab o'sadi va gardishda
-  // o'sishdan TO'XTAYDI (yoyning o'sish tezligi gardishga yaqin nolga
-  // intiladi). Shuning uchun mezon — «keyingi [win] qatorda kenglik 2.5%
-  // dan kam o'sdi», ya'ni QAT'IY tekislik talab qilinmaydi: haqiqiy fotoda
-  // tortning yon tomoni bir oz toraysa/kengaysa ham gardish topiladi.
-  // (Ilgari «±4% ichida qat'iy tekis» talab qilinardi — gumbazsimon tort
-  // bunga tushmay, tekislik PATNISDA topilardi.)
-  // Qidiruv faqat yuqori 70% da: pastdagi kengayish — yarus yoki patnis.
-  final hh0 = y1 - y0 + 1;
-  final hwRaw = [for (var y = y0; y <= y1; y++) halfAt(y)];
-  // 3-median filtr — JPEG shovqini va bezak chetlari.
-  final hw = List<double>.generate(hwRaw.length, (i) {
-    final v = [
-      hwRaw[math.max(0, i - 1)],
-      hwRaw[i],
-      hwRaw[math.min(hwRaw.length - 1, i + 1)],
-    ]..sort();
-    return v[1];
-  });
-  final win = math.max(3, (0.08 * hh0).round());
-  final searchEnd = math.min(hw.length - 1, (0.7 * hh0).round());
-  var r1 = 0.0;
+  // --- ENG TEPADAGI YARUS va uning gardishi — KENGLIK PROFILIDAN (tepadan
+  // pastga): avval yoy (tepa ellipsining orqa yarmi — kenglik o'sadi), so'ng
+  // TEKIS joy (yarusning yon tomoni — kenglik o'zgarmaydi). Tepaga chiqib
+  // turgan bezak (безе, shariklar, figurkalar) kenglikni deyarli
+  // o'zgartirmaydi — bu «osmon chizig'i»ni ellipsga moslashdan ancha
+  // barqaror. Tekis joy: keyingi 0.15·a qatorda kenglik ±4% ichida.
+  final hw = [for (var y = y0; y <= y1; y++) halfAt(y)];
+  final win = math.max(3, (0.15 * a).round());
+  var r1 = a;
   var yPlateau = y0;
-  var found = false;
-  for (var k = 0; k + win <= searchEnd; k++) {
+  for (var k = 0; k + win < hw.length; k++) {
     final w0 = hw[k];
-    if (w0 < 0.25 * a) continue;
-    if (hw[k + win] - w0 < 0.025 * w0) {
-      r1 = w0;
-      yPlateau = y0 + k;
-      found = true;
-      break;
-    }
-  }
-  if (!found) {
-    // Topilmadi — yuqori qismdagi ENG KENG qator (patnisga tushib
-    // ketmaslik uchun baribir yuqori 70% ichida).
-    for (var k = 0; k <= searchEnd; k++) {
-      if (hw[k] > r1) {
-        r1 = hw[k];
-        yPlateau = y0 + k;
+    if (w0 < 0.1 * a) continue;
+    var flat = true;
+    for (var m = 1; m <= win; m++) {
+      if ((hw[k + m] - w0).abs() > 0.04 * w0) {
+        flat = false;
+        break;
       }
     }
-  }
-  if (r1 < 2) {
-    r1 = a;
-    yPlateau = y0;
+    if (flat) {
+      r1 = w0;
+      yPlateau = y0 + k;
+      break;
+    }
   }
   // Gardish qatori (θ = 90°): kenglik birinchi marta r1'ning 95% ga yetgan joy.
   var yCi = yPlateau;
@@ -410,97 +344,63 @@ CakePhotoShape analyzeCakePhoto(Uint8List px, int w, int h) {
     }
   }
 
-  final cxTop = left[yPlateau] < 0
-      ? cx
-      : (left[yPlateau] + right[yPlateau]) / 2;
+  final cxTop = (left[yPlateau] + right[yPlateau]) / 2;
 
-  // --- kvadrat / yumaloq: 3/4 rakursdagi kvadrat tortning tepa konturi
-  // ellips emas, «tom» (^) — ikki to'g'ri chiziq. Ikkala model tepa
-  // konturiga (topY) eng kichik kvadratlar bilan moslanadi va SSE'lari
-  // solishtiriladi.
-  //
-  // MUHIM: tortning USTIDAGI bezak (makaron, rezavor, shokolad «yelpig'ich»,
-  // безе) konturni MARKAZDA yuqoriga ko'taradi va «tom» shaklini TAQLID
-  // qiladi — shu sababli yumaloq tort kvadrat bo'lib chiqardi. Ikki himoya:
-  //   • faqat TASHQI belbog' (0.45 ≤ |t| ≤ 0.97) olinadi — bezak gardishdan
-  //     ichkarida turadi, chetga deyarli yetmaydi;
-  //   • ellipsga moslangach, undan YUQORIDA qolgan nuqtalar (bezak
-  //     cho'qqilari) tashlanadi va IKKALA model o'sha bitta to'plamda qayta
-  //     moslanadi (halol solishtirish). Kvadrat tortning konturi ellipsdan
-  //     PASTDA yotadi — u tashlanmaydi.
-  // Kvadrat deb faqat ANIQ dalilda aytiladi (SSE 3 barobar kichik): yumaloq
-  // tortni kvadrat qilib qo'yish — eng ko'zga tashlanadigan xato, teskarisi
-  // esa ancha yumshoq.
+  // --- kvadrat: 3/4 rakursdan olingan kvadrat tortning tepa konturi ellips
+  // emas, «tom» (^): ikki to'g'ri chiziq. Tepa yarus ustunlari bo'yicha
+  // ikkala model eng kichik kvadratlar bilan solishtiriladi — «tom» aniq
+  // yaxshiroq mos kelsagina kvadrat. Old tomondan olingan kvadrat siluetda
+  // silindrdan farq qilmaydi — yumaloq deb olinadi (ko'proq uchraydi).
   var square = false;
   {
-    final ts = <double>[], ys = <double>[];
+    final gEll = <double>[], gRoof = <double>[], ys = <double>[];
     for (var x = (cxTop - r1).ceil(); x <= (cxTop + r1).floor(); x++) {
       if (x < 0 || x >= w || topY[x].isNaN) continue;
       final t = ((x - cxTop) / r1).abs();
-      if (t < 0.45 || t > 0.97) continue;
-      ts.add(t);
+      if (t > 0.97) continue;
+      gEll.add(math.sqrt(1 - t * t));
+      gRoof.add(1 - t);
       ys.add(topY[x]);
     }
-    // y = c − b·g(t) uchun eng kichik kvadratlar: (c, b, SSE).
-    (double, double, double)? fit(
-      double Function(double) g,
-      List<bool> use,
-    ) {
+    // y = c − b·g uchun (c, b, SSE).
+    (double, double, double)? fit(List<double> gs) {
       double n = 0, sg = 0, sgg = 0, sy = 0, sgy = 0;
-      for (var i = 0; i < ts.length; i++) {
-        if (!use[i]) continue;
-        final gi = g(ts[i]);
+      for (var i = 0; i < gs.length; i++) {
         n++;
-        sg += gi;
-        sgg += gi * gi;
+        sg += gs[i];
+        sgg += gs[i] * gs[i];
         sy += ys[i];
-        sgy += gi * ys[i];
+        sgy += gs[i] * ys[i];
       }
       final det = n * sgg - sg * sg;
-      if (n < 8 || det.abs() < 1e-9) return null;
+      if (n < 6 || det.abs() < 1e-9) return null;
       final bb = (sg * sy - n * sgy) / det;
       final c = (sy + bb * sg) / n;
       var sse = 0.0;
-      for (var i = 0; i < ts.length; i++) {
-        if (!use[i]) continue;
-        final d = ys[i] - (c - bb * g(ts[i]));
+      for (var i = 0; i < gs.length; i++) {
+        final d = ys[i] - (c - bb * gs[i]);
         sse += d * d;
       }
       return (c, bb, sse);
     }
 
-    double ell(double t) => math.sqrt(1 - t * t);
-    double roof(double t) => 1 - t;
-
-    var use = List<bool>.filled(ts.length, true);
-    final first = fit(ell, use);
-    if (first != null) {
-      // Bezak cho'qqilari: ellipsdan YUQORIDA (y kichikroq) qolganlar.
-      final tol = math.max(2.0, 0.06 * r1);
-      use = [
-        for (var i = 0; i < ts.length; i++)
-          ys[i] - (first.$1 - first.$2 * ell(ts[i])) >= -tol,
-      ];
-      final e = fit(ell, use);
-      final r = fit(roof, use);
-      if (e != null && r != null && r.$2 > 0.05 * r1 && r.$3 < e.$3 / 3) {
-        square = true;
-      }
+    final e = fit(gEll), r = fit(gRoof);
+    if (e != null && r != null && r.$2 > 0.05 * r1 && r.$3 < 0.5 * e.$3) {
+      square = true;
     }
   }
 
   // --- gardish qatori (yC) va kamera balandligi (b = r1·sinE) — gardish
   // USTIDAGI yoy qatorlaridan, eng kichik kvadratlar: yumaloq —
   // y = yC − b·√(1 − (w/r1)²); kvadrat («tom») — y = yC − b·(1 − w/r1).
-  // Faqat KENG qatorlar (0.7–0.97·r1): tepadagi bezak qatorni kengaytirib,
-  // yoyni balandroq ko'rsatardi va kamera burchagi (sinE) oshib ketardi.
+  // Kenglik 0.3–0.97·r1 bo'lgan qatorlar (tepadagi tor bezak tashlanadi).
   var yC = yCi.toDouble();
   var b = 0.0;
   {
     double n = 0, sg = 0, sgg = 0, sy = 0, sgy = 0;
     for (var k = 0; k <= yPlateau - y0; k++) {
       final t = hw[k] / r1;
-      if (t < 0.7 || t > 0.97) continue;
+      if (t < 0.3 || t > 0.97) continue;
       final g = square ? 1 - t : math.sqrt(1 - t * t);
       final y = (y0 + k).toDouble();
       n++;
@@ -1003,14 +903,27 @@ class CakePhoto3DView extends StatefulWidget {
   State<CakePhoto3DView> createState() => _CakePhoto3DViewState();
 }
 
-// QAT'IY rakurs — model shu holatda qotib turadi (burish/masshtab yo'q).
-const double _fixedYaw = 0;
-const double _fixedPitch = 0.32;
+// Tez burchaklar: (yozuv, yaw, pitch).
+const List<(String, double, double)> _views = [
+  ('Old', 0, 0.32),
+  ('Yon', math.pi / 2, 0.32),
+  ('Orqa', math.pi, 0.32),
+  ('Tepa', 0, 1.45),
+];
 
-class _CakePhoto3DViewState extends State<CakePhoto3DView> {
+class _CakePhoto3DViewState extends State<CakePhoto3DView>
+    with TickerProviderStateMixin {
   CakePhotoModel? _model;
   // Yuklash/tahlil xatosi matni (null — xato yo'q).
   String? _error;
+  double _yaw = 0;
+  double _pitch = 0.32;
+  double _zoom = 1;
+  // Tugma bosilganda burchakka silliq o'tish. O'zi aylanish YO'Q — model
+  // bir holatda turadi, faqat barmoq / tugmalar buradi.
+  AnimationController? _move;
+  double _fromYaw = 0, _fromPitch = 0, _toYaw = 0, _toPitch = 0;
+  double _startZoom = 1;
 
   @override
   void initState() {
@@ -1029,6 +942,12 @@ class _CakePhoto3DViewState extends State<CakePhoto3DView> {
     }
   }
 
+  @override
+  void dispose() {
+    _move?.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     final url = widget.imageUrl;
     try {
@@ -1040,6 +959,30 @@ class _CakePhoto3DViewState extends State<CakePhoto3DView> {
       if (!mounted || url != widget.imageUrl) return;
       setState(() => _error = '$e');
     }
+  }
+
+  void _goTo(double yaw, double pitch) {
+    _move?.dispose();
+    _fromYaw = _yaw;
+    _fromPitch = _pitch;
+    // Eng qisqa yo'l bilan burish.
+    var dy = (yaw - _yaw) % (2 * math.pi);
+    if (dy > math.pi) dy -= 2 * math.pi;
+    _toYaw = _yaw + dy;
+    _toPitch = pitch;
+    final c = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    );
+    final curve = CurvedAnimation(parent: c, curve: Curves.easeInOut);
+    c.addListener(() {
+      if (!mounted) return;
+      setState(() {
+        _yaw = _fromYaw + (_toYaw - _fromYaw) * curve.value;
+        _pitch = _fromPitch + (_toPitch - _fromPitch) * curve.value;
+      });
+    });
+    _move = c..forward();
   }
 
   // Foto yuklanmadi / model qurilmadi — sabab va qayta urinish. Umumiy
@@ -1083,26 +1026,48 @@ class _CakePhoto3DViewState extends State<CakePhoto3DView> {
   @override
   Widget build(BuildContext context) {
     final model = _model;
-    // Faqat rasmning o'zi: burchak tugmalari («Old / Yon / Orqa / Tepa»)
-    // OLIB TASHLANGAN, jestlar ham yo'q.
-    return ClipRRect(
-      borderRadius: widget.borderRadius,
-      child: Container(
-        height: widget.height,
-        width: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [_heroTop, _heroBottom],
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ClipRRect(
+          borderRadius: widget.borderRadius,
+          child: Container(
+            height: widget.height,
+            width: double.infinity,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [_heroTop, _heroBottom],
+              ),
+            ),
+            child: _error != null
+                ? _errorView()
+                : model == null
+                    ? _loading()
+                    : _viewer(model),
           ),
         ),
-        child: _error != null
-            ? _errorView()
-            : model == null
-                ? _loading()
-                : _viewer(model),
-      ),
+        if (model != null) ...[
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            alignment: WrapAlignment.center,
+            children: [
+              for (final v in _views)
+                ActionChip(
+                  label: Text(v.$1, style: const TextStyle(fontSize: 11.5)),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  backgroundColor: Colors.white,
+                  side: BorderSide(color: Colors.grey.shade300),
+                  onPressed: () => _goTo(v.$2, v.$3),
+                ),
+            ],
+          ),
+        ],
+      ],
     );
   }
 
@@ -1117,16 +1082,41 @@ class _CakePhoto3DViewState extends State<CakePhoto3DView> {
     );
   }
 
-  // Model QAT'IY burchakda chiziladi: jest ham, g'ildirak ham yo'q —
-  // foydalanuvchi uni hech qanday yo'l bilan siljita olmaydi.
   Widget _viewer(CakePhotoModel model) {
-    return RepaintBoundary(
-      child: CustomPaint(
-        size: Size.infinite,
-        painter: CakePhotoPainter(
-          model: model,
-          yaw: _fixedYaw,
-          pitch: _fixedPitch,
+    return Listener(
+      // Sichqoncha g'ildiragi — masshtab.
+      onPointerSignal: (e) {
+        if (e is PointerScrollEvent) {
+          setState(() {
+            _zoom = (_zoom * (e.scrollDelta.dy > 0 ? 0.9 : 1.1)).clamp(0.5, 3.0);
+          });
+        }
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        // Bitta detektor: surish — burish, ikki barmoq — masshtab.
+        onScaleStart: (d) {
+          _move?.dispose();
+          _move = null;
+          _startZoom = _zoom;
+        },
+        onScaleUpdate: (d) => setState(() {
+          _yaw += d.focalPointDelta.dx * 0.012;
+          _pitch = (_pitch + d.focalPointDelta.dy * 0.008).clamp(-0.35, 1.5);
+          if (d.pointerCount > 1) {
+            _zoom = (_startZoom * d.scale).clamp(0.5, 3.0);
+          }
+        }),
+        child: RepaintBoundary(
+          child: CustomPaint(
+            size: Size.infinite,
+            painter: CakePhotoPainter(
+              model: model,
+              yaw: _yaw,
+              pitch: _pitch,
+              zoom: _zoom,
+            ),
+          ),
         ),
       ),
     );

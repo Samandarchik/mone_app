@@ -3,9 +3,9 @@
 // rangi, bezaklari (marvarid, rezavor, makaron, shokolad oqimi, sepma, gul,
 // sham, topper) va yozuvi CakeLook'dan (model/cake_design.dart) olinadi.
 // Model/plagin YO'Q — hammasi CustomPainter bilan chiziladi.
-// Cake3DView — katta ko'rinish: BIR HOLATDA qotib turadi (o'zi aylanmaydi,
-// barmoq bilan ham burilmaydi, burchak tugmalari yo'q).
-// [faceFront] — yozuv o'qilishi uchun old tomondan, tepadanroq rakurs.
+// Cake3DView — katta ko'rinish: BIR HOLATDA turadi (o'zi aylanmaydi), yon
+// tomonga surilsa buriladi; bosish / nuqtalar — 3 ta burchak (yondan,
+// tepadan, past). [faceFront] — yozuv o'qilishi uchun old tomondan, tepadan.
 // Cake3D — kichik statik variant (kartalar uchun).
 // Rotating3DView — umumiy qobiq (biskvit ham shuni ishlatadi: biscuit_3d.dart).
 import 'dart:math' as math;
@@ -15,11 +15,12 @@ import 'package:uz_ai_dev/shef/model/cake_design.dart';
 
 const Color _heroTop = Color(0xFFFFFFFF);
 const Color _heroBottom = Color(0xFFE6DDF3);
+const Color _dotActive = Color(0xFF8E83B8);
 const Color _chocolate = Color(0xFF4A2A1A);
 
-// Ko'rinish burchagi: ellips balandligi / kengligi nisbati
-// (0 — yondan, 1 — tepadan). Bitta qat'iy rakurs — tanlov yo'q.
-const double _restTilt = 0.26;
+// Ko'rinish burchaklari: ellips balandligi / kengligi nisbati
+// (0 — yondan, 1 — tepadan).
+const List<double> _tilts = [0.26, 0.46, 0.14];
 const double _frontTilt = 0.55;
 
 class Cake3DView extends StatelessWidget {
@@ -52,22 +53,16 @@ class Cake3DView extends StatelessWidget {
 typedef Painter3DBuilder = CustomPainter Function(
     double tilt, double rotation);
 
-// Tinch holatdagi rakurs: burilish (radian) — barcha 3D ko'rinishlar shu
-// bitta holatda turadi.
-const double _restRotation = 0.6;
-
-// STATIK 3D ko'rinish qobig'i: fon + chizma, boshqa hech narsa.
-// Model MUTLAQO QO'ZG'ALMAYDI — o'zi aylanmaydi, barmoq bilan burilmaydi,
-// burchak tugmalari/nuqtalari yo'q. Ilgari bu yerda surib burish va
-// burchak nuqtalari bor edi; ular OLIB TASHLANGAN (tort doim bitta
-// holatda ko'rinsin). Nima chizilishini [painter] beradi (tort / biskvit /
-// kesim).
-class Rotating3DView extends StatelessWidget {
+// Aylanadigan 3D ko'rinish qobig'i: fon, o'zi aylanish, surib burish,
+// burchak nuqtalari. Nima chizilishini [painter] beradi (tort / biskvit).
+class Rotating3DView extends StatefulWidget {
   final Painter3DBuilder painter;
   final double height;
   final BorderRadius borderRadius;
-  // true — yozuv o'qilishi uchun tepadanroq rakurs, burilishsiz.
   final bool faceFront;
+  // true — qo'lda boshqarish: nuqtalar yo'q; barmoq yon tomonga — burish,
+  // tepaga/pastga — qarash burchagi (yondan ↔ tepadan).
+  final bool manual;
 
   const Rotating3DView({
     super.key,
@@ -75,14 +70,114 @@ class Rotating3DView extends StatelessWidget {
     this.height = 260,
     this.borderRadius = const BorderRadius.all(Radius.circular(16)),
     this.faceFront = false,
+    this.manual = false,
   });
 
   @override
+  State<Rotating3DView> createState() => _Rotating3DViewState();
+}
+
+// O'ZI AYLANMAYDI: model bir holatda turadi (_restRotation), faqat barmoq
+// bilan buriladi. [_spin] doim 0 da — painter'lar uchun burilish manbai
+// o'zgarmasin deb saqlangan (repeat() chaqirilmaydi).
+const double _restRotation = 0.6;
+
+class _Rotating3DViewState extends State<Rotating3DView>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _spin = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 14),
+  );
+  int _page = 0;
+  // Burilish (radian): boshlanishida tinch holat, barmoq bilan o'zgaradi.
+  double _drag = _restRotation;
+  // Qo'lda rejimdagi qarash burchagi (manual).
+  double _tilt = _tilts.first;
+
+  @override
+  void dispose() {
+    _spin.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (widget.manual) return _buildManual();
+    final front = widget.faceFront;
+    return Column(
+      children: [
+        ClipRRect(
+          borderRadius: widget.borderRadius,
+          child: Container(
+            height: widget.height,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [_heroTop, _heroBottom],
+              ),
+            ),
+            child: GestureDetector(
+              // Gorizontal surish — aylantirish (vertikal — sahifa scroll'i).
+              onHorizontalDragUpdate: front
+                  ? null
+                  : (d) => setState(() => _drag += d.delta.dx * 0.015),
+              // Bosish — keyingi burchak.
+              onTap: front
+                  ? null
+                  : () => setState(() => _page = (_page + 1) % _tilts.length),
+              child: RepaintBoundary(
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(end: front ? _frontTilt : _tilts[_page]),
+                  duration: const Duration(milliseconds: 450),
+                  curve: Curves.easeInOut,
+                  builder: (context, tilt, _) => AnimatedBuilder(
+                    animation: _spin,
+                    builder: (context, _) => CustomPaint(
+                      size: Size.infinite,
+                      painter: widget.painter(
+                        tilt,
+                        front ? 0 : _spin.value * 2 * math.pi + _drag,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (var i = 0; i < _tilts.length; i++)
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: front ? null : () => setState(() => _page = i),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: const EdgeInsets.all(4),
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: !front && i == _page
+                        ? _dotActive
+                        : Colors.grey.shade300,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildManual() {
     return ClipRRect(
-      borderRadius: borderRadius,
+      borderRadius: widget.borderRadius,
       child: Container(
-        height: height,
+        height: widget.height,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -90,12 +185,26 @@ class Rotating3DView extends StatelessWidget {
             colors: [_heroTop, _heroBottom],
           ),
         ),
-        child: RepaintBoundary(
-          child: CustomPaint(
-            size: Size.infinite,
-            painter: painter(
-              faceFront ? _frontTilt : _restTilt,
-              faceFront ? 0 : _restRotation,
+        // Gorizontal va vertikal alohida: ichki vertikal surish sahifa
+        // scroll'idan ustun turadi (ko'rinish scroll ichida bo'lsa ham
+        // burchakni o'zgartiradi).
+        child: GestureDetector(
+          onHorizontalDragUpdate: (d) =>
+              setState(() => _drag += d.delta.dx * 0.015),
+          // Pastga surish — tepadan ko'proq qarash.
+          onVerticalDragUpdate: (d) => setState(
+            () => _tilt = (_tilt + d.delta.dy * 0.004).clamp(0.06, 0.95),
+          ),
+          child: RepaintBoundary(
+            child: AnimatedBuilder(
+              animation: _spin,
+              builder: (context, _) => CustomPaint(
+                size: Size.infinite,
+                painter: widget.painter(
+                  _tilt,
+                  _spin.value * 2 * math.pi + _drag,
+                ),
+              ),
             ),
           ),
         ),

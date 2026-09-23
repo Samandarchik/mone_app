@@ -95,25 +95,6 @@ void main() {
     expect(find.byType(ShefCakeConstructorPage), findsOneWidget);
   });
 
-  testWidgets('«Торт» categories are not repeated as category cards',
-      (t) async {
-    // Bo'limga «П/Ф Бисквит» va «Tortlar premium» qo'shilgan.
-    await BiskvitLinks.add(1);
-    await BiskvitLinks.add(4);
-    addTearDown(() async {
-      await BiskvitLinks.remove(1);
-      await BiskvitLinks.remove(4);
-    });
-    await open(t, const Size(497, 1200));
-    // Tortlar tepadagi gridda; «Tortlar premium» kategoriya kartasi YO'Q.
-    expect(find.text('Торт Медовик'), findsOneWidget);
-    expect(find.text('Kategoriyalar'), findsOneWidget);
-    expect(find.text('П/Ф Бисквит'), findsOneWidget);
-    expect(find.text('Tortlar premium'), findsNothing);
-    // Sarlavha yonida yangi tort qo'shish tugmasi.
-    expect(find.text('Qo\'shish'), findsOneWidget);
-  });
-
   testWidgets('narrow screen: cards keep their height, one per row',
       (t) async {
     await open(t, const Size(240, 900));

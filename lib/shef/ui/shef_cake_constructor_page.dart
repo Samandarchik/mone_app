@@ -24,11 +24,11 @@
 //       nachinka bloklari, hammasi «Nachinka rangi» palitrasida.
 //   3 — Tort: TAYYOR TORT — TORTNING O'Z FOTOSIDAN 3D model
 //       (cake_photo_3d.dart, CakePhoto3DView: shakl fotodagi siluetdan,
-//       tekstura — fotoning o'zi); yuklanmasa — xato + «Qayta urinish»
-//       (illyustratsiyaga O'TILMAYDI: u boshqa tort bo'lib ko'rinardi).
-//       Foto YO'Q bo'lsagina — vektor ILLYUSTRATSIYA tex kartadan
-//       (cake_illustration.dart: qoplama rangi, faktura, dekor).
-//       Ostida qoplama/dekor bloklari.
+//       tekstura — fotoning o'zi, barmoq bilan buriladi); yuklanmasa —
+//       xato + «Qayta urinish» (illyustratsiyaga O'TILMAYDI: u boshqa tort
+//       bo'lib ko'rinardi). Foto YO'Q bo'lsagina — vektor ILLYUSTRATSIYA
+//       tex kartadan (cake_illustration.dart: qoplama rangi, faktura,
+//       dekor). Ostida fotoning o'zi va qoplama/dekor bloklari.
 // Blok roli nomidan (CakeBlockRole.of): бисквит/корж → biskvit; покрытие/
 // глазурь/выравнивание → qoplama; декор/украшение → bezak; пропитка/сироп/
 // сборка → bosqich; qolgani (крем, начинка, конфи, мусс) → nachinka.
@@ -428,8 +428,9 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
         final list = k == null ? blocks : [blocks[k % blocks.length]];
         return [for (final b in list) _BlockCard(block: b, card: card)];
       default:
-        // Foto tepada (hero) — pastda takrorlanmaydi.
+        final url = _fullUrl(cake.imageUrl);
         return [
+          if (url != null) _PhotoCard(url: url),
           for (final b in parts.finishBlocks) _BlockCard(block: b, card: card),
           if (parts.finishBlocks.isEmpty) _hint(_steps[2].$3),
         ];
@@ -775,6 +776,66 @@ class _PfSection extends StatelessWidget {
         else
           for (final b in bases) _BlockCard(block: b, card: card!),
       ],
+    );
+  }
+}
+
+// 3-qadam: tortning o'z fotosi — 3D model shundan.
+class _PhotoCard extends StatelessWidget {
+  final String url;
+
+  const _PhotoCard({required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Tort fotosi',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '3D model shundan',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: Colors.brown.shade700,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: AppNetworkImage(
+                  imageUrl: url,
+                  width: double.infinity,
+                  height: 160,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

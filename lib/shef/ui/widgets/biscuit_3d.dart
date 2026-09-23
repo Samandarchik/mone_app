@@ -401,6 +401,7 @@ class Biscuit3DView extends StatelessWidget {
       displayWidth: 600,
       builder: (context, photo) => Rotating3DView(
         height: height,
+        manual: true,
         painter: (tilt, rotation) => BiscuitPainter(
           dims: dims,
           palette: palette,
