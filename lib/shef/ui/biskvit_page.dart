@@ -27,6 +27,7 @@ import 'package:uz_ai_dev/admin/model/category_model.dart';
 import 'package:uz_ai_dev/admin/model/product_model.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
+import 'package:uz_ai_dev/admin/ui/admin_add_product_ui.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
@@ -184,6 +185,9 @@ Future<CategoryProductAdmin?> pickTechCardCategory(
   BuildContext context, {
   required Set<int> exclude,
   required String hint,
+  // true — «Торт» kategoriyalari ro'yxatda chiqmaydi («Торты» bo'limi:
+  // hamma tortlar allaqachon tepadagi gridda, karta takror bo'lardi).
+  bool hideTort = false,
 }) async {
   final cats = context.read<CategoryProviderAdmin>();
   final shef = context.read<ShefProvider>();
@@ -205,7 +209,8 @@ Future<CategoryProductAdmin?> pickTechCardCategory(
   }
   final all = shefCategoriesById(cats.categories, shef.pfStock)
       .values
-      .where((c) => !exclude.contains(c.id));
+      .where((c) => !exclude.contains(c.id))
+      .where((c) => !hideTort || !isTortCategory(c.name));
   final pfOptions = all.where((c) => pfCounts.containsKey(c.id)).toList();
   final otherOptions = all.where((c) => !pfCounts.containsKey(c.id)).toList();
   final empty = pfOptions.isEmpty && otherOptions.isEmpty;
@@ -376,6 +381,21 @@ class _BiskvitPageState extends State<BiskvitPage> {
     );
   }
 
+  // «Qo'shish» — yangi tort «Торт» kategoriyasiga (shef_cakes_page.dart
+  // dagi bilan bir xil oqim); qaytgach ro'yxat yangilanadi.
+  Future<void> _addCake(int categoryId) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddProductPage(initialCategoryId: categoryId),
+      ),
+    );
+    if (!mounted) return;
+    await context
+        .read<ProductProviderAdmin>()
+        .initializeProducts(forceRefresh: true);
+  }
+
   // «+» — hali qo'shilmagan kategoriyalardan birini tanlash. Tanlangani
   // darhol karta bo'lib chiqadi. Bosh ekranga qo'shilganlar ham chiqmaydi.
   Future<void> _addCategory() async {
@@ -386,6 +406,7 @@ class _BiskvitPageState extends State<BiskvitPage> {
       exclude: {...BiskvitLinks.linkedIds, ...ShefHomeLinks.linkedIds},
       hint: '«Тех карта»dagi kategoriya hamma mahsulotlari bilan '
           '«Торты» bo\'limiga o\'tadi',
+      hideTort: true,
     );
     if (picked == null || !mounted) return;
     await BiskvitLinks.add(picked.id);
@@ -471,25 +492,63 @@ class _BiskvitPageState extends State<BiskvitPage> {
                 }
               }
               // Backend'da o'chirilgan (ro'yxatda yo'q) id'lar ko'rsatilmaydi.
+              // «Торт» kategoriyalari ham chiqmaydi — ularning tortlari
+              // allaqachon tepadagi gridda (karta takror bo'lardi).
               final linked = [
                 for (final id in BiskvitLinks.ids)
-                  if (byId[id] != null) byId[id]!,
+                  if (byId[id] != null && !isTortCategory(byId[id]!.name))
+                    byId[id]!,
               ];
-              if (linked.isEmpty && cakes.isEmpty) {
+              // Yangi tort qo'shish uchun — birinchi «Торт» kategoriyasi.
+              CategoryProductAdmin? tortCategory;
+              for (final c in byId.values) {
+                if (isTortCategory(c.name)) {
+                  tortCategory = c;
+                  break;
+                }
+              }
+              if (linked.isEmpty && cakes.isEmpty && tortCategory == null) {
                 return _EmptyHint(onAdd: _addCategory);
               }
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (cakes.isNotEmpty) ...[
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(4, 2, 4, 8),
-                      child: Text(
-                        'Tortlar',
-                        style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.bold),
+                  if (cakes.isNotEmpty || tortCategory != null) ...[
+                    // Sarlavha + «Qo'shish» (yangi tort «Торт»
+                    // kategoriyasiga; kategoriya kartasi bu bo'limda yo'q).
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 0, 0, 4),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Tortlar',
+                              style: TextStyle(
+                                  fontSize: 15, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          if (tortCategory != null)
+                            TextButton.icon(
+                              onPressed: () => _addCake(tortCategory!.id),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.brown.shade700,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text('Qo\'shish'),
+                            ),
+                        ],
                       ),
                     ),
+                    if (cakes.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
+                        child: Text(
+                          'Hozircha tort yo\'q — «Qo\'shish» bilan qo\'shing',
+                          style: TextStyle(color: Colors.grey.shade600),
+                        ),
+                      )
+                    else
                     GridView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
