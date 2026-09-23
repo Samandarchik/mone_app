@@ -29,8 +29,7 @@
 //       fotodan siluet bo'yicha model qurish tashlandi (Mone fotolarida
 //       tort oq patnis ustida, fon ham oq — siluet patnis bilan qo'shilib
 //       ketardi). Foto YO'Q bo'lsagina — vektor ILLYUSTRATSIYA tex kartadan
-//       (cake_illustration.dart). Ostida fotoning o'zi va qoplama/dekor
-//       bloklari.
+//       (cake_illustration.dart). Ostida qoplama/dekor bloklari.
 // Blok roli nomidan (CakeBlockRole.of): бисквит/корж → biskvit; покрытие/
 // глазурь/выравнивание → qoplama; декор/украшение → bezak; пропитка/сироп/
 // сборка → bosqich; qolgani (крем, начинка, конфи, мусс) → nachinka.
@@ -430,9 +429,8 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
         final list = k == null ? blocks : [blocks[k % blocks.length]];
         return [for (final b in list) _BlockCard(block: b, card: card)];
       default:
-        final url = _fullUrl(cake.imageUrl);
+        // Foto tepada (hero) — pastda takrorlanmaydi.
         return [
-          if (url != null) _PhotoCard(url: url),
           for (final b in parts.finishBlocks) _BlockCard(block: b, card: card),
           if (parts.finishBlocks.isEmpty) _hint(_steps[2].$3),
         ];
@@ -782,76 +780,6 @@ class _PfSection extends StatelessWidget {
   }
 }
 
-// 3-qadam: tortning o'z fotosi — 3D model shundan.
-class _PhotoCard extends StatelessWidget {
-  final String url;
-
-  const _PhotoCard({required this.url});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.grey.shade300),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Tort fotosi',
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '3D model shundan',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: Colors.brown.shade700,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              // Foto TO'LIQ ko'rinadi va cho'zilmaydi: nisbati saqlanib
-              // (contain) markazga qo'yiladi. Quti balandligi QAT'IY emas —
-              // 4:3 nisbatda kenglikdan hisoblanadi, shuning uchun ekran
-              // kengayganda rasm ham proporsional kattalashadi.
-              // (Ilgari qat'iy 160 px balandlik + cover edi: keng foto
-              // tepa-pastidan qirqilar, tort «yassi» ko'rinardi.)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: AspectRatio(
-                  aspectRatio: 4 / 3,
-                  child: ColoredBox(
-                    color: const Color(0xFFF7F5FC),
-                    child: AppNetworkImage(
-                      imageUrl: url,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // Tex karta bloki: nomi + rol chipi, rasmi (blok rasmi), og'irligi/bo'limi
 // va masalliqlar (miqdor — tex kartadagidek, butun partiya uchun).
 class _BlockCard extends StatelessWidget {
@@ -907,8 +835,7 @@ class _BlockCard extends StatelessWidget {
               ),
               if (url != null) ...[
                 const SizedBox(height: 8),
-                // Blok rasmi ham to'liq va cho'zilmasdan (yuqoridagi
-                // «Tort fotosi» bilan bir xil qoida).
+                // Blok rasmi to'liq va cho'zilmasdan (contain, 4:3).
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
                   child: AspectRatio(
