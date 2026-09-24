@@ -103,7 +103,7 @@ void main() {
     expect(s.a, greaterThan(20));
   });
 
-  testWidgets('viewer: loads via loader, rotates by drag, shows angle chips',
+  testWidgets('viewer: loads via loader, fixed pose, no angle chips',
       (t) async {
     final img = await _cakeImage(tiers: [(100, 120)]);
     CakePhotoModel.clearCache();
@@ -126,10 +126,10 @@ void main() {
     expect(find.byType(CustomPaint), findsWidgets);
     expect(find.text('Qayta urinish'), findsNothing);
     for (final label in ['Old', 'Yon', 'Orqa', 'Tepa']) {
-      expect(find.text(label), findsOneWidget);
+      expect(find.text(label), findsNothing);
     }
 
-    // Surish — burish; xatosiz chiziladi.
+    // Surish tortni burmaydi — bir holatda turadi.
     final painterFinder = find.byWidgetPredicate(
         (w) => w is CustomPaint && w.painter is CakePhotoPainter);
     expect(painterFinder, findsOneWidget);
@@ -138,17 +138,9 @@ void main() {
     await t.pump(const Duration(milliseconds: 50));
     expect(t.takeException(), isNull);
     final after = t.widget<CustomPaint>(painterFinder).painter as CakePhotoPainter;
-    // Model (mesh, tekstura) O'SHA — faqat burchak o'zgargan.
     expect(identical(before.model, after.model), isTrue);
-    expect(after.pitch, isNot(before.pitch));
-
-    // Tepadan ko'rish tugmasi.
-    await t.tap(find.text('Tepa'));
-    await t.pump(); // animatsiya boshlanadi
-    await t.pump(const Duration(milliseconds: 500));
-    expect(t.takeException(), isNull);
-    final topView = t.widget<CustomPaint>(painterFinder).painter as CakePhotoPainter;
-    expect(topView.pitch, closeTo(1.45, 0.01));
+    expect(after.yaw, before.yaw);
+    expect(after.pitch, before.pitch);
   });
 
   testWidgets('viewer: load failure → error, no generic model', (t) async {
