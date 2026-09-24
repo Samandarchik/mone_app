@@ -19,6 +19,8 @@
 // mahsulotning тех картасидан, filling_3d.dart) va «Покрытие» (showCoating —
 // nachinka kategoriyasining O'SHA mahsulotlari, lekin tortni tashqaridan
 // qoplagan krem sifatida; rang — tex kartadagi «Покрытие rangi» palitrasi).
+// «П/Ф Бисквит»: tex kartada suratga olingan foto (biscuit_photo_url) bo'lsa
+// — kartada ham, tepada ham SHU foto (3D emas); foto yo'q — 3D / mahsulot rasmi.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -31,6 +33,7 @@ import 'package:uz_ai_dev/admin/ui/admin_add_product_ui.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
+import 'package:uz_ai_dev/core/widgets/full_screen_image.dart';
 import 'package:uz_ai_dev/shef/ui/biskvit_page.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
@@ -360,8 +363,11 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
           // bo'limi (ikkalasida ham tech_card.biscuit_photo_url). Saqlangach
           // 3D o'zi yangilanadi: biskvitda foto yon tomonga o'raladi,
           // nachinkada qatlamlar RANGI fotodan olinadi.
-          showBiscuitPhoto:
-              widget.showCakeConstructor || widget.showFillingCake,
+          // Biskvit bo'limidagi «Бисквит» kategoriyasi (showBaking) ham —
+          // foto shu biskvitning asosiy rasmi bo'ladi.
+          showBiscuitPhoto: widget.showCakeConstructor ||
+              widget.showFillingCake ||
+              widget.showBaking,
           // «П/Ф Начинка» va «Покрытие»: YAGONA rang palitrasi («Nachinka
           // rangi») — tanlangan rang saqlangach 3D tortda nachinka (va shu
           // mahsulot bilan qoplangan tort) shu rangda chiziladi.
@@ -512,6 +518,8 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                           separatorBuilder: (_, __) => const Divider(height: 1),
                           itemBuilder: (context, index) => _ProductTile(
                             product: rows[index],
+                            // «Бисквит» — tex kartadagi foto asosiy rasm.
+                            useBiscuitPhoto: widget.showBaking,
                             onTap: () => _openTechCard(rows[index]),
                             onEditBaking: widget.showBaking
                                 ? () => _editBaking(rows[index])
@@ -632,6 +640,13 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
                             photoUrl: photoUrl,
                           );
                         }()
+                      // Tex kartada foto bor — tanlangan biskvitning O'Z
+                      // fotosi (3D chizma emas); yo'q — avvalgidek 3D.
+                      : biscuitPhotoUrlOf(selected?.techCard) != null
+                      ? _BiscuitPhotoView(
+                          url: biscuitPhotoUrlOf(selected?.techCard)!,
+                          height: _biscuitViewH,
+                        )
                       : Biscuit3DView(
                           height: _biscuitViewH,
                           dims: BiscuitDims.fromTechCard(selected?.techCard),
@@ -791,22 +806,31 @@ class _ProductTile extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onEditBaking;
 
+  // true — biskvit: tex kartada foto bo'lsa u asosiy rasm (mahsulot rasmidan
+  // ustun).
+  final bool useBiscuitPhoto;
+
   const _ProductTile({
     required this.product,
     required this.onTap,
     this.onEditBaking,
+    this.useBiscuitPhoto = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final url = product.imageUrl;
+    final raw = product.imageUrl;
+    final url = (useBiscuitPhoto
+            ? biscuitPhotoUrlOf(product.techCard)
+            : null) ??
+        ((raw != null && raw.isNotEmpty) ? '${AppUrls.baseUrl}$raw' : null);
     final hasCard = _hasTechCard(product);
     return ListTile(
       onTap: onTap,
       leading: ClipOval(
-        child: (url != null && url.isNotEmpty)
+        child: url != null
             ? AppNetworkImage(
-                imageUrl: '${AppUrls.baseUrl}$url',
+                imageUrl: url,
                 width: 50,
                 height: 50,
                 fit: BoxFit.cover,
@@ -878,6 +902,50 @@ class _ProductTile extends StatelessWidget {
 // «П/Ф Бисквит»dagi 3D biskvit balandligi.
 const double _biscuitViewH = 210;
 
+// Ilovadagi standart «rasm yo'q» placeholder (_ProductTile'dagi kabi).
+class _PhotoPlaceholder extends StatelessWidget {
+  const _PhotoPlaceholder();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        color: Colors.grey.shade300,
+        alignment: Alignment.center,
+        child: const Icon(Icons.image_not_supported),
+      );
+}
+
+// Tepadagi ko'rinish: tex kartada suratga olingan biskvitning O'Z fotosi
+// (3D o'rniga). Bosilsa — to'liq ekranda.
+class _BiscuitPhotoView extends StatelessWidget {
+  final String url;
+  final double height;
+
+  const _BiscuitPhotoView({required this.url, required this.height});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => openFullScreenImage(context, url),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          height: height,
+          width: double.infinity,
+          color: Colors.white,
+          child: AppNetworkImage(
+            imageUrl: url,
+            height: height,
+            fit: BoxFit.contain,
+            errorWidget: (_) => const Center(
+              child: Icon(Icons.image_not_supported, color: Colors.black38),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // Qat'iy balandlikdagi pinned sarlavha (SliverPersistentHeader uchun).
 class _PinnedBoxDelegate extends SliverPersistentHeaderDelegate {
   final double extent;
@@ -930,9 +998,14 @@ class _ProductGridCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final productImage = product.imageUrl ?? '';
-    final url = (coating || productImage.isEmpty)
-        ? null
-        : '${AppUrls.baseUrl}$productImage';
+    // Biskvit: tex kartada suratga olingan FOTO — kartaning asosiy rasmi
+    // (3D chizma emas). Yo'q bo'lsa — avvalgidek mahsulot rasmi / 3D.
+    final userPhoto =
+        (filling || coating) ? null : biscuitPhotoUrlOf(product.techCard);
+    final url = userPhoto ??
+        ((coating || productImage.isEmpty)
+            ? null
+            : '${AppUrls.baseUrl}$productImage');
     final hasCard = _hasTechCard(product);
     // Rasm yuklanmagan (yoki yuklanmay qolgan) biskvit — kulrang o'rniga
     // uning 3D chizmasi: o'lchami va turi тех картадан. Tex kartada biskvit
@@ -983,8 +1056,14 @@ class _ProductGridCard extends StatelessWidget {
                             width: box.maxWidth,
                             height: box.maxHeight,
                             fit: BoxFit.cover,
-                            placeholder: (_) => placeholder,
-                            errorWidget: (_) => placeholder,
+                            // Foydalanuvchi fotosi yuklanguncha / yuklanmasa —
+                            // oddiy kulrang placeholder (3D chizma EMAS).
+                            placeholder: (_) => userPhoto != null
+                                ? const _PhotoPlaceholder()
+                                : placeholder,
+                            errorWidget: (_) => userPhoto != null
+                                ? const _PhotoPlaceholder()
+                                : placeholder,
                           )
                         : SizedBox.expand(child: placeholder),
                   ),
