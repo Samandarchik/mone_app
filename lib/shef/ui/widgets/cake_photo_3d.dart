@@ -47,6 +47,23 @@ const Color _heroTop = Color(0xFFFFFFFF);
 const Color _heroBottom = Color(0xFFE6DDF3);
 const Color _accentColor = Color(0xFFC5A97B);
 
+const String _assetScheme = 'asset:';
+
+/// Katalog fotosidan (fon + patnis) to'g'ri ajralmaydigan tortlar uchun
+/// ilovaga qo'shilgan TAYYOR kesilgan foto (fonsiz, patnissiz) — faqat 3D
+/// uchun; katalogdagi foto o'zgarmaydi (backend yuklangan rasmni JPEG qilib
+/// shaffoflikni yo'qotadi). Topilsa — CakePhoto3DView.imageUrl uchun
+/// «asset:…» manzil, aks holda null.
+String? cakePhoto3DAsset(String cakeName) {
+  final n = cakeName.toLowerCase();
+  if (n.contains('cheesecake') ||
+      n.contains('чизкейк') ||
+      n.contains('chizkeyk')) {
+    return '${_assetScheme}assets/cheesecake_3d.png';
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // 1. FOTO TAHLILI — siluetdan shakl
 // ---------------------------------------------------------------------------
@@ -573,6 +590,28 @@ double? _removePlate(Uint8List mask, int w, int h) {
   for (var y = y0; y <= y1; y++) {
     maxW = math.max(maxW, hw(y));
   }
+
+  // [yP] qatoridan pastda: tort past gardishi ellipsi (markaz yc, yarim
+  // o'qlar rb va arc) tashqarisidagi hamma narsa — patnis.
+  void cut(int yP, double rb, double yc, double arc) {
+    final cxb = (left[yP] + right[yP]) / 2;
+    for (var y = yP; y <= y1; y++) {
+      for (var x = 0; x < w; x++) {
+        final i = y * w + x;
+        if (mask[i] == 0) continue;
+        final t = (x + 0.5 - cxb) / rb;
+        final keep = t.abs() <= 1 &&
+            y <= yc + arc * math.sqrt(math.max(0.0, 1 - t * t));
+        if (!keep) mask[i] = 0;
+      }
+    }
+  }
+
+  // Patnis kadrning PASTKI chetiga tegib qirqilgan — old yoyi yo'q.
+  if (y1 >= h - 2 && hw(y1) >= 0.6 * maxW) {
+    return _removeCutPlate(hw, y0, y1, maxW, cut);
+  }
+
   // Patnis ustki yuzasining markaz qatori — kenglik birinchi marta maksimumga
   // yetgan joy; u siluetning pastki qismida bo'lishi shart.
   var ym = y0;
@@ -624,24 +663,59 @@ double? _removePlate(Uint8List mask, int w, int h) {
   if (yP < 0) return null;
   final rb = hw(yP);
   if (rb > 0.95 * maxW || rb < 0.3 * maxW) return null;
-  final cxb = (left[yP] + right[yP]) / 2;
-  final yc = ycT;
   // Patnis ostidagi soya siluetni pastga cho'zadi — old yoydan olingan sinE
   // biroz katta chiqadi. Kesish yoyi zaxira bilan sayozroq: tort tagidan bir
   // necha piksel ketgani ko'rinmaydi, patnis bo'lagi (Mone yozuvi) esa
   // ko'rinib qolardi.
-  final arc = rb * sinE * 0.78;
-  for (var y = yP; y <= y1; y++) {
-    for (var x = 0; x < w; x++) {
-      final i = y * w + x;
-      if (mask[i] == 0) continue;
-      final t = (x + 0.5 - cxb) / rb;
-      final keep = t.abs() <= 1 &&
-          y <= yc + arc * math.sqrt(math.max(0.0, 1 - t * t));
-      if (!keep) mask[i] = 0;
+  cut(yP, rb, ycT, rb * sinE * 0.78);
+  return sinE * 0.78;
+}
+
+/// Kadr pastida qirqilgan patnis: old yoy yo'q, shuning uchun tort tanasi
+/// kengligi (rb) TEPADAN olinadi — birinchi tekis joy (gardish ostidagi yon
+/// tomon). Undan pastda rb'dan sezilarli keng qatorlar — patnis (orqa yoyi).
+/// Kamera balandligi tepa gumbazidan: kenglik 0.95·rb ga yetguncha chuqurlik
+/// = ry·(1 − √(1 − 0.95²)) ≈ 0.69·ry. Tort tagi — patnis orqa yoyi tort
+/// chetidan chiqqan qatordan patnis markazigacha: + rP·sinE·√(1 − (rb/rP)²).
+double? _removeCutPlate(
+  double Function(int) hw,
+  int y0,
+  int y1,
+  double maxW,
+  void Function(int yP, double rb, double yc, double arc) cut,
+) {
+  final win = math.max(3, (0.08 * maxW).round());
+  var yPl = -1;
+  for (var y = y0; y + win <= y1; y++) {
+    final w0 = hw(y);
+    if (w0 < 0.3 * maxW) continue;
+    var ok = true;
+    for (var m = 1; ok && m <= win; m++) {
+      if ((hw(y + m) - w0).abs() > 0.04 * w0) ok = false;
+    }
+    if (ok) {
+      yPl = y;
+      break;
     }
   }
-  return sinE * 0.78;
+  if (yPl < 0) return null;
+  var rb = 0.0;
+  for (var y = yPl; y <= yPl + win; y++) {
+    rb = math.max(rb, hw(y));
+  }
+  if (rb > 0.92 * maxW) return null; // pastda sezilarli kengroq narsa yo'q
+  var yP = yPl + win;
+  while (yP < y1 && hw(yP + 1) <= rb * 1.04 + 1) {
+    yP++;
+  }
+  var y95 = y0;
+  while (y95 < yP && hw(y95) < 0.95 * rb) {
+    y95++;
+  }
+  final sinE = ((y95 - y0) / 0.69 / rb).clamp(0.15, 0.6).toDouble();
+  final k = math.sqrt(math.max(0.0, 1 - (rb / maxW) * (rb / maxW)));
+  cut(yP, rb, yP + maxW * sinE * k, rb * sinE * 0.9);
+  return sinE;
 }
 
 // ---------------------------------------------------------------------------
@@ -948,10 +1022,13 @@ class CakePhotoModel {
   // Tekstura uchun to'liq (1024 px, backend saqlagan) rasm kerak — ekrandagi
   // o'lchamda emas: aylantirilganda / yaqinlashtirilganda detal yo'qolmasin.
   // Shu bois displayWidth = 1024 (appNetworkImageProvider limiti).
+  // «asset:» bilan boshlansa — ilova ichidagi rasm (cakePhoto3DAsset).
   static Future<ui.Image> _loadImage(BuildContext context, String url) {
     final completer = Completer<ui.Image>();
-    final stream = appNetworkImageProvider(context, url, displayWidth: 1024)
-        .resolve(ImageConfiguration.empty);
+    final ImageProvider provider = url.startsWith(_assetScheme)
+        ? AssetImage(url.substring(_assetScheme.length))
+        : appNetworkImageProvider(context, url, displayWidth: 1024);
+    final stream = provider.resolve(ImageConfiguration.empty);
     late ImageStreamListener l;
     l = ImageStreamListener(
       (info, _) {

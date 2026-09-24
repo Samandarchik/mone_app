@@ -122,6 +122,12 @@ void main() {
     expect(m[(plateY - 45).round() * w + cx.round()], 1);
   });
 
+  test('cheesecake uses the bundled cut-out 3D photo, others the catalog one', () {
+    expect(cakePhoto3DAsset('Cheesecake'), 'asset:assets/cheesecake_3d.png');
+    expect(cakePhoto3DAsset('Торт Чизкейк'), 'asset:assets/cheesecake_3d.png');
+    expect(cakePhoto3DAsset('Red Velvet'), isNull);
+  });
+
   test('no background found → whole image is the cake (no crash)', () async {
     final rec = ui.PictureRecorder();
     Canvas(rec).drawRect(const Rect.fromLTWH(0, 0, 64, 64),
