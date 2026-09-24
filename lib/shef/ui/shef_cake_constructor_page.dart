@@ -533,7 +533,11 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
       }
       // Foto bor — 3D faqat SHU fotodan; yuklanmasa xato ko'rsatiladi,
       // illyustratsiyaga o'tilmaydi (u boshqa tort bo'lib ko'rinardi).
-      return CakePhoto3DView(imageUrl: url, height: _heroH + 30);
+      // Ba'zi tortlar uchun ilovada tayyor kesilgan 3D fotosi bor.
+      return CakePhoto3DView(
+        imageUrl: cakePhoto3DAsset(cake.name) ?? url,
+        height: _heroH + 30,
+      );
     }
     // 2 — bo'lagi kesilgan «yalang'och» tort, kesimda nachinka. Har qatlam
     // o'z пф'ining tex kartasidan; пф fotosi bo'lsa — kesim qatlamlari
