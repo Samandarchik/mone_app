@@ -93,6 +93,35 @@ void main() {
     expect(s.square, isTrue);
   });
 
+  test('plate under the cake is cut away (shape and mask)', () async {
+    // Tort r = 90, balandlik 90, ostida kengroq yupqa patnis (r = 130).
+    const w = 360, h = 360, sinE = 0.35;
+    final rec = ui.PictureRecorder();
+    final c = Canvas(rec);
+    c.drawRect(const Rect.fromLTWH(0, 0, 360, 360), Paint()..color = Colors.white);
+    const cx = 180.0, plateY = 280.0;
+    final plate = Paint()..color = const Color(0xFFB8B4C0);
+    c.drawOval(Rect.fromCenter(center: const Offset(cx, plateY + 6), width: 260, height: 260 * sinE), plate);
+    c.drawRect(const Rect.fromLTRB(cx - 130, plateY, cx + 130, plateY + 6), plate);
+    c.drawOval(Rect.fromCenter(center: const Offset(cx, plateY), width: 260, height: 260 * sinE),
+        Paint()..color = const Color(0xFFD8D4E0));
+    final cake = Paint()..color = const Color(0xFF8B5A2B);
+    c.drawOval(Rect.fromCenter(center: const Offset(cx, plateY), width: 180, height: 180 * sinE), cake);
+    c.drawRect(const Rect.fromLTRB(cx - 90, plateY - 90, cx + 90, plateY), cake);
+    c.drawOval(Rect.fromCenter(center: const Offset(cx, plateY - 90), width: 180, height: 180 * sinE),
+        Paint()..color = const Color(0xFF9B6A3B));
+    final img = await rec.endRecording().toImage(w, h);
+    final s = analyzeCakePhoto(await _rgba(img), w, h);
+    // Kenglik — tortniki, patnisniki emas.
+    expect(s.a, closeTo(90, 5));
+    expect(s.sinE, closeTo(sinE * 0.78, 0.1));
+    // Patnis cheti (tort yonidan tashqarida) niqobda yo'q, tort markazi bor.
+    final m = s.mask!;
+    expect(m[plateY.round() * w + (cx + 115).round()], 0);
+    expect(m[(plateY + 40).round() * w + cx.round()], 0);
+    expect(m[(plateY - 45).round() * w + cx.round()], 1);
+  });
+
   test('no background found → whole image is the cake (no crash)', () async {
     final rec = ui.PictureRecorder();
     Canvas(rec).drawRect(const Rect.fromLTWH(0, 0, 64, 64),
@@ -118,9 +147,14 @@ void main() {
         ),
       ),
     ));
-    // Model qurilishi — engine async (toImage); haqiqiy vaqtda kutamiz.
-    await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 400)));
-    await t.pump();
+    // Model qurilishi — engine async (toImage, fonsiz tekstura); haqiqiy
+    // vaqtda model tayyor bo'lguncha kutamiz.
+    final painterFinder = find.byWidgetPredicate(
+        (w) => w is CustomPaint && w.painter is CakePhotoPainter);
+    for (var i = 0; i < 30 && painterFinder.evaluate().isEmpty; i++) {
+      await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+      await t.pump();
+    }
     await t.pump(const Duration(milliseconds: 100));
     expect(t.takeException(), isNull);
     expect(find.byType(CustomPaint), findsWidgets);
@@ -130,8 +164,6 @@ void main() {
     }
 
     // Surish tortni burmaydi — bir holatda turadi.
-    final painterFinder = find.byWidgetPredicate(
-        (w) => w is CustomPaint && w.painter is CakePhotoPainter);
     expect(painterFinder, findsOneWidget);
     final before = t.widget<CustomPaint>(painterFinder).painter as CakePhotoPainter;
     await t.drag(painterFinder, const Offset(120, 40));

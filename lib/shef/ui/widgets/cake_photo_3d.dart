@@ -7,6 +7,9 @@
 // PRINSIP — FOTONI O'ZGARTIRMASLIK. Modelga hech narsa «o'ylab» qo'shilmaydi:
 //   1. Segmentatsiya (analyzeCakePhoto): fon rangi rasm chetidan olinadi,
 //      chetdan «suzib» fon belgilanadi, qolgan eng katta bo'lak — tort.
+//      Ostidagi patnis (Mone taxtachasi) siluetdan topilib kesiladi
+//      (_removePlate); tekstura fonsiz va patnissiz (_cutout), tort esa
+//      biskvitlardagi bir xil lavanda patnisda (paintPlate3D) chiziladi.
 //   2. Geometriya SILUETDAN: har qatorda tortning yarim kengligi → balandlik
 //      bo'yicha radius profili (proporsiya, yaruslar/pog'onalar o'z-o'zidan
 //      chiqadi — «hamma tort bir xil shakl» EMAS). Tepa konturi ellips
@@ -38,6 +41,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
+import 'package:uz_ai_dev/shef/ui/widgets/cake_3d.dart' show paintPlate3D;
 
 const Color _heroTop = Color(0xFFFFFFFF);
 const Color _heroBottom = Color(0xFFE6DDF3);
@@ -73,7 +77,12 @@ class CakePhotoShape {
   final int imageW;
   final int imageH;
 
+  /// Tort niqobi (imageW × imageH, 1 — tort; fon va patnis — 0). null —
+  /// niqob yo'q, butun rasm tekstura.
+  final Uint8List? mask;
+
   const CakePhotoShape({
+    this.mask,
     required this.square,
     required this.sinE,
     required this.heightRatio,
@@ -262,6 +271,14 @@ CakePhotoShape analyzeCakePhoto(Uint8List px, int w, int h) {
   // butun rasm tort.
   final wholeImage = bestSize < n * 0.06;
 
+  // Tort niqobi (1 — tort). Ostidagi patnis (Mone taxtachasi) olib
+  // tashlanadi — u modelga ham, teksturaga ham kirmaydi.
+  final mask = Uint8List(n);
+  for (var i = 0; i < n; i++) {
+    if (wholeImage || label[i] == best) mask[i] = 1;
+  }
+  final plateSinE = wholeImage ? null : _removePlate(mask, w, h);
+
   // --- ustun/qator konturlari ------------------------------------------
   final topY = List<double>.filled(w, double.nan);
   final botY = List<double>.filled(w, double.nan);
@@ -270,8 +287,7 @@ CakePhotoShape analyzeCakePhoto(Uint8List px, int w, int h) {
   var x0 = w, x1 = -1, y0 = h, y1 = -1;
   for (var y = 0; y < h; y++) {
     for (var x = 0; x < w; x++) {
-      final inCake = wholeImage || label[y * w + x] == best;
-      if (!inCake) continue;
+      if (mask[y * w + x] == 0) continue;
       if (topY[x].isNaN) topY[x] = y.toDouble();
       botY[x] = y.toDouble();
       if (left[y] < 0) left[y] = x;
@@ -295,6 +311,7 @@ CakePhotoShape analyzeCakePhoto(Uint8List px, int w, int h) {
       yBottom: h * 0.95,
       imageW: w,
       imageH: h,
+      mask: mask,
     );
   }
 
@@ -355,7 +372,10 @@ CakePhotoShape analyzeCakePhoto(Uint8List px, int w, int h) {
     for (var x = (cxTop - r1).ceil(); x <= (cxTop + r1).floor(); x++) {
       if (x < 0 || x >= w || topY[x].isNaN) continue;
       final t = ((x - cxTop) / r1).abs();
-      if (t > 0.97) continue;
+      // Faqat chetlar: o'rtadagi bezak (веер, makaron, figurka) tepa
+      // konturini «tom»ga o'xshatib qo'yadi — yumaloq tort kvadrat bo'lib
+      // qolardi. Chetda ellips tik ko'tariladi, «tom» — sekin.
+      if (t < 0.7 || t > 0.97) continue;
       gEll.add(math.sqrt(1 - t * t));
       gRoof.add(1 - t);
       ys.add(topY[x]);
@@ -408,7 +428,12 @@ CakePhotoShape analyzeCakePhoto(Uint8List px, int w, int h) {
       sgy += g * y;
     }
     final det = n * sgg - sg * sg;
-    if (n >= 3 && det.abs() > 1e-9) {
+    if (plateSinE != null) {
+      // Patnis topilgan: kamera balandligi patnis ellipsidan (tepadagi bezak
+      // yoyni buzmaydi) — yoydan faqat gardish qatori olinadi.
+      b = plateSinE * r1;
+      if (n >= 1) yC = (sy + b * sg) / n;
+    } else if (n >= 3 && det.abs() > 1e-9) {
       b = (sg * sy - n * sgy) / det;
       yC = (sy + b * sg) / n;
     }
@@ -517,7 +542,106 @@ CakePhotoShape analyzeCakePhoto(Uint8List px, int w, int h) {
     yBottom: yBot,
     imageW: w,
     imageH: h,
+    mask: mask,
   );
+}
+
+/// Tort ostidagi patnisni (taxtacha, Mone yorlig'i bilan) niqobdan olib
+/// tashlaydi. Siluetda patnis — pastdagi YUPQA keng ellips: eng keng qator
+/// pastki qismda, undan keyin kenglik tez torayadi (yarus kabi uzoq tekis
+/// yon tomoni yo'q). Tepaga qarab patnisning orqa yoyi tort tanasining tekis
+/// kengligiga (rb) yetadi. Tort patnis markazida turadi deb olinadi: past
+/// gardishi ellipsi (yarim o'qlar rb va rb·sinE, sinE — patnis yoyidan)
+/// ostidagi hamma narsa — patnis. Qaytaradi: tort uchun kamera balandligi
+/// (sinE); patnis topilmasa — null va niqob o'zgarmaydi.
+double? _removePlate(Uint8List mask, int w, int h) {
+  final left = List<int>.filled(h, -1), right = List<int>.filled(h, -1);
+  var y0 = h, y1 = -1;
+  for (var y = 0; y < h; y++) {
+    for (var x = 0; x < w; x++) {
+      if (mask[y * w + x] == 0) continue;
+      if (left[y] < 0) left[y] = x;
+      right[y] = x;
+      if (y < y0) y0 = y;
+      y1 = y;
+    }
+  }
+  if (y1 - y0 < 12) return null;
+  double hw(int y) => left[y] < 0 ? 0 : (right[y] - left[y] + 1) / 2;
+
+  var maxW = 0.0;
+  for (var y = y0; y <= y1; y++) {
+    maxW = math.max(maxW, hw(y));
+  }
+  // Patnis ustki yuzasining markaz qatori — kenglik birinchi marta maksimumga
+  // yetgan joy; u siluetning pastki qismida bo'lishi shart.
+  var ym = y0;
+  while (ym < y1 && hw(ym) < 0.985 * maxW) {
+    ym++;
+  }
+  if (ym < y0 + 0.5 * (y1 - y0)) return null;
+  // Yupqalik: maksimumdan keyingi «keng» qatorlar — faqat patnis qalinligi
+  // va ellips uchi. Yarus bo'lsa bu uning butun balandligi — patnis emas.
+  var flat = 0;
+  for (var y = ym; y <= y1; y++) {
+    if (hw(y) >= 0.97 * maxW) flat++;
+  }
+  if (flat > 0.35 * maxW) return null; // maxW — yarim kenglik
+
+  // Patnis ellipsi OLD yoyidan (tort uni to'smaydi): y = c + ry·√(1 − t²),
+  // t = kenglik / rP. Tor qatorlar (Mone yorlig'i) hisobga olinmaydi.
+  double n = 0, sg = 0, sgg = 0, sy = 0, sgy = 0;
+  for (var y = ym; y <= y1; y++) {
+    final t = hw(y) / maxW;
+    if (t < 0.45 || t > 0.97) continue;
+    final g = math.sqrt(1 - t * t);
+    n++;
+    sg += g;
+    sgg += g * g;
+    sy += y;
+    sgy += g * y;
+  }
+  final det = n * sgg - sg * sg;
+  if (n < 4 || det.abs() < 1e-9) return null;
+  final ry = (n * sgy - sg * sy) / det;
+  if (ry <= 0) return null;
+  final sinE = (ry / maxW).clamp(0.08, 0.8).toDouble();
+  // Old yoy — patnisning PASTKI yuzasi; ustki yuza qalinlikcha yuqorida.
+  final c = (sy - ry * sg) / n;
+  final ycT = c - math.max(1.0, 0.04 * maxW * math.sqrt(1 - sinE * sinE));
+
+  // Tepaga: siluet patnis ellipsining orqa yoyi ichida — patnis; undan
+  // kengroq bo'lgan birinchi qator — tort tanasi.
+  var yP = -1;
+  for (var y = ycT.floor(); y >= y0; y--) {
+    final d = (ycT - y) / ry;
+    final pred = d >= 1 ? 0.0 : maxW * math.sqrt(1 - d * d);
+    if (hw(y) > pred + 0.06 * maxW + 1) {
+      yP = y;
+      break;
+    }
+  }
+  if (yP < 0) return null;
+  final rb = hw(yP);
+  if (rb > 0.95 * maxW || rb < 0.3 * maxW) return null;
+  final cxb = (left[yP] + right[yP]) / 2;
+  final yc = ycT;
+  // Patnis ostidagi soya siluetni pastga cho'zadi — old yoydan olingan sinE
+  // biroz katta chiqadi. Kesish yoyi zaxira bilan sayozroq: tort tagidan bir
+  // necha piksel ketgani ko'rinmaydi, patnis bo'lagi (Mone yozuvi) esa
+  // ko'rinib qolardi.
+  final arc = rb * sinE * 0.78;
+  for (var y = yP; y <= y1; y++) {
+    for (var x = 0; x < w; x++) {
+      final i = y * w + x;
+      if (mask[i] == 0) continue;
+      final t = (x + 0.5 - cxb) / rb;
+      final keep = t.abs() <= 1 &&
+          y <= yc + arc * math.sqrt(math.max(0.0, 1 - t * t));
+      if (!keep) mask[i] = 0;
+    }
+  }
+  return sinE * 0.78;
 }
 
 // ---------------------------------------------------------------------------
@@ -615,12 +739,14 @@ _Mesh _buildMesh(CakePhotoShape s, int texW, int texH) {
         final cx = ro * sx(j1), cz = ro * sz(j1);
         final dx = ro * sx(j), dz = ro * sz(j);
         // Tepa: normal yuqoriga (θ o'sishi × radius o'sishi); past — teskari.
+        // Markaziy halqada (k = 0) a = b — o'sha uchburchak nol yuzali,
+        // faqat ikkinchisi chiziladi (aks holda tepa o'rtasida teshik).
         if (top) {
-          tri(ax, y, az, cx, y, cz, bx, y, bz, false);
-          if (k > 0) tri(ax, y, az, dx, y, dz, cx, y, cz, false);
+          if (k > 0) tri(ax, y, az, cx, y, cz, bx, y, bz, false);
+          tri(ax, y, az, dx, y, dz, cx, y, cz, false);
         } else {
-          tri(ax, y, az, bx, y, bz, cx, y, cz, true);
-          if (k > 0) tri(ax, y, az, cx, y, cz, dx, y, dz, true);
+          if (k > 0) tri(ax, y, az, bx, y, bz, cx, y, cz, true);
+          tri(ax, y, az, cx, y, cz, dx, y, dz, true);
         }
       }
     }
@@ -661,9 +787,10 @@ class CakePhotoModel {
 
   CakePhotoModel._(this.image, this.shape, this._mesh);
 
-  /// Rasmdan model (tahlil ≈256 px nusxada, tekstura — rasmning o'zi).
+  /// Rasmdan model (tahlil ≈320 px nusxada). Tekstura — fonsiz va
+  /// patnissiz kesib olingan foto (_cutout).
   static Future<CakePhotoModel> fromImage(ui.Image image) async {
-    final scale = math.min(1.0, 256 / image.width);
+    final scale = math.min(1.0, 320 / image.width);
     final w = math.max(8, (image.width * scale).round());
     final h = math.max(8, (image.height * scale).round());
     final rec = ui.PictureRecorder();
@@ -676,9 +803,10 @@ class CakePhotoModel {
     final small = await rec.endRecording().toImage(w, h);
     final bytes = await small.toByteData(format: ui.ImageByteFormat.rawRgba);
     small.dispose();
+    final px = bytes!.buffer.asUint8List();
     CakePhotoShape shape;
     try {
-      shape = analyzeCakePhoto(bytes!.buffer.asUint8List(), w, h);
+      shape = analyzeCakePhoto(px, w, h);
     } catch (e, st) {
       // Tahlil xatosi — baribir SHU tortning fotosi silindrga qo'yiladi
       // (umumiy model emas), xato logda.
@@ -696,7 +824,98 @@ class CakePhotoModel {
         imageH: h,
       );
     }
-    return CakePhotoModel._(image, shape, _buildMesh(shape, image.width, image.height));
+    final mask = shape.mask;
+    final tex = mask == null ? image : await _cutout(image, px, mask, w, h);
+    return CakePhotoModel._(tex, shape, _buildMesh(shape, tex.width, tex.height));
+  }
+
+  /// Fonsiz tekstura: tort piksellari — fotoning o'zi (to'liq o'lchamda,
+  /// niqob bo'yicha kesilgan), tashqarisi — eng yaqin tort pikselining
+  /// rangi bilan to'ldirilgan. Mesh cheti siluet chetidan biroz tashqariga
+  /// tushsa ham oq fon / patnis emas, tortning o'z rangi chiqadi (oq
+  /// «gardish» va cho'zilgan fon yo'qoladi).
+  static Future<ui.Image> _cutout(
+      ui.Image image, Uint8List px, Uint8List mask, int w, int h) async {
+    final n = w * h;
+    // Niqob 1 px toraytiriladi — chetdagi piksel fon bilan aralashgan.
+    final core = Uint8List(n);
+    for (var y = 1; y < h - 1; y++) {
+      for (var x = 1; x < w - 1; x++) {
+        final i = y * w + x;
+        if (mask[i] == 1 &&
+            mask[i - 1] == 1 &&
+            mask[i + 1] == 1 &&
+            mask[i - w] == 1 &&
+            mask[i + w] == 1) {
+          core[i] = 1;
+        }
+      }
+    }
+    final fill = Uint8List(n * 4);
+    final alpha = Uint8List(n * 4);
+    final seen = Uint8List(n);
+    final queue = Int32List(n);
+    var qh = 0, qt = 0;
+    for (var i = 0; i < n; i++) {
+      if (core[i] == 0) continue;
+      for (var c = 0; c < 3; c++) {
+        fill[i * 4 + c] = px[i * 4 + c];
+        alpha[i * 4 + c] = 255;
+      }
+      fill[i * 4 + 3] = 255;
+      alpha[i * 4 + 3] = 255;
+      seen[i] = 1;
+      queue[qt++] = i;
+    }
+    if (qt == 0) return image;
+    // Ko'p manbali BFS: har tashqi piksel eng yaqin tort pikseli rangini oladi.
+    while (qh < qt) {
+      final i = queue[qh++];
+      final x = i % w, y = i ~/ w;
+      void spread(int j) {
+        if (seen[j] == 1) return;
+        seen[j] = 1;
+        for (var c = 0; c < 4; c++) {
+          fill[j * 4 + c] = fill[i * 4 + c];
+        }
+        queue[qt++] = j;
+      }
+
+      if (x > 0) spread(i - 1);
+      if (x < w - 1) spread(i + 1);
+      if (y > 0) spread(i - w);
+      if (y < h - 1) spread(i + w);
+    }
+    final fillImg = await _rgbaImage(fill, w, h);
+    final alphaImg = await _rgbaImage(alpha, w, h);
+    final src = Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble());
+    final dst =
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+    final rec = ui.PictureRecorder();
+    final canvas = Canvas(rec);
+    canvas.drawImageRect(
+        fillImg, src, dst, Paint()..filterQuality = FilterQuality.medium);
+    canvas.saveLayer(dst, Paint());
+    canvas.drawImage(image, Offset.zero, Paint());
+    canvas.drawImageRect(
+      alphaImg,
+      src,
+      dst,
+      Paint()
+        ..blendMode = BlendMode.dstIn
+        ..filterQuality = FilterQuality.medium,
+    );
+    canvas.restore();
+    final out = await rec.endRecording().toImage(image.width, image.height);
+    fillImg.dispose();
+    alphaImg.dispose();
+    return out;
+  }
+
+  static Future<ui.Image> _rgbaImage(Uint8List rgba, int w, int h) {
+    final c = Completer<ui.Image>();
+    ui.decodeImageFromPixels(rgba, w, h, ui.PixelFormat.rgba8888, c.complete);
+    return c.future;
   }
 
   // Testlar uchun: URL → rasm yuklovchini almashtirish.
@@ -754,6 +973,9 @@ class CakePhotoModel {
 // 4. PAINTER — burish, saralash, drawVertices
 // ---------------------------------------------------------------------------
 
+// Patnis radiusi (tort radiusi = 1).
+const double _standR = 1.22;
+
 class CakePhotoPainter extends CustomPainter {
   final CakePhotoModel model;
   final double yaw; // atrofida (radian)
@@ -773,8 +995,8 @@ class CakePhotoPainter extends CustomPainter {
     final hW = model.shape.heightRatio;
     final cy = math.cos(yaw), sy = math.sin(yaw);
     final cp = math.cos(pitch), sp = math.sin(pitch);
-    // Ko'rinish radiusi — tort butunlay sig'sin.
-    final bound = math.sqrt(1 + hW * hW / 4) * 1.06;
+    // Ko'rinish radiusi — tort ham, patnis ham butunlay sig'sin.
+    final bound = math.max(math.sqrt(1 + hW * hW / 4) * 1.06, _standR * 1.08);
     final scale = math.min(size.width, size.height) / 2 / bound * 0.92 * zoom;
     final ox = size.width / 2, oy = size.height / 2;
     const dist = 6.0; // perspektiva (radius birligida)
@@ -818,19 +1040,18 @@ class CakePhotoPainter extends CustomPainter {
     // Uzoqdan yaqinga (rassom algoritmi).
     order.sort((p, q) => depth[p].compareTo(depth[q]));
 
-    // Yerdagi yumshoq soya — tort emas, faqat «turgan joyi» hissi.
-    if (pitch > 0.02) {
-      final shadowR = scale * 1.05;
-      final syFloor = -(-hW / 2) * cp; // y = 0 tekisligi kamera y'da
-      canvas.drawOval(
-        Rect.fromCenter(
-          center: Offset(ox, oy + syFloor * scale * (dist / (dist + hW / 2 * sp))),
-          width: shadowR * 2,
-          height: shadowR * 2 * sp,
-        ),
-        Paint()
-          ..color = const Color(0x2A4A3A5A)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+    // Tort biskvitlar bilan BIR XIL patnisda turadi (paintPlate3D) — fotodagi
+    // Mone taxtachasi niqobda kesib tashlangan. Patnis ustki yuzasi = tort
+    // tagi (y = 0), markazi kamera fazosida (0, −hW/2·cp, −hW/2·sp).
+    {
+      final persp = dist / (dist + hW / 2 * sp);
+      final rx = scale * _standR * persp;
+      paintPlate3D(
+        canvas,
+        Offset(ox, oy + hW / 2 * cp * scale * persp),
+        rx,
+        rx * sp,
+        rx * 0.05,
       );
     }
 
