@@ -469,9 +469,12 @@ class _BiskvitPageState extends State<BiskvitPage> {
                 }
               }
               // Backend'da o'chirilgan (ro'yxatda yo'q) id'lar ko'rsatilmaydi.
+              // «Торты» kategoriyasi kartasi ham yo'q — uning hamma tortlari
+              // tepadagi gridda turibdi, pastda takrorlanmasin.
               final linked = [
                 for (final id in BiskvitLinks.ids)
-                  if (byId[id] != null) byId[id]!,
+                  if (byId[id] != null && !isTortCategory(byId[id]!.name))
+                    byId[id]!,
               ];
               if (linked.isEmpty && cakes.isEmpty) {
                 return _EmptyHint(onAdd: _addCategory);
