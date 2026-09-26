@@ -148,6 +148,7 @@ if errorlevel 1 (
 
 REM --- Release bundle ni Desktop\Release_uz_ai_dev papkaga nusxalash (ixtiyoriy) ---
 set "OUTDIR=%USERPROFILE%\Desktop\Release_uz_ai_dev"
+if exist "C:\samandar_app\releases" set "OUTDIR=C:\samandar_app\releases\uz_ai_dev"
 echo [+] Release papkaga nusxalanmoqda: %OUTDIR%
 robocopy "%RELDIR%" "%OUTDIR%" /MIR /NFL /NDL /NJH /NJS /NP /R:1 /W:1 >nul
 if %errorlevel% geq 8 (
