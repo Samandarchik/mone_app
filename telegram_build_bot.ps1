@@ -39,18 +39,22 @@ $Desktop = Join-Path $env:USERPROFILE 'Desktop'
 # Hamma loyihalar bitta ildizda: C:\samandar_app (bot uz_ai_dev ichida, ildiz = bir pog'ona yuqori).
 # Eski joylashuv (Desktop / C:\) zaxira sifatida qoladi: yangi yo'l bo'lmasa eskisi olinadi.
 $Root = Split-Path -Parent $Dir
+# 28.09.2026: ilovalar apps\ dan C:\samandar_app\<nom> ga chiqarildi ($Top = $Root ning otasi).
+$Top  = Split-Path -Parent $Root
 function Pick-Path([string[]]$cands) { foreach ($p in $cands) { if (Test-Path $p) { return $p } }; return $cands[0] }
 
 # --- Loyihalar: nom -> papka (build_windows.bat shu papkada bo'lishi kerak) ---
 $Projects = [ordered]@{
     'uz_ai_dev'          = $Dir
-    'workly_app'         = (Pick-Path @((Join-Path $Root 'apps\workly_app'),          (Join-Path $Desktop 'workly_app')))
-    'timekivi_app'       = (Pick-Path @((Join-Path $Root 'apps\timekivi_app'),        (Join-Path $env:USERPROFILE 'timekivi_app')))
-    'qilinadigan_ishlar' = (Pick-Path @((Join-Path $Root 'apps\qilinadigan_ishlar'),  (Join-Path $Desktop 'qilinadigan_ishlar')))
+    'workly_app'         = (Pick-Path @((Join-Path $Top 'workly_app'), (Join-Path $Root 'apps\workly_app'),          (Join-Path $Desktop 'workly_app')))
+    'timekivi_app'       = (Pick-Path @((Join-Path $Top 'timekivi_app'), (Join-Path $Root 'apps\timekivi_app'),        (Join-Path $env:USERPROFILE 'timekivi_app')))
+    'qilinadigan_ishlar' = (Pick-Path @((Join-Path $Top 'qilinadigan_ishlar'), (Join-Path $Root 'apps\qilinadigan_ishlar'),  (Join-Path $Desktop 'qilinadigan_ishlar')))
     'pos_flutter'        = (Pick-Path @((Join-Path $Root 'pos\pos_flutter'),          'C:\pos_flutter'))
-    'taxi'               = (Pick-Path @((Join-Path $Root 'apps\mone-taxi-mobile'),    (Join-Path $Desktop 'mone-taxi-mobile')))
+    'taxi'               = (Pick-Path @((Join-Path $Top 'mone-taxi-mobile'), (Join-Path $Root 'apps\mone-taxi-mobile'),    (Join-Path $Desktop 'mone-taxi-mobile')))
     # Flutter loyihasi repo ichidagi papkada: web_end_bot_app_hr\hr_mobile_app
-    'hr_mobile_app'      = (Pick-Path @((Join-Path $Root 'apps\web_end_bot_app_hr\hr_mobile_app'), (Join-Path $Desktop 'web_end_bot_app_hr\hr_mobile_app')))
+    'hr_mobile_app'      = (Pick-Path @((Join-Path $Top 'web_end_bot_app_hr\hr_mobile_app'), (Join-Path $Root 'apps\web_end_bot_app_hr\hr_mobile_app'), (Join-Path $Desktop 'web_end_bot_app_hr\hr_mobile_app')))
+    # build_windows.bat / publish_release.ps1 repoda yo'q - lokal (.git\info\exclude da)
+    'builder'            = (Join-Path $Top 'builder')
 }
 
 # --- Loyiha -> GitHub repo (owner/name). Auto update shu ro'yxatni kuzatadi. ---
@@ -62,6 +66,7 @@ $Repos = [ordered]@{
     'pos_flutter'        = 'Samandarchik/pos_flutter'
     'taxi'               = 'Samandarchik/mone-taxi-mobile'
     'hr_mobile_app'      = 'Samandarchik/web_end_bot_app_hr'
+    'builder'            = 'Samandarchik/builder'
 }
 $PollSec       = 60                                   # GitHub'ni tekshirish oralig'i (soniya)
 $PollStatePath = Join-Path $Dir '.github_poll_state.json'
