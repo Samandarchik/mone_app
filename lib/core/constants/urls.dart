@@ -18,8 +18,10 @@ abstract final class AppUrls {
   // bilan ishlashda davom etadi, eski ilova versiyalari uchun).
   static String get loginV1 => '$baseUrl/api/v1/login';
   static String get register => '$baseUrl/api/register';
-  static String get productAll => '$baseUrl/api/products/all';
-  static String get product1 => '$baseUrl/api/products1';
+  // YAGONA katalog endpointi (hamma rol): rol bo'yicha filtr SERVERDA,
+  // `?include=recipe` — tex karta bilan (admin/shef). CatalogRepository.
+  static String get products => '$baseUrl/api/products';
+  // POST (yaratish) / PUT, DELETE `$product/{id}` — admin mahsulot CRUD.
   static String get product => '$baseUrl/api/products';
   // Masalliqning QO'LDA kiritilgan xarid narxi (hech qachon sotib olinmagan
   // mahsulot uchun): PUT {"manual_price": 8000} — BUTUN so'm, mahsulotning
@@ -35,9 +37,6 @@ abstract final class AppUrls {
       '$baseUrl/api/products/$id/tech-card/versions';
   static String techCardRollback(int id) =>
       '$baseUrl/api/products/$id/tech-card/rollback';
-
-  // Ombor (bozor mahsulotlari)
-  static String get omborProducts => '$baseUrl/api/ombor/products';
 
   // Yuk keltiruvchi (sklad buyurtmalari)
   static String get yukOrders => '$baseUrl/api/yuk/orders';
@@ -90,10 +89,8 @@ abstract final class AppUrls {
   // Rollar: bugalter yoki admin. Xato JSON {success:false, message}.
   static String get bugalterExport => '$baseUrl/api/bugalter/export';
 
-  // Ishlab chiqarish (производство) — shef roli.
-  // Tex kartasi bor mahsulotlar ro'yxati (buyurtma yaratish uchun).
-  static String get productionProducts => '$baseUrl/api/production/products';
-
+  // Ishlab chiqarish (производство) — shef roli. (Mahsulotlar ro'yxati
+  // endi GET /api/products?include=recipe — CatalogRepository.)
   // Admin boshqaruv paneli: bugungi buyurtmalar, ishlab chiqarish holati,
   // kam qolgan xomashyo jamlanmasi.
   static String get dashboard => '$baseUrl/api/dashboard';

@@ -8,8 +8,8 @@ import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/admin/model/category_model.dart';
-import 'package:uz_ai_dev/admin/model/product_model.dart';
-import 'package:uz_ai_dev/admin/model/tech_card.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
+import 'package:uz_ai_dev/core/catalog/tech_card.dart';
 import 'package:uz_ai_dev/admin/model/tech_card_cost.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
@@ -38,8 +38,8 @@ class CompositionPickerPage extends StatefulWidget {
 class _CompositionPickerPageState extends State<CompositionPickerPage> {
   final TextEditingController _searchController = TextEditingController();
 
-  List<ProductModelAdmin> _allProducts = [];
-  List<ProductModelAdmin> _filtered = [];
+  List<Product> _allProducts = [];
+  List<Product> _filtered = [];
   bool _isLoading = true;
   String? _error;
 
@@ -98,7 +98,7 @@ class _CompositionPickerPageState extends State<CompositionPickerPage> {
     });
   }
 
-  Future<void> _onProductTap(ProductModelAdmin product) async {
+  Future<void> _onProductTap(Product product) async {
     final result = await showDialog<TechItem>(
       context: context,
       builder: (_) => _AmountUnitDialog(product: product),
@@ -266,7 +266,7 @@ class _CategoryProductsPage extends StatelessWidget {
   });
 
   Future<void> _onProductTap(
-      BuildContext context, ProductModelAdmin product) async {
+      BuildContext context, Product product) async {
     final result = await showDialog<TechItem>(
       context: context,
       builder: (_) => _AmountUnitDialog(product: product),
@@ -302,8 +302,8 @@ class _CategoryProductsPage extends StatelessWidget {
 // Mahsulot qatori (rasm + nom + birlik + qo'shish belgisi) — qidiruv
 // natijalarida ham, kategoriya ichida ham bir xil ishlatiladi.
 class _ProductPickTile extends StatelessWidget {
-  final ProductModelAdmin product;
-  final ValueChanged<ProductModelAdmin> onTap;
+  final Product product;
+  final ValueChanged<Product> onTap;
 
   const _ProductPickTile({required this.product, required this.onTap});
 
@@ -339,7 +339,7 @@ class _ProductPickTile extends StatelessWidget {
       ),
       // Полуфабрикат — nom yonida «ПФ» belgisi (tex kartadagi chip uslubi):
       // tanlansa muharrir uni bazadan avto пф deb taniydi.
-      title: product.isSemiFinished
+      title: product.isPf
           ? Row(
               children: [
                 Flexible(child: Text(product.name)),
@@ -364,7 +364,7 @@ class _ProductPickTile extends StatelessWidget {
               ],
             )
           : Text(product.name),
-      subtitle: product.type.isNotEmpty ? Text(product.type) : null,
+      subtitle: product.unit.isNotEmpty ? Text(product.unit) : null,
       trailing: const Icon(Icons.add_circle_outline),
       onTap: () => onTap(product),
     );
@@ -376,7 +376,7 @@ class _ProductPickTile extends StatelessWidget {
 // bunda «1 шт = X gr» so'raladi/ko'rsatiladi (pf uchun tex kartadan, xom
 // mahsulot uchun admin kiritadi va mahsulotga saqlanadi — piece_weight_g).
 class _AmountUnitDialog extends StatefulWidget {
-  final ProductModelAdmin product;
+  final Product product;
 
   const _AmountUnitDialog({required this.product});
 
@@ -393,12 +393,12 @@ class _AmountUnitDialogState extends State<_AmountUnitDialog> {
   bool _saving = false;
 
   // Mahsulot шт-oilasidanmi (tuxum, pf...). Pf mahsulot type doim шт.
-  bool get _isShtFamily => normalizeProductType(widget.product.type) == 'шт';
+  bool get _isShtFamily => normalizeProductType(widget.product.unit) == 'шт';
 
   // Полуфабрикат birligi TANLANMAYDI — o'z tex kartasi belgilaydi: batch_unit
   // 'g' → гр, aks holda дона. Дона'dagi пф grammga o'tmaydi (birlik faqat пф
   // tex kartasida шт↔гр bilan o'zgartiriladi). null — oddiy (xom) mahsulot.
-  String? get _pfFixedUnit => widget.product.isSemiFinished
+  String? get _pfFixedUnit => widget.product.isPf
       ? (widget.product.techCard?.batchUnit == 'g' ? 'g' : 'pcs')
       : null;
 
@@ -406,9 +406,9 @@ class _AmountUnitDialogState extends State<_AmountUnitDialog> {
   void initState() {
     super.initState();
     // Mahsulot turidan birlikni topishga harakat qilamiz (пф — kartasidan).
-    _unit = _pfFixedUnit ?? normalizeTechUnit(widget.product.type);
+    _unit = _pfFixedUnit ?? normalizeTechUnit(widget.product.unit);
     final saved = _effectiveW;
-    if (saved > 0 && !widget.product.isSemiFinished) {
+    if (saved > 0 && !widget.product.isPf) {
       _pieceWeightController.text = saved.toString();
     }
   }
@@ -421,7 +421,7 @@ class _AmountUnitDialogState extends State<_AmountUnitDialog> {
 
   // Hisob-kitoblar uchun joriy W: pf — tex kartadan (read-only), xom —
   // maydonga yozilgan qiymat.
-  int get _currentW => widget.product.isSemiFinished
+  int get _currentW => widget.product.isPf
       ? _effectiveW
       : (int.tryParse(_pieceWeightController.text.trim()) ?? 0);
 
@@ -446,7 +446,7 @@ class _AmountUnitDialogState extends State<_AmountUnitDialog> {
     // g -> dona konvertini qila olmaydi.
     if (_isShtFamily && _unit == 'g') {
       final w = _currentW;
-      if (widget.product.isSemiFinished) {
+      if (widget.product.isPf) {
         if (w <= 0) {
           _snack('Пф tex kartasida og\'irlik yo\'q — grammda kiritib '
               'bo\'lmaydi');
@@ -487,7 +487,7 @@ class _AmountUnitDialogState extends State<_AmountUnitDialog> {
   // «1 шт = X gr» bo'limi: pf — read-only matn, xom — tahrir maydoni.
   // Faqat шт-oilasida va 'g' birlik tanlanganda ko'rinadi.
   Widget _pieceWeightSection() {
-    if (widget.product.isSemiFinished) {
+    if (widget.product.isPf) {
       final w = _effectiveW;
       return Padding(
         padding: const EdgeInsets.only(top: 12),

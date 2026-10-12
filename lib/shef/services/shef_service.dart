@@ -25,20 +25,7 @@ class ShefService {
     throw Exception('Tarmoq xatosi: ${e.message ?? fallback}');
   }
 
-  // GET /api/production/products -> tex kartasi bor mahsulotlar.
-  Future<List<ProductionProduct>> fetchProducts() async {
-    try {
-      final response = await dio.get(AppUrls.productionProducts);
-      if (response.statusCode == 200) {
-        final body = response.data;
-        if (body is Map) return ProductionProduct.listFromJson(body['data']);
-        return [];
-      }
-      throw Exception('Mahsulotlarni yuklab bo\'lmadi: ${response.statusCode}');
-    } on DioException catch (e) {
-      _throwDio(e, 'mahsulotlar yuklanmadi');
-    }
-  }
+
 
   // GET /api/production/pf-availability?product_id=N&qty=Q — tanlangan
   // mahsulot uchun полуфабрикат qoldig'i bo'yicha limit (shef o'z skladi).

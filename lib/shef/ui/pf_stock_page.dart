@@ -27,7 +27,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/admin/model/category_model.dart';
-import 'package:uz_ai_dev/admin/model/product_model.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/provider/upload_image_provider.dart';
@@ -81,7 +81,7 @@ class _PfCategory {
 List<_PfCategory> _buildPfCategories(
   List<PfStockRow> pf,
   List<CategoryProductAdmin> allCats,
-  List<ProductModelAdmin> products,
+  List<Product> products,
 ) {
   final counts = <String, int>{};
   final empties = <String, int>{};
@@ -159,7 +159,7 @@ class _PfStockPageState extends State<PfStockPage> {
   // Kategoriyalar keshi: uchala manba (identity) o'zgarmasa qayta
   // hisoblanmaydi.
   List<PfStockRow>? _catsSource;
-  List<ProductModelAdmin>? _catsProductsSource;
+  List<Product>? _catsProductsSource;
   // DIQQAT: kategoriyalar uchun `identical()` YARAMAYDI —
   // CategoryProviderAdmin.reorderCategories ro'yxatni JOYIDA o'zgartiradi
   // (removeAt + insert), ya'ni obyekt o'sha-o'sha qoladi. Shuning uchun
@@ -207,7 +207,7 @@ class _PfStockPageState extends State<PfStockPage> {
   void _rebuildCats(
     List<PfStockRow> source,
     List<CategoryProductAdmin> allCats,
-    List<ProductModelAdmin> products,
+    List<Product> products,
   ) {
     final allFingerprint = allCats.map((c) => c.id).join(',');
     if (identical(_catsSource, source) &&
@@ -234,7 +234,7 @@ class _PfStockPageState extends State<PfStockPage> {
   // shuning uchun mahsulot ProductProviderAdmin (yagona manba) dan topiladi.
   void _openTechCard(PfStockRow row) {
     final products = context.read<ProductProviderAdmin>().products;
-    ProductModelAdmin? found;
+    Product? found;
     for (final p in products) {
       if (p.id == row.productId) {
         found = p;
@@ -827,7 +827,7 @@ class _PfStockPageState extends State<PfStockPage> {
   // Qatorni BOSIB TURISH — mahsulotning O'ZINI tahrirlash (nom, kategoriya,
   // birlik...). Bitta bosish esa тех картани ochadi.
   Future<void> _editProduct(PfStockRow row) async {
-    ProductModelAdmin? found;
+    Product? found;
     for (final p in context.read<ProductProviderAdmin>().products) {
       if (p.id == row.productId) {
         found = p;

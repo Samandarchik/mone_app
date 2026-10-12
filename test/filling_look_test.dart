@@ -2,7 +2,7 @@
 // masalliqlar (miqdori eng ko'p rang beruvchi masalliq; neytral asos oxirida).
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:uz_ai_dev/admin/model/tech_card.dart';
+import 'package:uz_ai_dev/core/catalog/tech_card.dart';
 import 'package:uz_ai_dev/admin/ui/widgets/filling_color_palette.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';

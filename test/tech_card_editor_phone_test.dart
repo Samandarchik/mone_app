@@ -17,10 +17,10 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
-import 'package:uz_ai_dev/admin/model/product_model.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
-import 'package:uz_ai_dev/core/di/di.dart';
+import 'helpers/catalog_test_env.dart';
 
 // Tarmoqqa umuman chiqmaydigan Dio adapteri: sahifaning initState'dagi
 // `/api/prices/latest` so'rovi darhol xato bilan tugaydi (haqiqiy soket ham,
@@ -40,7 +40,7 @@ class _OfflineAdapter implements HttpClientAdapter {
 // qirqilardi.
 const String _longName = 'Сахарная пудра мелкого помола';
 
-ProductModelAdmin _product() => ProductModelAdmin.fromJson({
+Product _product() => Product.fromJson({
       'id': 1,
       'name': 'Торт Наполеон классический большой',
       'category_id': 1,
@@ -102,9 +102,8 @@ void main() {
     // Sahifa initState'da narxlarni so'raydi — Dio ro'yxatdan o'tmasa
     // GetIt otib yuboradi. So'rovning o'zi tarmoqqa chiqmay xato beradi va
     // sahifa uni JIM yutadi (narxlar «—» bo'lib qoladi).
-    if (!sl.isRegistered<Dio>()) {
-      sl.registerSingleton<Dio>(Dio()..httpClientAdapter = _OfflineAdapter());
-    }
+    registerTestCatalog(
+        dio: Dio()..httpClientAdapter = _OfflineAdapter());
   });
 
   testWidgets('360dp telefonda overflow yo\'q va nom ustuni keng',

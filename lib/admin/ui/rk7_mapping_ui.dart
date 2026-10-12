@@ -8,7 +8,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:uz_ai_dev/admin/model/product_model.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
 import 'package:uz_ai_dev/admin/model/rk7_mapping_model.dart';
 import 'package:uz_ai_dev/admin/model/rk7_shift_model.dart';
 import 'package:uz_ai_dev/admin/model/sh5_recipe_model.dart';
@@ -124,7 +124,7 @@ class _Rk7MappingTabState extends State<Rk7MappingTab>
     Rk7Mapping? existing,
   }) async {
     final products = context.read<ProductProviderAdmin>().products;
-    ProductModelAdmin? selected;
+    Product? selected;
     final existingId = existing?.productId ?? 0;
     if (existingId > 0) {
       for (final p in products) {
@@ -374,10 +374,10 @@ class _Rk7MappingTabState extends State<Rk7MappingTab>
   }
 
   // Mone mahsulotini qidiruvli tanlash (manba: ProductProviderAdmin).
-  Future<ProductModelAdmin?> _pickProduct(BuildContext dialogContext) {
+  Future<Product?> _pickProduct(BuildContext dialogContext) {
     final all = dialogContext.read<ProductProviderAdmin>().products;
     String query = '';
-    return showDialog<ProductModelAdmin>(
+    return showDialog<Product>(
       context: dialogContext,
       builder: (pickerContext) => StatefulBuilder(
         builder: (pickerContext, setPickerState) {
@@ -423,7 +423,7 @@ class _Rk7MappingTabState extends State<Rk7MappingTab>
                                   style: const TextStyle(fontSize: 13.5),
                                 ),
                                 subtitle: Text(
-                                  product.type,
+                                  product.unit,
                                   style: TextStyle(
                                     fontSize: 11.5,
                                     color: Colors.grey.shade600,

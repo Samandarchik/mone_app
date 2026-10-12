@@ -37,7 +37,7 @@
 // aloqador emas.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:uz_ai_dev/admin/model/product_model.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
@@ -58,12 +58,12 @@ const double _heroH = 205;
 // rang tanlangan bo'lsa (filling_color) — o'sha; tanlanmagan bo'lsa —
 // tavsifidan (nom / blok / masalliqlar). Foto tahlili yo'q: rang sinxron va
 // aynan tex kartadagidek. null (qatlam bo'sh) — neytral.
-FillingLook _fillingLookOf(ProductModelAdmin? p) =>
+FillingLook _fillingLookOf(Product? p) =>
     p == null ? FillingLook.neutral : FillingLook.fromTechCard(p.name, p.techCard);
 
 // Qatlam rang yo'llari — shu qatlam mahsulotining tex kartasidan. Tex
 // kartada YAGONA palitra: qaysi qatlam bo'lishidan qat'i nazar rang bitta.
-List<FillingBand> _layerBands(ProductModelAdmin? p) =>
+List<FillingBand> _layerBands(Product? p) =>
     _fillingLookOf(p).bandsOf(0);
 
 // Qadamlar: (tugma yozuvi, grid sarlavhasi).
@@ -117,7 +117,7 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
   // (narxsiz), hozirgi qadamga mos bo'limlar bilan: biskvit — foto; nachinka
   // — foto + nachinka palitrasi; qoplama — «Покрытие rangi» palitrasi.
   // Saqlangach provider xotirada yangilanadi va 3D o'zi qayta chiziladi.
-  void _openTechCard(ProductModelAdmin product) {
+  void _openTechCard(Product product) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -132,7 +132,7 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
     );
   }
 
-  static ProductModelAdmin? _pick(List<ProductModelAdmin> list, int? id) {
+  static Product? _pick(List<Product> list, int? id) {
     if (list.isEmpty) return null;
     for (final p in list) {
       if (p.id == id) return p;
@@ -162,8 +162,8 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
           );
           // Kategoriya nomi bo'yicha ajratish — BITTA o'tishda.
           final byId = shefCategoriesById(cats.categories, pf);
-          final biscuits = <ProductModelAdmin>[];
-          final fillings = <ProductModelAdmin>[];
+          final biscuits = <Product>[];
+          final fillings = <Product>[];
           for (final p in products.products) {
             final name = byId[p.categoryId]?.name ?? '';
             if (isBiskvitCategory(name)) {
@@ -299,9 +299,9 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
   // Katta 3D: qadamga qarab biskvit / nachinkali / qoplangan tort.
   // [layers] — nachinka qatlamlari mahsulotlari, pastdan yuqoriga.
   Widget _hero(
-    ProductModelAdmin? biscuit,
-    List<ProductModelAdmin?> layers,
-    ProductModelAdmin? coating,
+    Product? biscuit,
+    List<Product?> layers,
+    Product? coating,
   ) {
     final palette = biscuit == null
         ? BiscuitPalette.classic
@@ -345,7 +345,7 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
   }
 
   // Qatlamning asosiy rangi — chipdagi rangli nuqta uchun.
-  static Color _layerDot(ProductModelAdmin? p) {
+  static Color _layerDot(Product? p) {
     final bands = _layerBands(p);
     return bands.reduce((a, b) => b.part > a.part ? b : a).color;
   }
@@ -357,7 +357,7 @@ class _ShefConstructorPageState extends State<ShefConstructorPage> {
   // oxirida «+ Qatlam» (ustiga qo'shadi). Chiplar HAR DOIM faol (onPressed
   // bor) — aks holda Flutter ularni xira chizadi.
   // Chiplar IXCHAM (kichik shrift, zich) — 3D ostida ko'p joy olmasin.
-  Widget _layerBar(List<ProductModelAdmin?> layers) {
+  Widget _layerBar(List<Product?> layers) {
     const chipText = TextStyle(fontSize: 12);
     return SizedBox(
       height: 34,
@@ -493,7 +493,7 @@ class _StepButton extends StatelessWidget {
 
 // Griddagi bitta mahsulot: rasm (yo'q bo'lsa qadamga mos chizma) + nom.
 class _PickCard extends StatelessWidget {
-  final ProductModelAdmin product;
+  final Product product;
   final int step;
   // 1-qadamda tanlangan biskvit o'lchami — 3-qadamdagi qoplangan tort
   // kartalari shu o'lchamda (hammasi tanlangan biskvitga mos).
@@ -534,7 +534,7 @@ class _PickCard extends StatelessWidget {
     }
     // Qoplama qadamida mahsulotning o'z rasmi ko'rsatilmaydi: u nachinkaning
     // rasmi, qoplangan tortniki emas.
-    final image = product.imageUrl ?? '';
+    final image = product.imageUrl;
     final url = (step == 2 || image.isEmpty) ? null : '${AppUrls.baseUrl}$image';
 
     return Material(

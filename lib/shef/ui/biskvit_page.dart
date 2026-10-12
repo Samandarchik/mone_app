@@ -23,7 +23,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uz_ai_dev/admin/model/category_model.dart';
-import 'package:uz_ai_dev/admin/model/product_model.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
@@ -368,7 +368,7 @@ class _BiskvitPageState extends State<BiskvitPage> {
   }
 
   // Tort bosilsa — tortning o'z to'liq konstruktori (tex kartasidan).
-  void _openCakeConstructor(ProductModelAdmin cake) {
+  void _openCakeConstructor(Product cake) {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => ShefCakeConstructorPage(cake: cake)),
@@ -461,7 +461,7 @@ class _BiskvitPageState extends State<BiskvitPage> {
               final counts = <int, int>{};
               // HAMMA tortlar (nomi «Торт» bo'lgan kategoriyalar mahsulotlari)
               // — bo'limga kirilishi bilan tepada, kategoriyalardan oldin.
-              final cakes = <ProductModelAdmin>[];
+              final cakes = <Product>[];
               for (final p in products.products) {
                 counts[p.categoryId] = (counts[p.categoryId] ?? 0) + 1;
                 if (isTortCategory(byId[p.categoryId]?.name ?? '')) {

@@ -6,7 +6,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:uz_ai_dev/admin/model/product_model.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/widgets/product_type_radio.dart'
     show normalizeProductType;
@@ -99,7 +99,7 @@ class _PriceHistorySheetState extends State<_PriceHistorySheet> {
   // Mahsulot ProductProviderAdmin (yagona manba) dan bir marta olinadi:
   // birlik yorlig'i va joriy qo'lda narx uchun. null — ro'yxatda yo'q
   // (masalan mahsulotlar hali yuklanmagan) → tahrir bloki ko'rsatilmaydi.
-  ProductModelAdmin? _product;
+  Product? _product;
 
   @override
   void initState() {
@@ -284,7 +284,7 @@ class _PriceHistorySheetState extends State<_PriceHistorySheet> {
   }
 
   // «Qo'lda narx» tahrir bloki — sheet'ning eng tepasida.
-  Widget _manualPriceBlock(ProductModelAdmin product) {
+  Widget _manualPriceBlock(Product product) {
     final saved = product.manualPrice;
     final at = product.manualPriceAt;
     return Container(
@@ -337,7 +337,7 @@ class _PriceHistorySheetState extends State<_PriceHistorySheet> {
                     isDense: true,
                     filled: true,
                     fillColor: Colors.white,
-                    labelText: manualPriceLabel(product.type),
+                    labelText: manualPriceLabel(product.unit),
                     labelStyle: const TextStyle(fontSize: 13),
                     suffixText: ' сум',
                     hintText: '—',

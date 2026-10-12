@@ -240,35 +240,5 @@ class StockService {
     }
   }
 
-  // Korreksiya dialogidagi katalog: /api/ombor/products (hamma rolga ochiq,
-  // bozor mahsulotlari — masalliqlar shu ro'yxatdan). Qoldiqda hali yozuvi
-  // yo'q mahsulotga boshlang'ich qoldiq kiritish uchun kerak.
-  Future<List<CatalogProduct>> fetchCatalog() async {
-    try {
-      final response = await dio.get(AppUrls.omborProducts);
-      if (response.statusCode != 200) return [];
-      final body = response.data;
-      if (body is! Map || body['data'] is! Map) return [];
-      final result = <CatalogProduct>[];
-      (body['data'] as Map).forEach((_, products) {
-        if (products is! List) return;
-        for (final p in products) {
-          if (p is! Map) continue;
-          final id = p['id'];
-          result.add(CatalogProduct(
-            id: id is num
-                ? id.toInt()
-                : int.tryParse(id?.toString() ?? '') ?? 0,
-            name: p['name']?.toString() ?? '',
-            type: p['type']?.toString() ?? '',
-          ));
-        }
-      });
-      result.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-      return result;
-    } on DioException {
-      // Katalog ixtiyoriy manba — xato bo'lsa jim bo'sh ro'yxat.
-      return [];
-    }
-  }
+
 }

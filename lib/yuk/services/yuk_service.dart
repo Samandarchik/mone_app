@@ -2,6 +2,7 @@
 // yukOrders (fetch/price/draft/revert), yukLedger[/day], procheNames, yukTransfers
 // (accept/reject), yukUpload, omborProducts (mahsulot rasmlari).
 import 'package:dio/dio.dart';
+import 'package:uz_ai_dev/core/catalog/catalog_repository.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/di/di.dart';
 import 'package:uz_ai_dev/yuk/models/proche_name_model.dart';
@@ -372,36 +373,19 @@ class YukService {
     }
   }
 
-  // GET /api/ombor/products -> mahsulot id -> katalog rasmi (image_url, relativ)
-  // xaritasi. Yuk keltiruvchining buyurtmadagi mahsulotlarining suratini
-  // ko'rsatish uchun. Javob kategoriya bo'yicha guruhlangan:
-  // { "data": { "Kategoriya": [ {"id":5, "image_url":"/static/..."}, ... ] } }.
-  // Xato bo'lsa bo'sh xarita qaytadi — surat ekrani placeholder ko'rsatadi.
+  // Bozor mahsulotlari rasmi (id -> image_url) — CatalogRepository
+  // (GET /api/products; server yuk keltiruvchi uchun sotib olinadiganlarni
+  // qaytaradi). Xato — bo'sh map (rasm ixtiyoriy).
   Future<Map<int, String>> fetchBozorProductImages() async {
     try {
-      final response = await dio.get(AppUrls.omborProducts);
-      final result = <int, String>{};
-      final body = response.data;
-      final data = (body is Map) ? body['data'] : null;
-      if (data is Map) {
-        for (final list in data.values) {
-          if (list is! List) continue;
-          for (final item in list) {
-            if (item is! Map) continue;
-            final rawId = item['id'];
-            final id = rawId is num ? rawId.toInt() : int.tryParse('$rawId');
-            final img = item['image_url'];
-            if (id != null && img is String && img.isNotEmpty) {
-              result[id] = img;
-            }
-          }
-        }
-      }
-      return result;
-    } on DioException {
-      return <int, String>{};
+      final products = await sl<CatalogRepository>().load();
+      return {
+        for (final p in products)
+          if (p.imageUrl.isNotEmpty) p.id: p.imageUrl,
+      };
     } catch (_) {
       return <int, String>{};
     }
   }
+
 }

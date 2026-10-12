@@ -10,6 +10,7 @@ import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
 import 'package:uz_ai_dev/shef/model/production_model.dart';
 import 'package:uz_ai_dev/shef/provider/shef_provider.dart';
 import 'package:uz_ai_dev/shef/services/shef_service.dart';
@@ -48,9 +49,9 @@ class _ShefCreateOrderUiState extends State<ShefCreateOrderUi> {
 
   // ── Guruhlash keshi ──────────────────────────────────────────────────────
   // Manba ro'yxat (identity) va qidiruv matni o'zgarmaguncha qayta hisoblamaymiz.
-  List<ProductionProduct>? _groupsSource;
+  List<Product>? _groupsSource;
   String _groupsQuery = '';
-  // Yassi (flat) ro'yxatlar: CategoryHeader | ProductionProduct elementlari.
+  // Yassi (flat) ro'yxatlar: CategoryHeader | Product elementlari.
   List<Object> _pfEntries = const [];
   List<Object> _readyEntries = const [];
   // Tab yorlig'idagi son — filtrdan keyingi mahsulotlar soni.
@@ -59,7 +60,7 @@ class _ShefCreateOrderUiState extends State<ShefCreateOrderUi> {
 
   // Faqat manba/qidiruv o'zgarganda ishlaydi (build ichidan chaqiriladi, lekin
   // setState qilmaydi — bu shunchaki kesh).
-  void _rebuildGroups(List<ProductionProduct> source, String query) {
+  void _rebuildGroups(List<Product> source, String query) {
     if (identical(_groupsSource, source) && _groupsQuery == query) return;
     _groupsSource = source;
     _groupsQuery = query;
@@ -67,16 +68,16 @@ class _ShefCreateOrderUiState extends State<ShefCreateOrderUi> {
     final matched = query.isEmpty
         ? source
         : source.where((p) => p.name.toLowerCase().contains(query)).toList();
-    final pfList = matched.where((p) => p.isSemiFinished).toList();
-    final readyList = matched.where((p) => !p.isSemiFinished).toList();
+    final pfList = matched.where((p) => p.isPf).toList();
+    final readyList = matched.where((p) => !p.isPf).toList();
     _pfCount = pfList.length;
     _readyCount = readyList.length;
-    _pfEntries = buildCategoryEntries<ProductionProduct>(
+    _pfEntries = buildCategoryEntries<Product>(
       pfList,
       categoryId: (p) => p.categoryId,
       categoryName: (p) => p.categoryName,
     );
-    _readyEntries = buildCategoryEntries<ProductionProduct>(
+    _readyEntries = buildCategoryEntries<Product>(
       readyList,
       categoryId: (p) => p.categoryId,
       categoryName: (p) => p.categoryName,
@@ -104,7 +105,7 @@ class _ShefCreateOrderUiState extends State<ShefCreateOrderUi> {
   }
 
   // Mahsulot bosilganda son kiritish dialogi (jonli partiya hisobi bilan).
-  Future<void> _editQty(ProductionProduct product) async {
+  Future<void> _editQty(Product product) async {
     final qty = await showDialog<int>(
       context: context,
       builder: (_) => _QtyDialog(
@@ -244,7 +245,7 @@ class _ShefCreateOrderUiState extends State<ShefCreateOrderUi> {
                           if (entry is CategoryHeader) {
                             return CategoryHeaderTile(header: entry);
                           }
-                          return _productTile(entry as ProductionProduct);
+                          return _productTile(entry as Product);
                         },
                       ),
               ),
@@ -297,7 +298,7 @@ class _ShefCreateOrderUiState extends State<ShefCreateOrderUi> {
     );
   }
 
-  Widget _productTile(ProductionProduct product) {
+  Widget _productTile(Product product) {
     final qty = _cart[product.id] ?? 0;
     final imageUrl = _fullImageUrl(product.imageUrl);
     final batches = product.batchesFor(qty);
@@ -434,7 +435,7 @@ class _ShefCreateOrderUiState extends State<ShefCreateOrderUi> {
 // so'raladi va son maydoni max_qty bilan QATTIQ cheklanadi (server ham
 // oshib ketsa 400 qaytaradi).
 class _QtyDialog extends StatefulWidget {
-  final ProductionProduct product;
+  final Product product;
   final int initialQty;
 
   const _QtyDialog({required this.product, required this.initialQty});

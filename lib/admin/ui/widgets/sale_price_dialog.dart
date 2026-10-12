@@ -5,7 +5,7 @@
 // ekranlaridagi «narx belgilanmagan» mahsulotlar shu orqali narxlanadi.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:uz_ai_dev/admin/model/tech_card.dart';
+import 'package:uz_ai_dev/core/catalog/tech_card.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/core/utils/money_input.dart';
 import 'package:uz_ai_dev/production/ui/widgets/cost_sheet.dart'

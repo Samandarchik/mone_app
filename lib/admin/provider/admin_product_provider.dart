@@ -1,53 +1,49 @@
-// admin/provider/admin_product_provider.dart — mahsulotlarning YAGONA manbai
-// (ProductProviderAdmin, ChangeNotifier): barcha mahsulotlarni bir marta
-// yuklaydi (initializeProducts), kategoriya bo'yicha filtrlaydi
-// (filterByCategory) va create/update/delete/reorderProducts/setManualPrice
-// (qo'lda xarid narxi) ni xotirada yangilaydi — to'liq re-fetch YO'Q.
-// ApiProductService bilan ishlaydi.
+// admin/provider/admin_product_provider.dart — admin/shef ekranlari uchun
+// mahsulot holati (ProductProviderAdmin, ChangeNotifier). Ma'lumotning O'ZI
+// endi YAGONA manbada — CatalogRepository (core/catalog): bu provider uni
+// retsept bilan (`withRecipe: true`) yuklaydi, kategoriya bo'yicha filtrlaydi
+// (filterByCategory) va create/update/delete/reorder/setManualPrice'dan keyin
+// repozitoriyni LOKAL yangilaydi — to'liq re-fetch YO'Q. ApiProductService
+// bilan ishlaydi.
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:uz_ai_dev/admin/model/product_model.dart';
 import 'package:uz_ai_dev/admin/services/api_product_service.dart';
+import 'package:uz_ai_dev/core/catalog/catalog_repository.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
 import 'package:uz_ai_dev/core/clearable_provider.dart';
-import 'package:uz_ai_dev/core/data/local/products_cache.dart';
+import 'package:uz_ai_dev/core/di/di.dart';
 
 class ProductProviderAdmin extends ChangeNotifier with ClearableProvider {
   final ApiProductService _service = ApiProductService();
+  final CatalogRepository _repo = sl<CatalogRepository>();
 
-  // Lokal kesh: `/api/products/all` xom javobi app papkasidagi faylda.
-  final ProductsCache _cache = ProductsCache();
-
-  // Barcha mahsulotlar bir marta yuklanadi
-  List<ProductModelAdmin> _allProducts = [];
-  List<ProductModelAdmin> _filteredProducts = [];
+  List<Product> _filteredProducts = [];
   bool _isLoading = false;
   bool _isInitialized = false; // Ma'lumotlar yuklangani
   String? _error;
   int? _selectedCategoryId;
 
   // Getters
-  List<ProductModelAdmin> get products => _allProducts;
-  List<ProductModelAdmin> get filteredProducts => _filteredProducts;
+  List<Product> get products => _repo.products;
+  List<Product> get filteredProducts => _filteredProducts;
   bool get isLoading => _isLoading;
   bool get isInitialized => _isInitialized;
   String? get error => _error;
 
-  // Barcha mahsulotlarni yuklash: AVVAL lokal kesh (fon isolate'ida parse —
-  // ro'yxat darhol ko'rinadi), KEYIN tarmoqdan yangilanadi va kesh qayta
-  // yoziladi. Javob ~1.6 MB bo'lgani uchun na yuklab olish, na parse UI
-  // oqimini bloklamaydi (ilgari shu yerda ANR chiqardi).
+  // Barcha mahsulotlarni (retsept bilan) yuklash: AVVAL lokal kesh (fon
+  // isolate'ida parse — ro'yxat darhol ko'rinadi), KEYIN tarmoqdan yangilanadi.
+  // Javob ~1.6 MB bo'lgani uchun na yuklab olish, na parse UI oqimini
+  // bloklamaydi (CatalogRepository + CatalogCache).
   Future<void> initializeProducts({bool forceRefresh = false}) async {
-    // Agar allaqachon yuklangan bo'lsa va force refresh yo'q bo'lsa, qayta yuklamaymiz
-    if (_isInitialized && !forceRefresh) {
+    if (_isInitialized && !forceRefresh && _repo.hasRecipes) {
       return;
     }
 
     // 1) Kesh — tarmoqni kutmasdan ko'rsatamiz (bo'sh ekran / spinner yo'q).
-    if (_allProducts.isEmpty) {
-      final cached = await _cache.read();
+    if (products.isEmpty) {
+      final cached = await _repo.loadCached();
       if (cached != null && cached.isNotEmpty) {
-        _allProducts = cached;
         _applyFilter();
         _isInitialized = true;
         _isLoading = false;
@@ -57,20 +53,17 @@ class ProductProviderAdmin extends ChangeNotifier with ClearableProvider {
 
     // 2) Tarmoq. Keshdan ko'rsatilgan bo'lsa spinner chiqarmaymiz — ro'yxat
     // ekranda turadi va yangi ma'lumot kelganda jimgina almashadi.
-    final hadData = _allProducts.isNotEmpty;
+    final hadData = products.isNotEmpty;
     _error = null;
     _isLoading = !hadData;
     if (!hadData) notifyListeners();
 
     try {
-      final raw = await _service.fetchAllProductsRaw();
-      _allProducts = await compute(parseProductsJson, raw);
+      await _repo.load(withRecipe: true, force: true);
       _applyFilter();
       _isInitialized = true;
       _isLoading = false;
       notifyListeners();
-      // Kesh yozish javobni kutib turmaydi.
-      unawaited(_cache.write(raw));
     } catch (e) {
       _isLoading = false;
       // Keshdan ko'rsatilgan bo'lsa xatoni chiqarmaymiz — eski ro'yxat
@@ -83,13 +76,12 @@ class ProductProviderAdmin extends ChangeNotifier with ClearableProvider {
     }
   }
 
-  // Joriy filtrni (_selectedCategoryId) _allProducts ga qayta qo'llaydi.
-  // Nusxa olamiz — bir xil List'ga alias bo'lsa, filter/remove'lar
-  // _allProducts'ni ham buzib yuborardi.
+  // Joriy filtrni (_selectedCategoryId) repozitoriy ro'yxatiga qayta qo'llaydi.
+  // Nusxa olamiz — bir xil List'ga alias bo'lsa reorder repo'ni ham buzardi.
   void _applyFilter() {
     _filteredProducts = _selectedCategoryId == null
-        ? List.of(_allProducts)
-        : _allProducts
+        ? List.of(products)
+        : products
             .where((product) => product.categoryId == _selectedCategoryId)
             .toList();
   }
@@ -102,23 +94,15 @@ class ProductProviderAdmin extends ChangeNotifier with ClearableProvider {
   }
 
   // Create new product
-  Future<bool> createProduct(ProductModelAdmin product) async {
+  Future<bool> createProduct(Product product) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
       final newProduct = await _service.createProduct(product);
-
-      // Barcha mahsulotlar ro'yxatiga qo'shish
-      _allProducts.add(newProduct);
-
-      // Agar hozirgi filter mos kelsa, filtered listga ham qo'shamiz
-      if (_selectedCategoryId == null ||
-          newProduct.categoryId == _selectedCategoryId) {
-        _filteredProducts.add(newProduct);
-      }
-
+      _repo.upsertLocal(newProduct);
+      _applyFilter();
       _isLoading = false;
       notifyListeners();
       return true;
@@ -131,27 +115,15 @@ class ProductProviderAdmin extends ChangeNotifier with ClearableProvider {
   }
 
   // Update existing product
-  Future<bool> updateProduct(ProductModelAdmin product) async {
+  Future<bool> updateProduct(Product product) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
       final updatedProduct = await _service.updateProduct(product);
-
-      // Barcha mahsulotlar ro'yxatida yangilash
-      final index = _allProducts.indexWhere((p) => p.id == updatedProduct.id);
-      if (index != -1) {
-        _allProducts[index] = updatedProduct;
-      }
-
-      // Filtered listda yangilash
-      final filteredIndex =
-          _filteredProducts.indexWhere((p) => p.id == updatedProduct.id);
-      if (filteredIndex != -1) {
-        _filteredProducts[filteredIndex] = updatedProduct;
-      }
-
+      _repo.upsertLocal(updatedProduct);
+      _applyFilter();
       _isLoading = false;
       notifyListeners();
       return true;
@@ -163,14 +135,8 @@ class ProductProviderAdmin extends ChangeNotifier with ClearableProvider {
     }
   }
 
-  // Bitta mahsulot (id bo'yicha). Topilmasa null. Ro'yxat bo'ylab chiziqli
-  // qidiradi — build() ICHIDA emas, bir martalik chaqiruvlarda ishlating.
-  ProductModelAdmin? productById(int id) {
-    for (final p in _allProducts) {
-      if (p.id == id) return p;
-    }
-    return null;
-  }
+  // Bitta mahsulot (id bo'yicha). Topilmasa null.
+  Product? productById(int id) => _repo.byId(id);
 
   // Masalliqning QO'LDA kiritilgan xarid narxi (PUT
   // /api/products/{id}/manual-price). price — BUTUN so'm, mahsulotning
@@ -182,16 +148,12 @@ class ProductProviderAdmin extends ChangeNotifier with ClearableProvider {
       final data = await _service.setManualPrice(productId, price);
       final saved = (data['manual_price'] as num?)?.toInt() ?? price;
       final at = DateTime.tryParse(data['manual_price_at']?.toString() ?? '');
-
-      void patch(List<ProductModelAdmin> list) {
-        final i = list.indexWhere((p) => p.id == productId);
-        if (i != -1) {
-          list[i] = list[i].copyWith(manualPrice: saved, manualPriceAt: at);
-        }
+      final current = _repo.byId(productId);
+      if (current != null) {
+        _repo.upsertLocal(
+            current.copyWith(manualPrice: saved, manualPriceAt: at));
+        _applyFilter();
       }
-
-      patch(_allProducts);
-      patch(_filteredProducts);
       notifyListeners();
       return true;
     } catch (e) {
@@ -201,29 +163,24 @@ class ProductProviderAdmin extends ChangeNotifier with ClearableProvider {
     }
   }
 
-  // Delete product
   /// Serverda ALLAQACHON yangilangan mahsulotni lokal ro'yxatlarga qo'yadi
   /// (masalan tex karta rollback javobidan) — qayta fetch qilinmaydi.
-  void applyServerProduct(ProductModelAdmin updated) {
-    final index = _allProducts.indexWhere((p) => p.id == updated.id);
-    if (index != -1) _allProducts[index] = updated;
-    final filteredIndex = _filteredProducts.indexWhere((p) => p.id == updated.id);
-    if (filteredIndex != -1) _filteredProducts[filteredIndex] = updated;
+  void applyServerProduct(Product updated) {
+    _repo.upsertLocal(updated);
+    _applyFilter();
     notifyListeners();
   }
 
-  Future<bool> deleteProduct(ProductModelAdmin product) async {
+  // Delete product
+  Future<bool> deleteProduct(Product product) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
       await _service.deleteProduct(product);
-
-      // Barcha ro'yxatlardan o'chirish
-      _allProducts.removeWhere((p) => p.id == product.id);
-      _filteredProducts.removeWhere((p) => p.id == product.id);
-
+      _repo.removeLocal(product.id);
+      _applyFilter();
       _isLoading = false;
       notifyListeners();
       return true;
@@ -254,15 +211,13 @@ class ProductProviderAdmin extends ChangeNotifier with ClearableProvider {
 
   // Kategoriya bo'yicha mahsulotlar sonini olish
   int getProductCountByCategory(int categoryId) {
-    return _allProducts.where((p) => p.categoryId == categoryId).length;
+    return products.where((p) => p.categoryId == categoryId).length;
   }
 
-  // Logout: mahsulotlar (YAGONA manba) va filtr/holat maydonlarini tozalaymiz.
-  // Kesh fayli ham o'chadi — keyingi foydalanuvchiga eski ro'yxat ko'rinmasin.
+  // Logout: filtr/holat maydonlarini tozalaymiz. Katalogning o'zi (xotira +
+  // disk kesh) CatalogRepository.clear() da — session.dart chaqiradi.
   @override
   void clear() {
-    unawaited(_cache.clear());
-    _allProducts = [];
     _filteredProducts = [];
     _isLoading = false;
     _isInitialized = false;

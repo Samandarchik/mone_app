@@ -22,7 +22,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:uz_ai_dev/admin/model/tech_card.dart';
+import 'package:uz_ai_dev/core/catalog/tech_card.dart';
 import 'package:uz_ai_dev/admin/ui/widgets/filling_color_palette.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/biscuit_side_photo.dart';

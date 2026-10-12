@@ -4,11 +4,11 @@
 // Buyurtma yaratilganda tex kartadan SNAPSHOT olinadi, shuning uchun bu
 // modellar tex karta modellaridan mustaqil.
 //
-// Ichidagilar: ProductionProduct, PfLimit/PfAvailability (buyurtma limiti),
+// Ichidagilar: PfLimit/PfAvailability (buyurtma limiti),
 // PfStockRow/PfStockData (полуфабрикат qoldig'i ekrani), ProductionIngredient,
 // ProductionStage, ProductionItem, ProductionOrder.
 //
-// ProductionProduct va PfStockRow'da category_id/category_name bor — ekranlar
+// PfStockRow'da category_id/category_name bor — ekranlar
 // ro'yxatni kategoriya bo'yicha guruhlaydi (shef/ui/widgets/category_group.dart).
 // Eski backend bu maydonlarni yubormasa default 0 / '' bo'ladi.
 
@@ -21,66 +21,6 @@ int _asInt(dynamic v) {
 double _asDouble(dynamic v) {
   if (v is num) return v.toDouble();
   return double.tryParse(v?.toString() ?? '') ?? 0;
-}
-
-// GET /api/production/products elementi — tex kartasi bor mahsulot
-// (buyurtma yaratish sahifasidagi ro'yxat).
-class ProductionProduct {
-  final int id;
-  final String name;
-  final String imageUrl; // '/static/...' yoki to'liq URL yoki ''
-  final int batchQty; // BITTA LISTdan chiqadigan dona (>= 1)
-  final int listQty; // partiyada nechta list (противень); >= 1
-  // Полуфабрикат (biskvit kabi) — ro'yxatda qatnashadi, chunki u ham
-  // ishlab chiqariladi.
-  final bool isSemiFinished;
-  // Kategoriya (ro'yxatni guruhlash uchun). Server topa olmasa 0 / ''
-  // qaytaradi; eski backend bu maydonlarni umuman yubormasligi mumkin.
-  final int categoryId;
-  final String categoryName;
-
-  const ProductionProduct({
-    required this.id,
-    required this.name,
-    this.imageUrl = '',
-    this.batchQty = 1,
-    this.listQty = 1,
-    this.isSemiFinished = false,
-    this.categoryId = 0,
-    this.categoryName = '',
-  });
-
-  factory ProductionProduct.fromJson(Map<String, dynamic> json) {
-    final bq = _asInt(json['batch_qty']);
-    final lq = _asInt(json['list_qty']);
-    return ProductionProduct(
-      id: _asInt(json['id']),
-      name: json['name']?.toString() ?? '',
-      imageUrl: json['image_url']?.toString() ?? '',
-      batchQty: bq < 1 ? 1 : bq,
-      listQty: lq < 1 ? 1 : lq,
-      isSemiFinished: json['is_semi_finished'] == true,
-      categoryId: _asInt(json['category_id'] ?? 0),
-      categoryName: json['category_name']?.toString() ?? '',
-    );
-  }
-
-  // Partiya JAMI donasi = bitta list donasi (batchQty) × list soni (listQty).
-  int get totalPieces => batchQty * listQty;
-
-  // Partiya soni: yuqoriga yaxlitlash — ceil(qty / totalPieces).
-  int batchesFor(int qty) =>
-      qty <= 0 ? 0 : (qty + totalPieces - 1) ~/ totalPieces;
-
-  static List<ProductionProduct> listFromJson(dynamic data) {
-    if (data is List) {
-      return data
-          .whereType<Map>()
-          .map((e) => ProductionProduct.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
-    }
-    return [];
-  }
 }
 
 // GET /api/production/pf-availability javobidagi bitta полуфабрикат limiti:

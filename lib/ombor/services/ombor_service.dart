@@ -1,5 +1,6 @@
 // ombor/services/ombor_service.dart — Ombor (bozor) Dio servisi: OmborService. Endpointlar
-// AppUrls.orders (POST buyurtma / GET o'z buyurtmalari), omborProducts, category; item
+// AppUrls.orders (POST buyurtma / GET o'z buyurtmalari), category; item
+// (mahsulotlar ro'yxati — CatalogRepository, GET /api/products);
 // accept (POST .../accept) va soft-delete (DELETE .../items/{productId}).
 import 'package:dio/dio.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
@@ -83,36 +84,6 @@ class OmborService {
       throw Exception('Tarmoq xatosi: ${e.message}');
     } catch (e) {
       throw Exception('Buyurtma yuborishda kutilmagan xato: $e');
-    }
-  }
-
-  // GET /api/ombor/products -> kategoriya bo'yicha guruhlangan mahsulotlar
-  Future<Map<String, List<OmborProduct>>> fetchProducts() async {
-    try {
-      final response = await dio.get(AppUrls.omborProducts);
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData =
-            Map<String, dynamic>.from(response.data);
-        final data = responseData['data'];
-        if (data is Map) {
-          return parseOmborProducts(Map<String, dynamic>.from(data));
-        }
-        return {};
-      } else {
-        throw Exception('Mahsulotlarni yuklab bo\'lmadi: ${response.statusCode}');
-      }
-    } on DioException catch (e) {
-      if (e.response != null) {
-        final body = e.response!.data;
-        final msg = (body is Map && body['message'] != null)
-            ? body['message']
-            : 'Server xatosi: ${e.response!.statusCode}';
-        throw Exception(msg);
-      }
-      throw Exception('Tarmoq xatosi: ${e.message}');
-    } catch (e) {
-      throw Exception('Mahsulotlarni yuklashda kutilmagan xato: $e');
     }
   }
 

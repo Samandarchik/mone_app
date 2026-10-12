@@ -10,6 +10,9 @@ import 'package:uz_ai_dev/core/network/order_socket.dart';
 import 'package:uz_ai_dev/core/utils/order_sequence.dart';
 import 'package:uz_ai_dev/core/utils/qty_units.dart';
 import 'package:uz_ai_dev/ombor/models/ombor_order_model.dart';
+import 'package:uz_ai_dev/core/catalog/catalog_repository.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
+import 'package:uz_ai_dev/core/di/di.dart';
 import 'package:uz_ai_dev/ombor/models/ombor_product_model.dart';
 import 'package:uz_ai_dev/core/widgets/order_period.dart';
 import 'package:uz_ai_dev/ombor/services/ombor_service.dart';
@@ -25,7 +28,7 @@ typedef OmborCartKey = ({int productId, String source});
 class OmborProvider extends ChangeNotifier with ClearableProvider {
   final OmborService _service = OmborService();
 
-  Map<String, List<OmborProduct>> productsByCategory = {};
+  Map<String, List<Product>> productsByCategory = {};
   // GET /api/categories dan kelgan ro'yxat (rasm + server tartibi).
   List<OmborCategory> allCategories = [];
   bool isLoading = false;
@@ -74,7 +77,7 @@ class OmborProvider extends ChangeNotifier with ClearableProvider {
       productsByCategory[categoryName]?.length ?? 0;
 
   // Mahsulotni id bo'yicha topish (savat submit'da type kerak).
-  OmborProduct? findProductById(int productId) {
+  Product? findProductById(int productId) {
     for (final products in productsByCategory.values) {
       for (final p in products) {
         if (p.id == productId) return p;
@@ -84,8 +87,8 @@ class OmborProvider extends ChangeNotifier with ClearableProvider {
   }
 
   // Qidiruv uchun barcha mahsulotlar (kategoriya nomi bilan birga).
-  List<MapEntry<String, OmborProduct>> get allProductsWithCategory {
-    final result = <MapEntry<String, OmborProduct>>[];
+  List<MapEntry<String, Product>> get allProductsWithCategory {
+    final result = <MapEntry<String, Product>>[];
     productsByCategory.forEach((category, products) {
       for (final p in products) {
         result.add(MapEntry(category, p));
@@ -178,15 +181,18 @@ class OmborProvider extends ChangeNotifier with ClearableProvider {
     notifyListeners();
 
     try {
-      // Mahsulotlar va kategoriyalar parallel yuklanadi. Kategoriyalar
-      // faqat rasm/tartib uchun — xatosi asosiy ro'yxatni to'xtatmaydi.
-      final productsFuture = _service.fetchProducts();
+      // Mahsulotlar (CatalogRepository — GET /api/products, server ombor
+      // uchun sotib olinadiganlarni qaytaradi) va kategoriyalar parallel
+      // yuklanadi. Kategoriyalar faqat rasm/tartib uchun — xatosi asosiy
+      // ro'yxatni to'xtatmaydi.
+      final repo = sl<CatalogRepository>();
+      final productsFuture = repo.load(force: true);
       try {
         allCategories = await _service.fetchCategories();
       } catch (_) {
         allCategories = [];
       }
-      productsByCategory = await productsFuture;
+      productsByCategory = repo.groupedByCategory(await productsFuture);
       _reconcileCartSources();
     } catch (e) {
       errorMessage = e.toString().replaceFirst('Exception: ', '');
@@ -391,7 +397,7 @@ class OmborProvider extends ChangeNotifier with ClearableProvider {
       // manbani o'z bozorchisiga alohida buyurtma qiladi).
       final items = _cart.entries.map((e) {
         final productId = e.key.productId;
-        final type = findProductById(productId)?.type;
+        final type = findProductById(productId)?.unit;
         final num count;
         if (qtyUnitFactor(type) == 1000) {
           count = e.value; // milli == gramm/ml, butun son

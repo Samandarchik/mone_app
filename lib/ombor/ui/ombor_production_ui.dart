@@ -2,11 +2,13 @@
 // OmborProductionUi (OmborProductionProvider). Real-time socket bilan yangilanadi.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:uz_ai_dev/core/catalog/catalog_repository.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
+import 'package:uz_ai_dev/core/di/di.dart';
 import 'package:uz_ai_dev/core/utils/qty_units.dart';
 import 'package:uz_ai_dev/ombor/services/ombor_service.dart';
 import 'package:uz_ai_dev/production/provider/production_orders_provider.dart';
 import 'package:uz_ai_dev/production/provider/stock_provider.dart';
-import 'package:uz_ai_dev/production/services/production_service.dart';
 import 'package:uz_ai_dev/production/ui/widgets/production_order_widgets.dart';
 import 'package:uz_ai_dev/shef/model/production_model.dart';
 import 'package:uz_ai_dev/shef/ui/shef_home_ui.dart' show productionStatusChip;
@@ -183,11 +185,18 @@ class _OmborProductionDetailUiState extends State<OmborProductionDetailUi> {
     });
   }
 
+  // Ishlab chiqariladigan (пф / tayyor) mahsulot id'lari — «Yetishmaganidan
+  // buyurtma» oqimida pf qatorlarini chiqarib tashlash uchun. Katalog
+  // CatalogRepository'dan (GET /api/products): rolga qarab server pf'larni
+  // yubormasligi mumkin — unda to'plam bo'sh qoladi va oqim avvalgidek ishlaydi.
   Future<void> _loadProducedIds() async {
     try {
-      final products = await ProductionService().fetchProducts();
+      final products = await sl<CatalogRepository>().load();
       if (!mounted) return;
-      setState(() => _producedIds = {for (final p in products) p.id});
+      setState(() => _producedIds = {
+            for (final p in products)
+              if (p.kind != ProductKind.raw) p.id
+          });
     } catch (_) {
       // Jim — pf ajratib bo'lmasa, oqim avvalgidek ishlayveradi.
     }

@@ -7,7 +7,7 @@ import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/utils/product_sources.dart';
 import 'package:uz_ai_dev/core/utils/qty_units.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
-import 'package:uz_ai_dev/ombor/models/ombor_product_model.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
 import 'package:uz_ai_dev/ombor/provider/ombor_provider.dart';
 import 'package:uz_ai_dev/production/models/stock_model.dart';
 import 'package:uz_ai_dev/production/provider/stock_provider.dart';
@@ -66,7 +66,7 @@ class _OmborCategoryProductsUiState extends State<OmborCategoryProductsUi> {
       // bosilganda (addToCart -> notifyListeners) butun GridView, ya'ni
       // ekrandagi hamma kartochka qaytadan quriladi — kartochkalarning o'zi
       // esa savat holatini ichkarida allaqachon kuzatadi.
-      body: Selector<OmborProvider, List<OmborProduct>>(
+      body: Selector<OmborProvider, List<Product>>(
         selector: (_, provider) =>
             provider.productsByCategory[widget.categoryName] ?? const [],
         builder: (context, products, child) {
@@ -220,7 +220,7 @@ class OmborCartBar extends StatelessWidget {
 // skladId berilsa qoldiq aynan shu sklad bo'yicha; berilmasa ombor
 // skladlaridan birinchi topilgani.
 class OmborProductCard extends StatelessWidget {
-  final OmborProduct product;
+  final Product product;
   final bool isGrid;
   final int? skladId;
   const OmborProductCard({
@@ -235,23 +235,23 @@ class OmborProductCard extends StatelessWidget {
   static const Color _idleSourceColor = Color(0xFF7A5C2E);
   static const double _sourceRowHeight = 32;
 
-  // Bir qadam = kartochkada ko'rsatilgan pachka miqdori * 1000 (milli-birlik,
-  // butun son). Subtitle bilan BIR XIL fallback: bozor gramm -> mone gramm ->
-  // 1. Masalan 0.5 ko'rsatilgan mahsulotda + har bosilganda +0.5 qo'shiladi.
+  // Bir qadam = pachka miqdori (buyStep, eng kichik birlikda butun) * 1000 /
+  // birlik koeffitsiyenti = milli-birlik (butun son). Fallback (modelda):
+  // pachka -> seller qadami -> 1 to'liq birlik. Masalan 0.5 kg pachkada
+  // + har bosilganda +0.5 qo'shiladi.
   int get _stepMilli {
-    final qty = product.bozorGrams ?? product.grams;
-    if (qty == null || qty <= 0) return 1000;
-    return (qty * 1000).round();
+    final step = product.buyStepOrDefault;
+    if (step <= 0) return 1000;
+    return (step * 1000 / qtyUnitFactor(product.unit)).round();
   }
 
   String get _subtitle {
-    final unit =
-        (product.type != null && product.type!.isNotEmpty) ? product.type! : '';
-    // Pachka miqdori = bozor gramm; bo'lmasa mone gramm.
-    final qty = product.bozorGrams ?? product.grams;
+    final unit = product.unit;
+    // Pachka miqdori (display birlikda): buyStep, bo'lmasa sellStep.
+    final step = product.buyStep > 0 ? product.buyStep : product.sellStep;
     String qtyText = '';
-    if (qty != null) {
-      final v = qty.toDouble();
+    if (step > 0) {
+      final v = qtyToUi(step, product.unit);
       final u = unit.toLowerCase();
       final isKg = u == 'kg' || u == 'кг';
       // 1 kg dan kam bo'lsa grammda: 0.4 kg -> "400 gr".
@@ -314,7 +314,7 @@ class OmborProductCard extends StatelessWidget {
       context: context,
       builder: (_) => _OmborQtyDialog(
         title: product.name,
-        type: product.type,
+        type: product.unit,
         sources: sources,
         current: {
           for (final s in sources) s: provider.countMilli(product.id, s),
@@ -329,7 +329,7 @@ class OmborProductCard extends StatelessWidget {
 
   // Rasm bosilsa katta (to'liq) ko'rinishda ochiladi.
   void _showImageDialog(BuildContext context) {
-    if (product.imageUrl == null || product.imageUrl!.isEmpty) return;
+    if (product.imageUrl.isEmpty) return;
     showDialog(
       context: context,
       // To'liq ko'rinish ham ekran kengligida dekod qilinadi — telefon
@@ -353,7 +353,7 @@ class OmborProductCard extends StatelessWidget {
   }
 
   Widget _buildImage() {
-    final hasImage = product.imageUrl != null && product.imageUrl!.isNotEmpty;
+    final hasImage = product.imageUrl.isNotEmpty;
     if (!hasImage) {
       return Container(
         color: Colors.grey.shade200,
@@ -410,10 +410,9 @@ class OmborProductCard extends StatelessWidget {
       );
     }
 
-    final type = product.type;
-    final qtyText = (type != null && type.isNotEmpty)
-        ? '${formatMilli(milli)} $type'
-        : formatMilli(milli);
+    final type = product.unit;
+    final qtyText =
+        type.isNotEmpty ? '${formatMilli(milli)} $type' : formatMilli(milli);
 
     return Container(
       decoration: BoxDecoration(
@@ -514,10 +513,9 @@ class OmborProductCard extends StatelessWidget {
         ),
       );
     } else {
-      final type = product.type;
-      final qtyText = (type != null && type.isNotEmpty)
-          ? '${formatMilli(milli)} $type'
-          : formatMilli(milli);
+      final type = product.unit;
+      final qtyText =
+          type.isNotEmpty ? '${formatMilli(milli)} $type' : formatMilli(milli);
       control = Container(
         decoration: BoxDecoration(
           color: _accentColor,
@@ -680,7 +678,7 @@ class OmborProductCard extends StatelessWidget {
                   ),
                 if (stockRow != null) _buildQoldiq(stockRow),
                 // Berilgan, lekin hali kelmagan buyurtma (0 bo'lsa ko'rinmaydi).
-                OmborBuyurtmaLabel(productId: product.id, type: product.type),
+                OmborBuyurtmaLabel(productId: product.id, type: product.unit),
                 if (!flexImage) const Spacer(),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),

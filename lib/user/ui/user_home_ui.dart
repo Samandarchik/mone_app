@@ -172,7 +172,7 @@ class _UserHomeUiState extends State<UserHomeUi> {
                         ? allProducts
                         : allProducts.where((p) {
                             return p.name.toLowerCase().contains(query) ||
-                                (p.category?.toLowerCase().contains(query) ?? false);
+                                p.categoryName.toLowerCase().contains(query);
                           }).toList();
 
                     if (products.isEmpty) {
@@ -250,8 +250,8 @@ class _UserHomeUiState extends State<UserHomeUi> {
                                   name: product.name,
                                   quantity: quantity,
                                   quantityText:
-                                      formatQty(quantity, product.type),
-                                  type: product.type,
+                                      formatQty(quantity, product.unit),
+                                  type: product.unit,
                                   buttonColor: _buttonColor,
                                   onTap: () =>
                                       provider.incrementProduct(product.id),

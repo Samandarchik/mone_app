@@ -8,8 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/admin/model/category_model.dart';
-import 'package:uz_ai_dev/admin/model/product_model.dart';
-import 'package:uz_ai_dev/admin/model/tech_card.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
+import 'package:uz_ai_dev/core/catalog/tech_card.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
@@ -24,14 +24,15 @@ import 'package:uz_ai_dev/shef/ui/widgets/biscuit_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/cake_illustration.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/cake_photo_3d.dart';
 import 'package:uz_ai_dev/shef/ui/widgets/filling_3d.dart';
+import 'helpers/catalog_test_env.dart';
 
-ProductModelAdmin _product(int id, String name, int cat, String catName,
+Product _product(int id, String name, int cat, String catName,
         {TechCard card = const TechCard()}) =>
-    ProductModelAdmin(
+    Product(
       id: id,
       name: name,
       categoryId: cat,
-      type: 'шт',
+      unit: 'шт',
       categoryName: catName,
       filials: const [],
       filialNames: const [],
@@ -74,6 +75,7 @@ void main() {
   });
 
   setUp(() {
+    registerTestCatalog();
     cats = CategoryProviderAdmin();
     products = ProductProviderAdmin();
     cats.categories.addAll([

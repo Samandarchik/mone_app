@@ -6,18 +6,19 @@ import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/utils/qty_units.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
 import 'package:uz_ai_dev/user/provider/provider.dart';
 
 class CartPage extends StatelessWidget {
   const CartPage({super.key});
 
   // Miqdorni o'zgartirish dialogi (foydalanuvchi kg/l kiritadi)
-  void _showQuantityDialog(BuildContext context, ProductModel product) {
+  void _showQuantityDialog(BuildContext context, Product product) {
     final provider = context.read<ProductProvider>();
     final controller = TextEditingController(
       text: formatQty(
         provider.getProductQuantity(product.id),
-        product.type,
+        product.unit,
       ),
     );
 
@@ -32,13 +33,13 @@ class CartPage extends StatelessWidget {
             const SizedBox(height: 16),
             TextField(
               controller: controller,
-              keyboardType: product.type == 'шт'
+              keyboardType: product.unit == 'шт'
                   ? TextInputType.number
                   : const TextInputType.numberWithOptions(signed: true),
               decoration: InputDecoration(
                 labelText: 'Количество',
                 border: const OutlineInputBorder(),
-                suffixText: product.type,
+                suffixText: product.unit,
               ),
               autofocus: true,
             ),
@@ -56,7 +57,7 @@ class CartPage extends StatelessWidget {
                 // UI (kg/l) -> API (butun gramm/ml)
                 provider.setProductQuantity(
                   product.id,
-                  qtyFromUi(quantity, product.type).toDouble(),
+                  qtyFromUi(quantity, product.unit).toDouble(),
                 );
               }
               Navigator.pop(context);
@@ -151,12 +152,12 @@ class CartPage extends StatelessWidget {
           }
 
           // Savatdagi mahsulotlar
-          List<ProductModel> cartProducts = [];
+          List<Product> cartProducts = [];
           for (var entry in selected) {
             for (var list in provider.productsByCategory.values) {
               final found = list.firstWhere(
                 (p) => p.id == entry.key,
-                orElse: () => ProductModel(id: 0, name: ""),
+                orElse: () => Product(id: 0, name: ''),
               );
               if (found.id != 0) {
                 cartProducts.add(found);
@@ -209,7 +210,7 @@ class CartPage extends StatelessWidget {
                       children: [
                         if (quantity > 0)
                           Text(
-                            formatQty(quantity, product.type),
+                            formatQty(quantity, product.unit),
                             style: const TextStyle(fontSize: 16),
                           ),
                         IconButton(
@@ -218,7 +219,7 @@ class CartPage extends StatelessWidget {
                           onPressed: () =>
                               provider.decrementProduct(product.id),
                         ),
-                        Text(product.type ?? "null"),
+                        Text(product.unit),
                       ],
                     ),
                     onLongPress: () => _showQuantityDialog(context, product),

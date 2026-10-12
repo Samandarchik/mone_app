@@ -37,8 +37,8 @@
 // (provider) konstruktor o'zi yangilanadi.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:uz_ai_dev/admin/model/product_model.dart';
-import 'package:uz_ai_dev/admin/model/tech_card.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
+import 'package:uz_ai_dev/core/catalog/tech_card.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
@@ -111,9 +111,9 @@ String _sizeLine(TechCard? c) {
 // rol bo'yicha.
 class CakeParts {
   // Biskvit пф (birinchi topilgani); null — пф yo'q, tortning o'z bloki.
-  final ProductModelAdmin? biscuit;
+  final Product? biscuit;
   // Nachinka пф'lari — tex kartadagi tartibda (1-qatlam = birinchisi).
-  final List<ProductModelAdmin> fillings;
+  final List<Product> fillings;
   final List<TechBase> biscuitBlocks;
   final List<TechBase> fillingBlocks;
   // Qoplama, bezak va boshqa bosqichlar (tartib saqlanadi).
@@ -130,9 +130,9 @@ class CakeParts {
   // Tort tex kartasi + mahsulotlar xaritasi (id → mahsulot). Masalliq qatori
   // product_id bilan mahsulotga bog'langan va u mahsulot пф bo'lsa (pfRoleOf)
   // — ro'yxatga (takrorsiz, blok/masalliq tartibida).
-  factory CakeParts.resolve(TechCard card, Map<int, ProductModelAdmin> byId) {
-    ProductModelAdmin? biscuit;
-    final fillings = <ProductModelAdmin>[];
+  factory CakeParts.resolve(TechCard card, Map<int, Product> byId) {
+    Product? biscuit;
+    final fillings = <Product>[];
     final seen = <int>{};
     final biscuitBlocks = <TechBase>[];
     final fillingBlocks = <TechBase>[];
@@ -174,11 +174,11 @@ class CakeParts {
   // Mahsulot tortda qaysi пф: «Бисквит» kategoriyasi → biskvit, «Начинка»
   // kategoriyasi → nachinka; boshqa kategoriyada — faqat tex kartali
   // полуфабрикат bo'lsa, nomidan (CakeBlockRole.of). null — пф emas.
-  static CakeBlockRole? pfRoleOf(ProductModelAdmin p) {
+  static CakeBlockRole? pfRoleOf(Product p) {
     if (isBiskvitCategory(p.categoryName)) return CakeBlockRole.biscuit;
     if (isNachinkaCategory(p.categoryName)) return CakeBlockRole.filling;
     final card = p.techCard;
-    if (!p.isSemiFinished || card == null || card.bases.isEmpty) return null;
+    if (!p.isPf || card == null || card.bases.isEmpty) return null;
     final role = CakeBlockRole.of(TechBase(name: p.name));
     return (role == CakeBlockRole.biscuit || role == CakeBlockRole.filling)
         ? role
@@ -195,7 +195,7 @@ typedef _BiscuitLook = ({
 });
 
 class ShefCakeConstructorPage extends StatefulWidget {
-  final ProductModelAdmin cake;
+  final Product cake;
 
   const ShefCakeConstructorPage({super.key, required this.cake});
 
@@ -227,7 +227,7 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
 
   // Tort tex kartasi — boshqa bo'limlardagi kabi yagona «Nachinka rangi»
   // palitrasi; saqlangach konstruktor shu rangda.
-  void _openTechCard(ProductModelAdmin cake) {
+  void _openTechCard(Product cake) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -242,7 +242,7 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
 
   // Пф'ning o'z tex kartasi — «П/Ф Бисквит» / «П/Ф Начинка» sahifalaridagi
   // rejimda (foto; nachinkada palitra ham). Saqlangach 3D o'zi yangilanadi.
-  void _openPfCard(ProductModelAdmin pf, CakeBlockRole role) {
+  void _openPfCard(Product pf, CakeBlockRole role) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -261,7 +261,7 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
   // nom-tarkib, mevalar nomidan, foto); o'lcham — tortniki (kiritilgan
   // bo'lsa), aks holda пф'niki. Пф yo'q — tort nomi/bloklaridan.
   _BiscuitLook _biscuitLook(
-      ProductModelAdmin cake, TechCard card, CakeParts parts) {
+      Product cake, TechCard card, CakeParts parts) {
     final pf = parts.biscuit;
     if (pf == null) {
       return (
@@ -284,7 +284,7 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
   // Пф bo'lsa — k-qatlam → k-пф (navbat bilan), o'z tex kartasidan
   // (palitra → foto → nom/tarkib); пф yo'q — tortning «Nachinka rangi».
   List<(FillingLook, String?)> _layerSources(
-      ProductModelAdmin cake, TechCard card, CakeParts parts) {
+      Product cake, TechCard card, CakeParts parts) {
     final n = _layersOf(parts);
     if (parts.fillings.isEmpty) {
       final look = FillingLook.fromTechCard(cake.name, card);
@@ -304,7 +304,7 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
     // Tex karta saqlangach provider xotirada yangilanadi — eng yangi nusxa;
     // пф'lar ham shu ro'yxatdan (YAGONA manba).
     final products = context.select<ProductProviderAdmin,
-        List<ProductModelAdmin>>((p) => p.products);
+        List<Product>>((p) => p.products);
     final cake = products.firstWhere(
       (x) => x.id == widget.cake.id,
       orElse: () => widget.cake,
@@ -391,7 +391,7 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
   // 2 — nachinka пф tex kartalari (chip tanlangan bo'lsa — faqat shu
   // qatlamniki) yoki tortning nachinka bloklari; 3 — tort fotosi va
   // qoplama/bezak/bosqich bloklari.
-  List<Widget> _panel(ProductModelAdmin cake, TechCard card, CakeParts parts) {
+  List<Widget> _panel(Product cake, TechCard card, CakeParts parts) {
     switch (_step) {
       case 0:
         final pf = parts.biscuit;
@@ -442,7 +442,7 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
   // rangi), «×» olib tashlaydi, «+ Qatlam» ustiga qo'shadi. Chip bosilsa
   // shu qatlam tanlanadi (panelda uning пф tex kartasi), qayta bosilsa
   // tanlov olinadi.
-  Widget _layerBar(ProductModelAdmin cake, TechCard card, CakeParts parts) {
+  Widget _layerBar(Product cake, TechCard card, CakeParts parts) {
     final n = _layersOf(parts);
     final sources = _layerSources(cake, card, parts);
     const chipText = TextStyle(fontSize: 12);
@@ -507,7 +507,7 @@ class _ShefCakeConstructorPageState extends State<ShefCakeConstructorPage> {
 
   // Rasm: qadamga qarab biskvit (пф tex kartasi bo'yicha) / kesilgan
   // bo'lakli tort (пф nachinkalari) / tayyor tort illyustratsiyasi (fotodan).
-  Widget _hero(ProductModelAdmin cake, TechCard card, CakeParts parts) {
+  Widget _hero(Product cake, TechCard card, CakeParts parts) {
     final biscuit = _biscuitLook(cake, card, parts);
 
     // 1 — biskvitning o'zi; 2 — nachinka bo'lmasa ham biskvit.
@@ -668,7 +668,7 @@ class _StepButton extends StatelessWidget {
 // pishirish rejimi; bosilsa tex kartasi muharrirda) va ostida uning
 // bloklari masalliqlari bilan.
 class _PfSection extends StatelessWidget {
-  final ProductModelAdmin pf;
+  final Product pf;
   final CakeBlockRole role;
   // Biskvit rasmi uchun tort o'lchami (1-qadamdagi bilan bir xil).
   final BiscuitDims dims;

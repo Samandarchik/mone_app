@@ -11,7 +11,9 @@ import 'package:uz_ai_dev/admin/provider/admin_filial_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/provider/upload_image_provider.dart';
 import 'package:uz_ai_dev/bugalter/provider/bugalter_provider.dart';
+import 'package:uz_ai_dev/core/catalog/catalog_repository.dart';
 import 'package:uz_ai_dev/core/clearable_provider.dart';
+import 'package:uz_ai_dev/core/di/di.dart';
 import 'package:uz_ai_dev/core/context_extension.dart';
 import 'package:uz_ai_dev/core2/provider/core_dict_provider.dart';
 import 'package:uz_ai_dev/core2/provider/core_docs_provider.dart';
@@ -57,6 +59,9 @@ Future<void> logoutAndClear(BuildContext context) async {
   for (final p in providers) {
     p.clear();
   }
+  // Katalog (YAGONA manba, xotira + disk kesh) — rol/filial bo'yicha server
+  // filtrlangan ro'yxat keyingi foydalanuvchiga o'tmasin.
+  sl<CatalogRepository>().clear();
   // 4. Saqlangan sessiyani o'chiramiz.
   final prefs = await SharedPreferences.getInstance();
   for (final k in ['token', 'refresh_token', 'role', 'user', 'name', 'is_admin']) {

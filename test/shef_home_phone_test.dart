@@ -1,10 +1,8 @@
 // Shef bosh menyusi (shef_home_ui.dart) telefon ekranida: kartalar
 // ezilmaydi/yoyilmaydi (balandligi qat'iy, overflow yo'q), sarlavha bir
 // qatorda, 4 ta asosiy karta hammasi bor.
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:get_it/get_it.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
@@ -12,12 +10,11 @@ import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/core2/provider/core_session_provider.dart';
 import 'package:uz_ai_dev/shef/provider/shef_provider.dart';
 import 'package:uz_ai_dev/shef/ui/shef_home_ui.dart';
+import 'helpers/catalog_test_env.dart';
 
 void main() {
   setUpAll(() {
-    if (!GetIt.instance.isRegistered<Dio>()) {
-      GetIt.instance.registerSingleton<Dio>(Dio());
-    }
+    registerTestCatalog();
   });
 
   Future<void> open(WidgetTester t, Size size) async {

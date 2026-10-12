@@ -2,7 +2,10 @@
 // StockProvider (sklad bo'yicha qoldiq keshi + katalog) — adjust/setMin/
 // submitInventory/fetchMoves StockService orqali.
 import 'package:flutter/material.dart';
+import 'package:uz_ai_dev/core/catalog/catalog_repository.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
 import 'package:uz_ai_dev/core/clearable_provider.dart';
+import 'package:uz_ai_dev/core/di/di.dart';
 import 'package:uz_ai_dev/production/models/stock_model.dart';
 import 'package:uz_ai_dev/production/services/stock_service.dart';
 
@@ -68,7 +71,7 @@ class StockProvider extends ChangeNotifier with ClearableProvider {
       }
     }
     for (final c in catalog) {
-      if (c.id == productId && c.type.isNotEmpty) return c.type;
+      if (c.id == productId && c.unit.isNotEmpty) return c.unit;
     }
     return null;
   }
@@ -206,12 +209,21 @@ class StockProvider extends ChangeNotifier with ClearableProvider {
       _service.fetchMoves(skladId, productId: productId, limit: limit);
 
   // ───────────── Korreksiya dialogi uchun katalog (bir marta) ─────────────
-  List<CatalogProduct> catalog = [];
+  List<Product> catalog = [];
   bool _catalogLoaded = false;
 
+  // Katalog — CatalogRepository (GET /api/products): korreksiya dialogida
+  // qoldiqda hali yozuvi yo'q XOMASHYO (kind raw) tanlanadi; server rolga
+  // qarab filtrlaydi (ombor: sotib olinadiganlar). Xato — jim bo'sh ro'yxat.
   Future<void> ensureCatalog() async {
     if (_catalogLoaded) return;
-    catalog = await _service.fetchCatalog();
+    try {
+      final all = await sl<CatalogRepository>().load();
+      catalog = all.where((p) => p.kind == ProductKind.raw).toList()
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    } catch (_) {
+      catalog = [];
+    }
     _catalogLoaded = true;
     if (!_disposed) notifyListeners();
   }

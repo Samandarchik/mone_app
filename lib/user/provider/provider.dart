@@ -1,8 +1,10 @@
 // user/provider/provider.dart — Seller (user) roli markaziy provideri va modellari: ProductProvider
 // (ChangeNotifier — productsByCategory, categories, selectedProducts savat, submitOrder), modellar
-// ProductModel/CategoryModel/OrderItem va ProductService (GET category/product1, POST AppUrls.orders).
+// Product/CategoryModel/OrderItem va ProductService (GET category/product1, POST AppUrls.orders).
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:uz_ai_dev/core/catalog/catalog_repository.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
 import 'package:uz_ai_dev/core/clearable_provider.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/di/di.dart';
@@ -14,43 +16,6 @@ int _asInt(dynamic v) {
   if (v is num) return v.toInt();
   return int.tryParse(v?.toString() ?? '') ??
       (double.tryParse(v?.toString() ?? '')?.toInt() ?? 0);
-}
-
-num? _asNumOrNull(dynamic v) {
-  if (v is num) return v;
-  return num.tryParse(v?.toString() ?? '');
-}
-
-class ProductModel {
-  final int id;
-  final String name;
-  final String? type;
-  final num? grams;
-  final String? category;
-  final String? ingredients;
-  final String? imageUrl;
-
-  ProductModel({
-    required this.id,
-    required this.name,
-    this.ingredients,
-    this.type,
-    this.grams,
-    this.category,
-    this.imageUrl,
-  });
-
-  factory ProductModel.fromJson(Map<String, dynamic> json) {
-    return ProductModel(
-      id: _asInt(json['id']),
-      name: json['name']?.toString() ?? '',
-      type: json['type']?.toString(),
-      grams: _asNumOrNull(json['grams']),
-      ingredients: json['ingredients']?.toString(),
-      category: json['category']?.toString(),
-      imageUrl: json['image_url']?.toString(),
-    );
-  }
 }
 
 // Category Model
@@ -97,7 +62,7 @@ class OrderItem {
 }
 
 class ProductProvider extends ChangeNotifier with ClearableProvider {
-  Map<String, List<ProductModel>> productsByCategory = {};
+  Map<String, List<Product>> productsByCategory = {};
   List<CategoryModel> categories = [];
   Map<int, double> selectedProducts = {}; // productId: quantity (double)
   Map<int, int> productPrintMap = {}; // productId: print number
@@ -143,7 +108,7 @@ class ProductProvider extends ChangeNotifier with ClearableProvider {
     }
   }
 
-  List<ProductModel> getProductsByCategory(String category) {
+  List<Product> getProductsByCategory(String category) {
     return productsByCategory[category] ?? [];
   }
 
@@ -152,7 +117,7 @@ class ProductProvider extends ChangeNotifier with ClearableProvider {
   }
 
   // Mahsulotni id bo'yicha topish
-  ProductModel? findProductById(int productId) {
+  Product? findProductById(int productId) {
     for (var products in productsByCategory.values) {
       for (var p in products) {
         if (p.id == productId) return p;
@@ -161,15 +126,11 @@ class ProductProvider extends ChangeNotifier with ClearableProvider {
     return null;
   }
 
-  // Product type bo'yicha increment miqdorini aniqlash (API birlikda:
-  // кг/л uchun gramm/ml, boshqalar uchun o'z birligi)
+  // Mahsulot qadami (API birlikda: кг/л uchun gramm/ml, boshqalar uchun o'z
+  // birligi) — sellStep (eng kichik birlikda butun), yo'q bo'lsa 1 to'liq birlik.
   double _getIncrementAmount(int productId) {
     final product = findProductById(productId);
-    if (product != null && product.type != null) {
-      // grams — DISPLAY birlikdagi qadam (masalan 0.5 = 0.5 kg);
-      // API birlikka o'giramiz (кг/л -> gramm/ml)
-      return qtyFromUi(product.grams ?? 1, product.type).toDouble();
-    }
+    if (product != null) return product.sellStepOrDefault.toDouble();
     return 1.0;
   }
 
@@ -217,7 +178,7 @@ class ProductProvider extends ChangeNotifier with ClearableProvider {
     double sum = 0.0;
     selectedProducts.forEach((productId, qty) {
       final product = findProductById(productId);
-      sum += qtyToUi(qty, product?.type);
+      sum += qtyToUi(qty, product?.unit);
     });
     return sum;
   }
@@ -336,49 +297,28 @@ class ProductService {
     }
   }
 
-  // Mahsulotlarni olish
+  // Mahsulotlarni olish — CatalogRepository (GET /api/products; server
+  // seller uchun o'z filiali sotiladigan mahsulotlarini qaytaradi).
+  // Kategoriya nomi bo'yicha guruhlanadi + har mahsulot uchun print raqami
+  // (kategoriyaning `printer` maydoni).
   Future<Map<String, dynamic>> fetchProducts() async {
     try {
-      final response = await dio.get(AppUrls.product1);
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = response.data;
-        final Map<String, dynamic> data = responseData['data'];
-
-        Map<String, List<ProductModel>> productsByCategory = {};
-        Map<int, int> productPrintMap = {};
-
-        // Kategoriyalarni olish va print raqamini aniqlash
-        final categoriesResponse = await fetchCategories();
-        Map<String, int> categoryPrintMap = {};
-
-        for (var category in categoriesResponse) {
-          categoryPrintMap[category.name] = category.print;
-        }
-
-        data.forEach((category, products) {
-          if (products is List) {
-            int printNumber = categoryPrintMap[category] ?? 1;
-
-            List<ProductModel> productList =
-                products.map((item) => ProductModel.fromJson(item)).toList();
-
-            productsByCategory[category] = productList;
-
-            // Har bir mahsulot uchun print raqamini saqlash
-            for (var product in productList) {
-              productPrintMap[product.id] = printNumber;
-            }
-          }
-        });
-
-        return {
-          'products': productsByCategory,
-          'printMap': productPrintMap,
-        };
-      } else {
-        throw Exception('Failed to load products: ${response.statusCode}');
-      }
+      final repo = sl<CatalogRepository>();
+      final productsFuture = repo.load(force: true);
+      // Kategoriyalar — print raqami uchun.
+      final categoriesResponse = await fetchCategories();
+      final categoryPrintMap = <String, int>{
+        for (final c in categoriesResponse) c.name: c.print,
+      };
+      final products = await productsFuture;
+      final productsByCategory = repo.groupedByCategory(products);
+      final productPrintMap = <int, int>{
+        for (final p in products) p.id: categoryPrintMap[p.categoryName] ?? 1,
+      };
+      return {
+        'products': productsByCategory,
+        'printMap': productPrintMap,
+      };
     } catch (e) {
       throw Exception('Failed to load products: $e');
     }

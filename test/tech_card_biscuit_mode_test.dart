@@ -3,27 +3,26 @@
 // гр'da saqlangan karta 1 шт ga o'giriladi, гр almashtirgichi yo'q.
 // Sarlavha jadvalidagi «Вес всех ингредиентов» ustuni rejimga bog'liq emas:
 // hamma kartada bor, tahrirlanadi va retseptni mutanosib qayta hisoblaydi.
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:get_it/get_it.dart';
 import 'package:provider/provider.dart';
-import 'package:uz_ai_dev/admin/model/product_model.dart';
-import 'package:uz_ai_dev/admin/model/tech_card.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
+import 'package:uz_ai_dev/core/catalog/tech_card.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
+import 'helpers/catalog_test_env.dart';
 
 // «Бисквит Турецкий»: гр rejimida saqlangan — 302 гр = masalliqlar yig'indisi.
-ProductModelAdmin _biscuit({String unit = 'g', int batchQty = 302}) =>
-    ProductModelAdmin(
+Product _biscuit({String unit = 'g', int batchQty = 302}) =>
+    Product(
       id: 10,
       name: 'Бисквит Турецкий',
       categoryId: 1,
-      type: 'шт',
+      unit: 'шт',
       categoryName: 'П/Ф Бисквит',
       filials: const [],
       filialNames: const [],
-      isSemiFinished: true,
+      kind: ProductKind.pf,
       techCard: TechCard(
         diameterCm: 15,
         shape: 'round',
@@ -41,9 +40,7 @@ ProductModelAdmin _biscuit({String unit = 'g', int batchQty = 302}) =>
 
 void main() {
   setUpAll(() {
-    if (!GetIt.instance.isRegistered<Dio>()) {
-      GetIt.instance.registerSingleton<Dio>(Dio());
-    }
+    registerTestCatalog();
   });
 
   Future<void> open(WidgetTester t, Widget page) async {

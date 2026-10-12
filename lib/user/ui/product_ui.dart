@@ -157,7 +157,7 @@ class ProductsScreen extends StatelessWidget {
                                         child: Center(
                                           child: Text(
                                             formatQty(
-                                                quantity, product.type),
+                                                quantity, product.unit),
                                             style: TextStyle(
                                               color: Colors.white,
                                               fontSize: 14,

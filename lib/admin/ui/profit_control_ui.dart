@@ -5,8 +5,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:uz_ai_dev/admin/model/product_model.dart';
-import 'package:uz_ai_dev/admin/model/tech_card.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
+import 'package:uz_ai_dev/core/catalog/tech_card.dart';
 import 'package:uz_ai_dev/admin/model/tech_card_cost.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/profit_analytics_ui.dart';
@@ -40,7 +40,7 @@ class ProfitControlUi extends StatefulWidget {
 
 // Bitta jadval qatori uchun hisoblangan qiymatlar.
 class _RowData {
-  final ProductModelAdmin product;
+  final Product product;
   final TechCard card;
   final double fullCost; // C (1 dona to'liq tannarx), 0 — noma'lum
   final double? margin; // null — hisoblab bo'lmaydi
@@ -164,14 +164,14 @@ class _ProfitControlUiState extends State<ProfitControlUi> {
   }
 
   // Mahsulotlardan jadval qatorlarini yig'ish.
-  List<_RowData> _buildRows(List<ProductModelAdmin> products) {
+  List<_RowData> _buildRows(List<Product> products) {
     final wasteFactors = techWasteFactors(products);
     // Полуфабрикат qatorlari rekursiv tannarx bilan hisoblanadi.
     final byId = techProductsById(products);
     final rows = <_RowData>[];
     for (final p in products) {
       // Полуфабрикат sotilmaydi — «Foyda nazorati» ro'yxatiga kirmaydi.
-      if (p.isSemiFinished) continue;
+      if (p.isPf) continue;
       final card = p.techCard;
       if (!techCardHasContent(card)) continue;
       final c0 =

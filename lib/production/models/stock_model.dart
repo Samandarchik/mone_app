@@ -176,16 +176,6 @@ class StockMove {
   }
 }
 
-// Korreksiya dialogidagi katalog elementi (qoldiqda hali yo'q mahsulotlar
-// uchun — boshlang'ich qoldiq kiritish). /api/ombor/products dan yig'iladi.
-class CatalogProduct {
-  final int id;
-  final String name;
-  final String type;
-
-  const CatalogProduct({required this.id, required this.name, this.type = ''});
-}
-
 // Miqdorni chiroyli ko'rsatish: 7.0 -> "7", 7.25 -> "7.25".
 String fmtStockQty(double v) {
   if (v == v.roundToDouble()) return v.toInt().toString();

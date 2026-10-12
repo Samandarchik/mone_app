@@ -14,8 +14,8 @@
 // mumkin (unit 'g'): konvert W = techEffectivePieceWeightG («1 шт = X gr»,
 // pf uchun tex kartadan, xomga admin kiritadi) orqali — backend bilan mirror.
 
-import 'package:uz_ai_dev/admin/model/product_model.dart';
-import 'package:uz_ai_dev/admin/model/tech_card.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
+import 'package:uz_ai_dev/core/catalog/tech_card.dart';
 import 'package:uz_ai_dev/admin/ui/widgets/product_type_radio.dart'
     show normalizeProductType;
 import 'package:uz_ai_dev/production/models/latest_price_model.dart';
@@ -23,7 +23,7 @@ import 'package:uz_ai_dev/production/models/latest_price_model.dart';
 // Mahsulotlar ro'yxatidan tozalash yo'qotishi koeffitsiyentlari xaritasi
 // (faqat factor != 1 bo'lganlar — xarid narxi shu koeffitsiyentga
 // ko'paytiriladi, backend /api/production/cost ham xuddi shunday qiladi).
-Map<int, double> techWasteFactors(List<ProductModelAdmin> products) => {
+Map<int, double> techWasteFactors(List<Product> products) => {
       for (final p in products)
         if (p.wasteFactor != 1) p.id: p.wasteFactor,
     };
@@ -31,8 +31,8 @@ Map<int, double> techWasteFactors(List<ProductModelAdmin> products) => {
 // productId -> mahsulot xaritasi (полуфабрикат qatorlarini aniqlash uchun).
 // Ikkala chaqiruvchi (tex karta muharriri va «Foyda nazorati») ham
 // ProductProviderAdmin ro'yxatidan bir marta yig'adi.
-Map<int, ProductModelAdmin> techProductsById(
-        List<ProductModelAdmin> products) =>
+Map<int, Product> techProductsById(
+        List<Product> products) =>
     {for (final p in products) p.id: p};
 
 // Полуфабрикат ichma-ich chuqurligi chegarasi (pf ichida pf ...).
@@ -49,10 +49,10 @@ int techTotalPieces(TechCard card) => card.totalPieces;
 // batchQty<=0, sikl yoki chuqurlik chegarasi (bunday qator «narxsiz»
 // hisoblanadi va mavjud «N ta masalliqda narx yo'q» ogohlantirishiga kiradi).
 double? techPfPieceCost(
-  ProductModelAdmin pf,
+  Product pf,
   Map<int, LatestPrice> prices,
   Map<int, double> wasteFactors,
-  Map<int, ProductModelAdmin> products, {
+  Map<int, Product> products, {
   Set<int>? visited,
   int depth = 0,
 }) {
@@ -86,8 +86,8 @@ double? techPfPieceCost(
 // Qator «gramm kiritilgan шт mahsulot»mi: шт-oiladagi mahsulot (tuxum, pf)
 // tex kartada 'g' birligida yozilgan. Bunday qator gramm -> dona konvertini
 // W = techEffectivePieceWeightG («1 шт = X gr») orqali oladi (backend mirror).
-bool techIsShtGramRow(TechItem item, ProductModelAdmin? p) =>
-    p != null && item.unit == 'g' && normalizeProductType(p.type) == 'шт';
+bool techIsShtGramRow(TechItem item, Product? p) =>
+    p != null && item.unit == 'g' && normalizeProductType(p.unit) == 'шт';
 
 // Qator tannarxi (PARTIYA uchun): amount * unit_price * wasteFactor.
 // amount ham, unit_price ham ENG KICHIK birlikda — to'g'ridan-to'g'ri
@@ -100,7 +100,7 @@ double? techRowCost(
   TechItem item,
   Map<int, LatestPrice> prices,
   Map<int, double> wasteFactors, {
-  Map<int, ProductModelAdmin>? products,
+  Map<int, Product>? products,
   Set<int>? visited,
   int depth = 0,
 }) {
@@ -109,7 +109,7 @@ double? techRowCost(
   if (pf != null && techIsShtGramRow(item, pf)) {
     final w = techEffectivePieceWeightG(item.productId, products!);
     if (w <= 0) return null; // 1 dona og'irligi noma'lum — narxsiz qator
-    if (pf.isSemiFinished) {
+    if (pf.isPf) {
       final piece = techPfPieceCost(pf, prices, wasteFactors, products,
           visited: visited, depth: depth);
       if (piece == null) return null;
@@ -119,7 +119,7 @@ double? techRowCost(
     if (p == null) return null;
     return item.amount / w * p.unitPrice * (wasteFactors[item.productId] ?? 1);
   }
-  if (pf != null && pf.isSemiFinished) {
+  if (pf != null && pf.isPf) {
     final piece = techPfPieceCost(pf, prices, wasteFactors, products!,
         visited: visited, depth: depth);
     if (piece == null) return null;
@@ -137,7 +137,7 @@ double? techRowCost(
 double? techRowUnitPrice(
   TechItem item,
   Map<int, LatestPrice> prices, {
-  Map<int, ProductModelAdmin>? products,
+  Map<int, Product>? products,
   Map<int, double> wasteFactors = const {},
 }) {
   if (item.productId == 0) return null;
@@ -145,13 +145,13 @@ double? techRowUnitPrice(
   if (pf != null && techIsShtGramRow(item, pf)) {
     final w = techEffectivePieceWeightG(item.productId, products!);
     if (w <= 0) return null;
-    final perPiece = pf.isSemiFinished
+    final perPiece = pf.isPf
         ? techPfPieceCost(pf, prices, wasteFactors, products)
         : prices[item.productId]?.unitPrice;
     if (perPiece == null) return null;
     return perPiece / w * 1000;
   }
-  if (pf != null && pf.isSemiFinished) {
+  if (pf != null && pf.isPf) {
     return techPfPieceCost(pf, prices, wasteFactors, products!);
   }
   final p = prices[item.productId];
@@ -166,7 +166,7 @@ double techItemsCost(
   List<TechItem> items,
   Map<int, LatestPrice> prices,
   Map<int, double> wasteFactors, {
-  Map<int, ProductModelAdmin>? products,
+  Map<int, Product>? products,
 }) {
   double sum = 0;
   for (final it in items) {
@@ -180,7 +180,7 @@ double techBatchCost(
   TechCard card,
   Map<int, LatestPrice> prices,
   Map<int, double> wasteFactors, {
-  Map<int, ProductModelAdmin>? products,
+  Map<int, Product>? products,
 }) {
   double sum =
       techItemsCost(card.consumables, prices, wasteFactors, products: products);
@@ -196,7 +196,7 @@ double techIngredientPieceCost(
   TechCard card,
   Map<int, LatestPrice> prices,
   Map<int, double> wasteFactors, {
-  Map<int, ProductModelAdmin>? products,
+  Map<int, Product>? products,
 }) {
   if (card.batchQty <= 0) return 0;
   return techBatchCost(card, prices, wasteFactors, products: products) /
@@ -216,7 +216,7 @@ double techIngredientPieceCost(
 // xom шт mahsulot uchun admin kiritadi); yo'q — 0.
 int techEffectivePieceWeightG(
   int productId,
-  Map<int, ProductModelAdmin> products,
+  Map<int, Product> products,
 ) {
   final p = products[productId];
   if (p == null) return 0;
@@ -235,9 +235,9 @@ int techEffectivePieceWeightG(
 
 // pf mahsulotning 1 dona og'irligi (g) — FAQAT полуфабрикат uchun (pf
 // bo'lmasa 0). Umumiy qoida: techEffectivePieceWeightG.
-int techPfPieceWeightG(int productId, Map<int, ProductModelAdmin> products) {
+int techPfPieceWeightG(int productId, Map<int, Product> products) {
   final p = products[productId];
-  if (p == null || !p.isSemiFinished) return 0;
+  if (p == null || !p.isPf) return 0;
   return techEffectivePieceWeightG(productId, products);
 }
 
@@ -245,7 +245,7 @@ int techPfPieceWeightG(int productId, Map<int, ProductModelAdmin> products) {
 // pf qatori ham, «1 шт = X gr» belgilangan xom шт qatori (tuxum) ham.
 int techBaseExtraWeightG(
   TechBase base,
-  Map<int, ProductModelAdmin> products,
+  Map<int, Product> products,
 ) {
   int sum = 0;
   for (final it in base.ingredients) {
@@ -257,11 +257,11 @@ int techBaseExtraWeightG(
 }
 
 // Baza og'irligi = g/ml yig'indisi + pcs (pf/dona) qatorlar hissasi.
-int techBaseWeightG(TechBase base, Map<int, ProductModelAdmin> products) =>
+int techBaseWeightG(TechBase base, Map<int, Product> products) =>
     base.computedWeightG + techBaseExtraWeightG(base, products);
 
 // Partiya og'irligi = barcha bazalar (pf hissasi bilan).
-int techBatchWeightG(TechCard card, Map<int, ProductModelAdmin> products) {
+int techBatchWeightG(TechCard card, Map<int, Product> products) {
   int sum = 0;
   for (final base in card.bases) {
     sum += techBaseWeightG(base, products);
@@ -270,7 +270,7 @@ int techBatchWeightG(TechCard card, Map<int, ProductModelAdmin> products) {
 }
 
 // 1 dona og'irligi (pf hissasi bilan) — partiya JAMI donasiga bo'linadi.
-int techPieceWeightG(TechCard card, Map<int, ProductModelAdmin> products) =>
+int techPieceWeightG(TechCard card, Map<int, Product> products) =>
     card.batchQty > 0
         ? techBatchWeightG(card, products) ~/ techTotalPieces(card)
         : 0;
@@ -341,7 +341,7 @@ bool techCardHasContent(TechCard? card) {
 // va saqlangan sale_price dan farq qiladi (hali belgilanmagani ham kiradi).
 // Admin bosh sahifadagi badge va «Foyda nazorati» shu qoida bilan ishlaydi.
 int techPriceReplaceCount(
-  List<ProductModelAdmin> products,
+  List<Product> products,
   Map<int, LatestPrice> prices,
 ) {
   if (prices.isEmpty) return 0;
@@ -350,7 +350,7 @@ int techPriceReplaceCount(
   int n = 0;
   for (final p in products) {
     // Полуфабрикат sotilmaydi — sotish narxi nazoratiga kirmaydi.
-    if (p.isSemiFinished) continue;
+    if (p.isPf) continue;
     final card = p.techCard;
     if (!techCardHasContent(card)) continue;
     final c0 =

@@ -3,78 +3,58 @@
 // post/put/delete (createProduct/updateProduct/deleteProduct),
 // AppUrls.productReorder ga PUT (reorderProducts) va
 // AppUrls.productManualPrice ga PUT (setManualPrice — qo'lda xarid narxi).
-// ProductModelAdmin bilan.
+// Product bilan.
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
-import 'package:uz_ai_dev/admin/model/product_model.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
 import 'package:uz_ai_dev/admin/model/tech_card_version.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
-import 'package:uz_ai_dev/core/data/local/products_cache.dart';
 import 'package:uz_ai_dev/core/di/di.dart';
 import 'package:uz_ai_dev/core/network/error_handler.dart';
+
+// Server 400 javobidagi `data.unlinked` — bog'lanmagan retsept qatorlari
+// nomlari ([] — bunday xato emas).
+List<String> unlinkedNamesOf(dynamic body) {
+  if (body is! Map) return const [];
+  final data = body['data'];
+  if (data is! Map) return const [];
+  final list = data['unlinked'];
+  if (list is! List) return const [];
+  return [for (final e in list) e.toString()];
+}
+
+// Retseptda mahsulotga bog'lanmagan qatorlar bor — saqlanmadi.
+class UnlinkedRecipeLinesException implements Exception {
+  final List<String> names;
+  const UnlinkedRecipeLinesException(this.names);
+
+  @override
+  String toString() => 'Bog\'lanmagan masalliqlar: ${names.join(', ')}';
+}
 
 class ApiProductService {
   final Dio dio = sl<Dio>();
 
-  // Mahsulotlar ro'yxatining XOM javobi (~1.6 MB): `ResponseType.plain` —
-  // Dio uni UI oqimida dekod QILMAYDI. Dekod + fromJson `compute()` fon
-  // isolate'ida bajariladi (`parseProductsJson`), xom matn esa keshga
-  // yoziladi (`ProductsCache`). Ilgari bu yerda 1342 ta fromJson main
-  // isolate'da ishlab ANR («isn't responding») berardi.
-  Future<String> fetchAllProductsRaw() async {
-    try {
-      final response = await dio.get<String>(
-        AppUrls.productAll,
-        options: Options(responseType: ResponseType.plain),
-      );
-      if (response.statusCode == 200) return response.data ?? '';
-      throw Exception('Server xatosi: ${response.statusCode}');
-    } on DioException catch (e) {
-      if (e.response != null) {
-        throw Exception(
-            'Server xatosi: ${e.response!.statusCode} - ${e.response!.statusMessage}');
-      }
-      throw Exception('Tarmoq xatosi: ${e.message}');
-    }
-  }
-
-  // Get all products — xom javob + FON isolate'da parse.
-  Future<List<ProductModelAdmin>> getAllProducts() async {
-    try {
-      final raw = await fetchAllProductsRaw();
-      // `await` SHART: awaitsiz qaytarilgan Future xatosi shu try/catch dan
-      // chetlab o'tadi va isolate'dagi parse xatosi (buzuq JSON) pastdagi
-      // catch'ga tushmay, chaqiruvchiga xom holda chiqib ketardi.
-      return await compute(parseProductsJson, raw);
-    } on DioException catch (e) {
-      if (e.response != null) {
-        throw Exception(
-            'Server xatosi: ${e.response!.statusCode} - ${e.response!.statusMessage}');
-      } else {
-        throw Exception('Tarmoq xatosi: ${e.message}');
-      }
-    } catch (e) {
-      debugPrint('Ошибка getAllProducts: $e');
-      throw Exception('Kutilmagan Ошибка: $e');
-    }
-  }
-
   // Create new product
-  Future<ProductModelAdmin> createProduct(ProductModelAdmin product) async {
+  Future<Product> createProduct(Product product) async {
     try {
       final response = await dio.post(
         AppUrls.product, // product endpoint
-        data: product.toCreateJson(),
+        data: product.toJson(),
       );
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         final responseData = response.data['data'] ?? response.data;
-        return ProductModelAdmin.fromJson(responseData);
+        return Product.fromJson(responseData);
       } else {
         throw Exception('Server xatosi: ${response.statusCode}');
       }
     } on DioException catch (e) {
       if (e.response != null) {
+        final unlinked = unlinkedNamesOf(e.response!.data);
+        if (unlinked.isNotEmpty) {
+          throw UnlinkedRecipeLinesException(unlinked);
+        }
         throw Exception('Mahsulot yaratishda Ошибка: ${parseDioError(e)}');
       } else {
         throw Exception('Tarmoq xatosi: ${e.message}');
@@ -86,15 +66,15 @@ class ApiProductService {
   }
 
   // Update existing product
-  Future<ProductModelAdmin> updateProduct(ProductModelAdmin product) async {
+  Future<Product> updateProduct(Product product) async {
     try {
       final response = await dio.put(
         '${AppUrls.product}/${product.id}',
-        data: product.toUpdateJson(),
+        data: product.toJson(),
       );
       if (response.statusCode == 200) {
         final responseData = response.data['data'] ?? response.data;
-        return ProductModelAdmin.fromJson(responseData);
+        return Product.fromJson(responseData);
       } else {
         throw Exception('Server xatosi: ${response.statusCode}');
       }
@@ -102,6 +82,12 @@ class ApiProductService {
       if (e.response != null) {
         if (e.response!.statusCode == 404) {
           throw Exception('Mahsulot topilmadi');
+        }
+        // 400 + data.unlinked — retseptda mahsulotga bog'lanmagan qatorlar:
+        // server nomlarini qaytaradi, muharrir ularni ko'rsatadi.
+        final unlinked = unlinkedNamesOf(e.response!.data);
+        if (unlinked.isNotEmpty) {
+          throw UnlinkedRecipeLinesException(unlinked);
         }
         throw Exception('Mahsulot yangilashda Ошибка: ${parseDioError(e)}');
       } else {
@@ -113,7 +99,7 @@ class ApiProductService {
   }
 
   // Delete product
-  Future<ProductModelAdmin> deleteProduct(ProductModelAdmin product) async {
+  Future<Product> deleteProduct(Product product) async {
     try {
       final response = await dio.delete(
         '${AppUrls.product}/${product.id}',
@@ -124,7 +110,7 @@ class ApiProductService {
           return product;
         } else {
           final responseData = response.data['data'] ?? response.data;
-          return ProductModelAdmin.fromJson(responseData);
+          return Product.fromJson(responseData);
         }
       } else {
         throw Exception('Server xatosi: ${response.statusCode}');
@@ -192,13 +178,13 @@ class ApiProductService {
   }
 
   // Tex kartani tanlangan versiyaga qaytarish. Javob — yangilangan mahsulot.
-  Future<ProductModelAdmin> rollbackTechCard(int productId, int versionId) async {
+  Future<Product> rollbackTechCard(int productId, int versionId) async {
     try {
       final response = await dio.post(
         AppUrls.techCardRollback(productId),
         data: {'version_id': versionId},
       );
-      return ProductModelAdmin.fromJson(response.data['data']);
+      return Product.fromJson(response.data['data']);
     } on DioException catch (e) {
       throw Exception('Qaytarib bo\'lmadi: ${parseDioError(e)}');
     }

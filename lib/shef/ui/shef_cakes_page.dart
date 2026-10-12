@@ -10,8 +10,8 @@
 // yangi tort. Ro'yxat ProductProviderAdmin (YAGONA manba) dan, lokal qidiruv.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:uz_ai_dev/admin/model/product_model.dart';
-import 'package:uz_ai_dev/admin/model/tech_card.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
+import 'package:uz_ai_dev/core/catalog/tech_card.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/admin_add_product_ui.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
@@ -80,7 +80,7 @@ class _ShefCakesPageState extends State<ShefCakesPage> {
           );
 
   // Bir marta bosish — tortning o'z konstruktori (tex karta bloklaridan).
-  void _openConstructor(ProductModelAdmin cake) {
+  void _openConstructor(Product cake) {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => ShefCakeConstructorPage(cake: cake)),
@@ -89,7 +89,7 @@ class _ShefCakesPageState extends State<ShefCakesPage> {
 
   // Ikki marta bosish — tortning tex kartasi (narxsiz rejim) — boshqa
   // bo'limlardagi kabi yagona «Nachinka rangi» palitrasi.
-  void _openTechCard(ProductModelAdmin cake) {
+  void _openTechCard(Product cake) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -238,7 +238,7 @@ class _ShefCakesPageState extends State<ShefCakesPage> {
 }
 
 // Tortda tex karta tarkibi bormi (shef_tech_card_page.dart dagi naqsh).
-bool _hasTechCard(ProductModelAdmin p) {
+bool _hasTechCard(Product p) {
   final tc = p.techCard;
   if (tc == null) return false;
   return tc.bases.any((b) => b.ingredients.isNotEmpty) ||
@@ -270,7 +270,7 @@ String _sizeLine(TechCard? c) {
 // Bir marta — konstruktor, ikki marta — tex karta. Biskvit bo'limidagi
 // tortlar gridi ham shu kartani ishlatadi.
 class CakeCard extends StatelessWidget {
-  final ProductModelAdmin cake;
+  final Product cake;
   final VoidCallback onTap;
   final VoidCallback onDoubleTap;
 
@@ -283,7 +283,7 @@ class CakeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final image = cake.imageUrl ?? '';
+    final image = cake.imageUrl;
     final url = image.isEmpty ? null : '${AppUrls.baseUrl}$image';
     final hasCard = _hasTechCard(cake);
     final size = _sizeLine(cake.techCard);

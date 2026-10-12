@@ -23,8 +23,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/admin/model/category_model.dart';
-import 'package:uz_ai_dev/admin/model/product_model.dart';
-import 'package:uz_ai_dev/admin/model/tech_card.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
+import 'package:uz_ai_dev/core/catalog/tech_card.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/admin_add_product_ui.dart';
@@ -41,7 +41,7 @@ const Color _accentColor = Color(0xFFC5A97B);
 
 // Mahsulotda тех карта tarkibi bormi — «i» belgisini shartli ko'rsatish uchun
 // (admin ro'yxatidagi naqsh: admin_product_ui.dart → _hasTechCard).
-bool _hasTechCard(ProductModelAdmin product) {
+bool _hasTechCard(Product product) {
   final tc = product.techCard;
   if (tc == null) return false;
   return tc.bases.any((b) => b.ingredients.isNotEmpty) ||
@@ -349,7 +349,7 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
   // Тех карта muharriri — NARXSIZ rejim: shef retseptni tahrirlaydi, narx
   // maydonlari faqat o'qiladi (backend ham shef so'rovidan faqat tech_card ni
   // oladi). Saqlangach provider o'zini xotirada yangilaydi — qayta GET yo'q.
-  void _openTechCard(ProductModelAdmin product) {
+  void _openTechCard(Product product) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -376,7 +376,7 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
 
   // Pishirish vaqti/haroratini tahrirlash → tex kartada saqlash (shef
   // so'rovidan backend faqat tech_card ni oladi — boshqa maydon tegilmaydi).
-  Future<void> _editBaking(ProductModelAdmin product) async {
+  Future<void> _editBaking(Product product) async {
     final card = product.techCard ?? const TechCard();
     final res = await showDialog<(int, int)>(
       context: context,
@@ -530,7 +530,7 @@ class _ShefTechCardProductsPageState extends State<ShefTechCardProductsPage> {
   // Tanlangan biskvit (qidiruvdan qat'i nazar; yo'q bo'lsa — birinchisi).
   // Har build'da provider'dagi YANGI mahsulotdan olinadi — тех картага
   // balandlik/o'lcham qo'shilsa 3D darhol o'zgaradi.
-  ProductModelAdmin? _selectedOf(List<ProductModelAdmin> all) {
+  Product? _selectedOf(List<Product> all) {
     if (all.isEmpty) return null;
     for (final p in all) {
       if (p.id == _selectedId) return p;
@@ -787,7 +787,7 @@ bool isTortCategory(String name) {
 // Mahsulot qatori: rasm + nom (+ ПФ belgisi) + тех карта bor/yo'q belgisi.
 // [onEditBaking] berilsa (faqat «Бисквит») ostida pishirish rejimi chipi.
 class _ProductTile extends StatelessWidget {
-  final ProductModelAdmin product;
+  final Product product;
   final VoidCallback onTap;
   final VoidCallback? onEditBaking;
 
@@ -804,7 +804,7 @@ class _ProductTile extends StatelessWidget {
     return ListTile(
       onTap: onTap,
       leading: ClipOval(
-        child: (url != null && url.isNotEmpty)
+        child: url.isNotEmpty
             ? AppNetworkImage(
                 imageUrl: '${AppUrls.baseUrl}$url',
                 width: 50,
@@ -823,7 +823,7 @@ class _ProductTile extends StatelessWidget {
         children: [
           Flexible(
             child: Text(
-              '${product.name} (${product.type})',
+              '${product.name} (${product.unit})',
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 15,
@@ -831,7 +831,7 @@ class _ProductTile extends StatelessWidget {
             ),
           ),
           // Полуфабрикат belgisi (admin ro'yxatidagi kabi).
-          if (product.isSemiFinished)
+          if (product.isPf)
             Container(
               margin: const EdgeInsets.only(left: 6),
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -904,7 +904,7 @@ class _PinnedBoxDelegate extends SliverPersistentHeaderDelegate {
 // тех карта holati va (berilsa) pishirish rejimi chipi. [selected] — hozir
 // 3D'da ko'rsatilayotgani (ramka ajralib turadi).
 class _ProductGridCard extends StatelessWidget {
-  final ProductModelAdmin product;
+  final Product product;
   // true — «П/Ф Начинка»: rasm o'rniga kesilgan tort (nachinka rangi тех
   // картадан); false — biskvitning o'zi.
   final bool filling;
@@ -929,7 +929,7 @@ class _ProductGridCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final productImage = product.imageUrl ?? '';
+    final productImage = product.imageUrl;
     final url = (coating || productImage.isEmpty)
         ? null
         : '${AppUrls.baseUrl}$productImage';
@@ -1005,7 +1005,7 @@ class _ProductGridCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (product.isSemiFinished)
+                  if (product.isPf)
                     Container(
                       margin: const EdgeInsets.only(left: 4),
                       padding: const EdgeInsets.symmetric(

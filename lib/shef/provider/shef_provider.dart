@@ -6,6 +6,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:uz_ai_dev/core/clearable_provider.dart';
 import 'package:uz_ai_dev/core/network/order_socket.dart';
+import 'package:uz_ai_dev/core/catalog/catalog_repository.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
+import 'package:uz_ai_dev/core/di/di.dart';
 import 'package:uz_ai_dev/shef/model/production_model.dart';
 import 'package:uz_ai_dev/shef/services/shef_service.dart';
 
@@ -20,7 +23,7 @@ class ShefProvider extends ChangeNotifier with ClearableProvider {
   String? errorMessage;
 
   // Buyurtma yaratish sahifasi: tex kartali mahsulotlar.
-  List<ProductionProduct> products = [];
+  List<Product> products = [];
   bool isLoadingProducts = false;
   String? productsError;
 
@@ -116,7 +119,11 @@ class ShefProvider extends ChangeNotifier with ClearableProvider {
     notifyListeners();
 
     try {
-      products = await _service.fetchProducts();
+      // Katalog retsept bilan (CatalogRepository); faqat retsepti borlar —
+      // ishlab chiqariladiganlar (server shef uchun shuni qaytaradi, admin
+      // uchun hammasini — shu sabab bu yerda ham filtr).
+      final all = await sl<CatalogRepository>().load(withRecipe: true);
+      products = all.where((p) => p.hasRecipe).toList();
     } catch (e) {
       productsError = e.toString().replaceFirst('Exception: ', '');
     } finally {

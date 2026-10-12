@@ -6,7 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
-import 'package:uz_ai_dev/admin/model/product_model.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
 import 'package:uz_ai_dev/admin/model/tech_card_cost.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/ui/admin_add_categoriy.dart';
@@ -494,12 +494,12 @@ class _AdminProductSearchDelegate extends SearchDelegate<String> {
 
   Widget _buildSearchList(BuildContext context) {
     final results = query.isEmpty
-        ? <ProductModelAdmin>[]
+        ? <Product>[]
         : productProvider.products.where((p) {
             final q = query.toLowerCase();
             return p.name.toLowerCase().contains(q) ||
                 p.categoryName.toLowerCase().contains(q) ||
-                (p.companyName?.toLowerCase().contains(q) ?? false);
+                p.companyName.toLowerCase().contains(q);
           }).toList();
 
     if (query.isEmpty) {
@@ -527,7 +527,7 @@ class _AdminProductSearchDelegate extends SearchDelegate<String> {
         return ListTile(
           leading: ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: product.imageUrl != null
+            child: product.imageUrl.isNotEmpty
                 ? CachedNetworkImage(
                     imageUrl: "${AppUrls.baseUrl}${product.imageUrl}",
                     width: 50,
@@ -548,7 +548,7 @@ class _AdminProductSearchDelegate extends SearchDelegate<String> {
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
           subtitle: Text(
-            '${product.categoryName} • ${product.type}',
+            '${product.categoryName} • ${product.unit}',
             style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
           ),
           trailing: const Icon(Icons.arrow_forward_ios, size: 16),

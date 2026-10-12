@@ -1,15 +1,17 @@
 // admin/ui/admin_edit_product_ui.dart — mavjud mahsulotni tahrirlash formasi
 // (EditProductPage): ProductProviderAdmin.updateProduct; CategoryProviderAdmin/
-// FilialProviderAdmin, rasm CategoryProviderAdminUpload. Tex karta bu yerda emas —
-// _techController mavjud kartani o'zgarmay saqlaydi va «Состав» avto-to'ldirishga ishlatiladi.
+// FilialProviderAdmin, rasm CategoryProviderAdminUpload. TUR radiosi (xomashyo/пф/
+// tayyor), kanallar (sotiladi/sotib olinadi), qadam/pachka. Tex karta bu yerda emas —
+// _techController mavjud kartani o'zgarmay saqlaydi va «Retseptdan to'ldirish»ga ishlatiladi.
 import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import 'package:uz_ai_dev/admin/model/product_model.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
 import 'package:uz_ai_dev/core/utils/qty_units.dart';
+import 'package:uz_ai_dev/admin/ui/widgets/product_kind_radio.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_filial_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
@@ -21,7 +23,7 @@ import 'package:uz_ai_dev/core/data/sklad_registry.dart';
 import 'package:uz_ai_dev/core/utils/product_sources.dart';
 
 class EditProductPage extends StatefulWidget {
-  final ProductModelAdmin product;
+  final Product product;
 
   const EditProductPage({super.key, required this.product});
 
@@ -37,8 +39,10 @@ class _EditProductPageState extends State<EditProductPage> {
   String? _selectedType;
   late TextEditingController companyController;
   late TextEditingController ingredientsController;
-  late TextEditingController grammControlle;
-  late TextEditingController bozorGrammController;
+  // Buyurtma qadami / pachka — DISPLAY birlikda (kg, l, dona); saqlashda
+  // qtyFromUi bilan eng kichik birlikka (sellStep/buyStep, BUTUN) o'giriladi.
+  late TextEditingController sellStepController;
+  late TextEditingController buyStepController;
   // Tozalash yo'qotishi (faqat кг/л oilasida ko'rinadi), butun gramm.
   late TextEditingController wasteBaseController;
   late TextEditingController wasteAmountController;
@@ -52,24 +56,19 @@ class _EditProductPageState extends State<EditProductPage> {
   bool _imageChanged = false;
   String? _currentImageUrl;
 
-  // Ombor → yuk keltiruvchi oqimi uchun yangi maydonlar
-  late bool _moneApp;
-  late bool _bozor;
+  // Kanallar (turdan ALOHIDA): sotiladimi (filiallar) / sotib olinadimi (bozor).
+  late bool _sellable;
+  late bool _purchasable;
   // Yuk qayerdan keladi — bir nechta manba tanlanishi mumkin
   // (Samarqand + Toshkent).
   late Set<String> _selectedSources;
   late List<int> _selectedSklads;
 
-  // Полуфабрикат — ishlab chiqariladi, sotilmaydi; tex kartalarda ingredient.
-  late bool _isSemiFinished;
+  // Mahsulot TURI: xomashyo / полуфабрикат / tayyor mahsulot.
+  late ProductKind _kind;
 
   // Tarkib (tex karta)
   late final TechCardController _techController;
-
-  // «Состав» switch: yoniq bo'lsa Состав tarkib nomlaridan to'ladi (read-only),
-  // eski erkin matn _savedComment ga saqlanadi.
-  late bool _compositionAsIngredients;
-  late String _savedComment;
 
   // Skladlar — SkladRegistry (superadmin serverda tahrirlaydi).
   Map<int, String> get _skladOptions => SkladRegistry.names;
@@ -78,16 +77,18 @@ class _EditProductPageState extends State<EditProductPage> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.product.name);
-    final normalizedType = normalizeProductType(widget.product.type);
+    final normalizedType = normalizeProductType(widget.product.unit);
     _selectedType = normalizedType.isEmpty ? null : normalizedType;
     ingredientsController =
-        TextEditingController(text: widget.product.ingredients);
+        TextEditingController(text: widget.product.sostav);
     companyController = TextEditingController(text: widget.product.companyName);
-    grammControlle = TextEditingController(
-      text: (widget.product.grams ?? 1).toString(),
+    sellStepController = TextEditingController(
+      text: formatQty(widget.product.sellStepOrDefault, widget.product.unit),
     );
-    bozorGrammController = TextEditingController(
-      text: widget.product.bozorGrams?.toString() ?? '',
+    buyStepController = TextEditingController(
+      text: widget.product.buyStep > 0
+          ? formatQty(widget.product.buyStep, widget.product.unit)
+          : '',
     );
     wasteBaseController = TextEditingController(
       text: widget.product.wasteBase > 0
@@ -109,8 +110,8 @@ class _EditProductPageState extends State<EditProductPage> {
     _selectedFilials = List.from(widget.product.filials);
     _currentImageUrl = widget.product.imageUrl;
 
-    _moneApp = widget.product.moneApp;
-    _bozor = widget.product.bozor;
+    _sellable = widget.product.sellable;
+    _purchasable = widget.product.purchasable;
     // Faqat ma'lum manbalar (checkbox'da ko'rinadiganlar); hech biri
     // qolmasa — ilgarigidek standart Samarqand.
     _selectedSources = widget.product.sources
@@ -120,17 +121,10 @@ class _EditProductPageState extends State<EditProductPage> {
       _selectedSources.add(kDefaultProductSource);
     }
     _selectedSklads = List.from(widget.product.sklads);
-    _isSemiFinished = widget.product.isSemiFinished;
+    _kind = widget.product.kind;
 
     _techController = TechCardController(widget.product.techCard);
 
-    // «Состав» switch holatini saqlangan ma'lumotdan tiklaymiz.
-    _compositionAsIngredients = widget.product.compositionAsIngredients;
-    _savedComment = widget.product.comment ?? '';
-    if (_compositionAsIngredients) {
-      // Yoniq bo'lsa «Состав» nomlardan to'ladi (read-only).
-      ingredientsController.text = _compositionNames();
-    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -153,35 +147,55 @@ class _EditProductPageState extends State<EditProductPage> {
 
   // ---- «1 шт og'irligi» (piece_weight_g) yordamchilari ----
   // Faqat xom шт mahsulotda (pf emas) — tex kartada grammda kiritish uchun.
-  bool get _pieceWeightApplies => _selectedType == 'шт' && !_isSemiFinished;
+  bool get _pieceWeightApplies =>
+      _selectedType == 'шт' && _kind != ProductKind.pf;
+
+  // Display birlikdagi qadam matni -> eng kichik birlikda BUTUN (0 = yo'q).
+  int _stepFromText(String text) {
+    final v = double.tryParse(text.trim().replaceAll(',', '.'));
+    if (v == null || v <= 0) return 0;
+    return qtyFromUi(v, _selectedType).round();
+  }
+
+  // Tur o'zgarganda: пф — kanallar o'chadi; odatiy birlik «шт».
+  void _setKind(ProductKind kind) {
+    setState(() {
+      _kind = kind;
+      if (kind == ProductKind.pf) {
+        _sellable = false;
+        _purchasable = false;
+        if (_selectedType == null || _selectedType!.isEmpty) {
+          _selectedType = 'шт';
+        }
+      }
+    });
+  }
   int get _pieceWeightVal =>
       int.tryParse(pieceWeightController.text.trim()) ?? 0;
 
-  // «Состав» uchun: tex kartadagi showInSostav=true nomlarni vergul bilan
-  // birlashtiradi; полуфабрикат qatori ichidagi masalliq nomlariga yoyiladi.
+  // «Состав» uchun: retseptdagi masalliq nomlarini vergul bilan birlashtiradi;
+  // полуфабрикат qatori ichidagi masalliq nomlariga yoyiladi.
   String _compositionNames() {
     final byId = {
       for (final p in context.read<ProductProviderAdmin>().products) p.id: p
     };
-    return _techController.sostavNames(pfCard: (id) {
+    return _techController.ingredientNames(pfCard: (id) {
       final p = byId[id];
-      return (p != null && p.isSemiFinished) ? p.techCard : null;
+      return (p != null && p.isPf) ? p.techCard : null;
     }).join(', ');
   }
 
-  void _onCompositionSwitchChanged(bool value) {
-    setState(() {
-      if (value) {
-        // YONIQ: joriy matnni comment ga saqlab, maydonni nomlardan to'ldiramiz.
-        _savedComment = ingredientsController.text;
-        _compositionAsIngredients = true;
-        ingredientsController.text = _compositionNames();
-      } else {
-        // O'CHIQ: comment dagi eski matnni tiklaymiz.
-        _compositionAsIngredients = false;
-        ingredientsController.text = _savedComment;
-      }
-    });
+  // «Retseptdan to'ldirish» — matn maydonini retsept nomlari bilan to'ldiradi
+  // (bir martalik amal, saqlanadigan holat yo'q; keyin qo'lda tahrirlash mumkin).
+  void _fillSostavFromRecipe() {
+    final text = _compositionNames();
+    if (text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Retseptda masalliq yo\'q')),
+      );
+      return;
+    }
+    setState(() => ingredientsController.text = text);
   }
 
   Future<void> _pickImage() async {
@@ -502,19 +516,19 @@ class _EditProductPageState extends State<EditProductPage> {
               children: [
                 const Expanded(
                   child: Text(
-                    'Состав = из ингредиентов',
+                    'Состав (tarkibi)',
                     style: TextStyle(fontWeight: FontWeight.w500),
                   ),
                 ),
-                Switch(
-                  value: _compositionAsIngredients,
-                  onChanged: _onCompositionSwitchChanged,
+                TextButton.icon(
+                  onPressed: _fillSostavFromRecipe,
+                  icon: const Icon(Icons.auto_fix_high, size: 18),
+                  label: const Text('Retseptdan to\'ldirish'),
                 ),
               ],
             ),
             TextFormField(
               controller: ingredientsController,
-              readOnly: _compositionAsIngredients,
               decoration: const InputDecoration(
                 labelText: 'Состав',
                 border: OutlineInputBorder(),
@@ -544,10 +558,12 @@ class _EditProductPageState extends State<EditProductPage> {
               height: 20,
             ),
             TextFormField(
-              controller: grammControlle,
-              decoration: const InputDecoration(
-                labelText: 'Mone gramm',
-                border: OutlineInputBorder(),
+              controller: sellStepController,
+              decoration: InputDecoration(
+                labelText: 'Buyurtma qadami (${_selectedType ?? 'birlik'})',
+                helperText:
+                    'Sotuvchi «+» bosganda qo\'shiladigan miqdor (masalan 0.5 kg)',
+                border: const OutlineInputBorder(),
               ),
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
@@ -601,40 +617,25 @@ class _EditProductPageState extends State<EditProductPage> {
               },
             ),
             const SizedBox(height: 16),
-            // Полуфабрикат: yoqilganda birlik odatda «шт» (dona hisobida),
-            // lekin boshqa birlik ham tanlash mumkin.
+            // TUR: xomashyo / полуфабрикат / tayyor mahsulot. Пф — kanallar
+            // o'chiq (ishlab chiqariladi, sotilmaydi, sotib olinmaydi).
+            ProductKindRadioGroup(value: _kind, onChanged: _setKind),
+            const SizedBox(height: 8),
+            // Kanallar — turdan alohida.
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Полуфабрикат'),
+              title: const Text('Sotiladi'),
               subtitle: const Text(
-                'Ishlab chiqariladi, sotilmaydi — tex kartalarda '
-                'ingredient bo\'ladi (dona hisobida)',
+                'Filial / sotuvchi katalogida ko\'rinadi',
                 style: TextStyle(fontSize: 12),
               ),
-              value: _isSemiFinished,
-              onChanged: (value) {
-                setState(() {
-                  _isSemiFinished = value;
-                  // Odatiy birlik — «шт» (biskvit dona hisobida).
-                  if (value && (_selectedType == null || _selectedType!.isEmpty)) {
-                    _selectedType = 'шт';
-                  }
-                });
-              },
+              value: _sellable,
+              onChanged: _kind == ProductKind.pf
+                  ? null
+                  : (value) => setState(() => _sellable = value),
             ),
-            // Mone app / Bozor / Yuk manbai
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Mone app'),
-              value: _moneApp,
-              onChanged: (value) {
-                setState(() {
-                  _moneApp = value;
-                });
-              },
-            ),
-            // Filiallar tanlovi faqat Mone app yoqilganda ko'rinadi
-            if (_moneApp)
+            // Filiallar tanlovi faqat «Sotiladi» yoqilganda ko'rinadi
+            if (_sellable)
               Consumer<FilialProviderAdmin>(
                 builder: (context, provider, child) {
                   if (provider.isLoading) {
@@ -672,23 +673,27 @@ class _EditProductPageState extends State<EditProductPage> {
               ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Bozor'),
-              value: _bozor,
-              onChanged: (value) {
-                setState(() {
-                  _bozor = value;
-                });
-              },
+              title: const Text('Sotib olinadi'),
+              subtitle: const Text(
+                'Bozor / ombor katalogida — yuk keltiruvchi olib keladi',
+                style: TextStyle(fontSize: 12),
+              ),
+              value: _purchasable,
+              onChanged: _kind == ProductKind.pf
+                  ? null
+                  : (value) => setState(() => _purchasable = value),
             ),
-            // Bozor yoqilganda: bozor grammi, yuk manbalari (checkbox — bir
+            // «Sotib olinadi» yoqilganda: pachka, yuk manbalari (checkbox — bir
             // nechtasi mumkin) va sklad tanlovi (checkbox)
-            if (_bozor) ...[
+            if (_purchasable) ...[
               const SizedBox(height: 16),
               TextFormField(
-                controller: bozorGrammController,
-                decoration: const InputDecoration(
-                  labelText: 'Bozor gramm',
-                  border: OutlineInputBorder(),
+                controller: buyStepController,
+                decoration: InputDecoration(
+                  labelText: 'Pachka (${_selectedType ?? 'birlik'})',
+                  helperText:
+                      'Omborchi «+» bosganda qo\'shiladigan miqdor (masalan 25 kg qop)',
+                  border: const OutlineInputBorder(),
                 ),
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
@@ -771,7 +776,7 @@ class _EditProductPageState extends State<EditProductPage> {
                               );
                               return;
                             }
-                            if (_moneApp && _selectedFilials.isEmpty) {
+                            if (_sellable && _selectedFilials.isEmpty) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                     content:
@@ -779,7 +784,7 @@ class _EditProductPageState extends State<EditProductPage> {
                               );
                               return;
                             }
-                            if (_bozor && _selectedSources.isEmpty) {
+                            if (_purchasable && _selectedSources.isEmpty) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                     content:
@@ -787,7 +792,7 @@ class _EditProductPageState extends State<EditProductPage> {
                               );
                               return;
                             }
-                            if (_bozor && _selectedSklads.isEmpty) {
+                            if (_purchasable && _selectedSklads.isEmpty) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                     content:
@@ -824,45 +829,30 @@ class _EditProductPageState extends State<EditProductPage> {
 
                             final updatedProduct = widget.product.copyWith(
                               name: _nameController.text,
-                              categoryName: companyController.text,
-                              // Bo'sh maydonda double.parse('') FormatException
-                              // otib saqlashni jimgina to'xtatardi (validator
-                              // bo'sh qiymatga ruxsat beradi) — add ekranidagi
-                              // kabi himoya qilamiz.
-                              grams: grammControlle.text.isEmpty
-                                  ? null
-                                  : double.parse(grammControlle.text),
-                              bozorGrams: bozorGrammController.text.isEmpty
-                                  ? null
-                                  : double.parse(bozorGrammController.text),
                               categoryId: _selectedCategoryId,
                               companyName: companyController.text,
-                              type: _selectedType!,
-                              ingredients: ingredientsController.text,
+                              unit: _selectedType!,
+                              kind: _kind,
+                              sellable: _sellable,
+                              purchasable: _purchasable,
+                              sellStep: _stepFromText(sellStepController.text),
+                              buyStep: _stepFromText(buyStepController.text),
+                              sostav: ingredientsController.text,
                               filials: _selectedFilials,
                               imageUrl: imageUrl,
-                              moneApp: _moneApp,
-                              bozor: _bozor,
-                              // Kanonik tartibda; source = sources.first
-                              // (model o'zi hisoblaydi). Bo'sh bo'lsa
-                              // (bozor o'chiq) — eski manbalar qoladi.
+                              // Kanonik tartibda. Bo'sh bo'lsa (sotib
+                              // olinmaydi) — eski manbalar qoladi.
                               sources: _selectedSources.isEmpty
                                   ? widget.product.sources
                                   : canonicalProductSources(_selectedSources),
                               sklads: _selectedSklads,
                               techCard: _techController.build(),
-                              comment: _compositionAsIngredients
-                                  ? _savedComment
-                                  : ingredientsController.text,
-                              compositionAsIngredients:
-                                  _compositionAsIngredients,
                               wasteBase: _wasteApplies && _wasteValid
                                   ? _wasteBaseVal
                                   : 0,
                               wasteAmount: _wasteApplies && _wasteValid
                                   ? _wasteAmountVal
                                   : 0,
-                              isSemiFinished: _isSemiFinished,
                               pieceWeightG: _pieceWeightApplies
                                   ? _pieceWeightVal
                                   : 0,
@@ -905,8 +895,8 @@ class _EditProductPageState extends State<EditProductPage> {
   void dispose() {
     _nameController.dispose();
     ingredientsController.dispose();
-    grammControlle.dispose();
-    bozorGrammController.dispose();
+    sellStepController.dispose();
+    buyStepController.dispose();
     wasteBaseController.dispose();
     wasteAmountController.dispose();
     pieceWeightController.dispose();

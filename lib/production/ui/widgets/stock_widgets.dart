@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/core/utils/qty_units.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
 import 'package:uz_ai_dev/production/models/stock_model.dart';
 import 'package:uz_ai_dev/production/provider/stock_provider.dart';
 
@@ -739,7 +740,7 @@ class _StockAdjustDialogState extends State<_StockAdjustDialog> {
   final TextEditingController _qtyController = TextEditingController();
   final TextEditingController _commentController = TextEditingController();
 
-  CatalogProduct? _selected;
+  Product? _selected;
   // 0: + kirim, 1: − chiqim, 2: spisaniya (brak)
   int _mode = 0;
   String? _error;
@@ -755,10 +756,10 @@ class _StockAdjustDialogState extends State<_StockAdjustDialog> {
   // bilan bottom sheet'da ko'rsatiladi.
   Future<void> _pickProduct() async {
     final provider = context.read<StockProvider>();
-    final merged = <int, CatalogProduct>{};
+    final merged = <int, Product>{};
     for (final r in provider.stockFor(widget.skladId) ?? const <StockRow>[]) {
       merged[r.productId] =
-          CatalogProduct(id: r.productId, name: r.name, type: r.type);
+          Product(id: r.productId, name: r.name, unit: r.type);
     }
     for (final c in provider.catalog) {
       merged.putIfAbsent(c.id, () => c);
@@ -766,7 +767,7 @@ class _StockAdjustDialogState extends State<_StockAdjustDialog> {
     final items = merged.values.toList()
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
-    final picked = await showModalBottomSheet<CatalogProduct>(
+    final picked = await showModalBottomSheet<Product>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
@@ -799,7 +800,7 @@ class _StockAdjustDialogState extends State<_StockAdjustDialog> {
       return;
     }
     // UI (kg/l) -> API (butun gramm/ml); boshqa birliklar o'zgarishsiz.
-    final apiQty = qtyFromUi(qty, _selected!.type).toDouble();
+    final apiQty = qtyFromUi(qty, _selected!.unit).toDouble();
     Navigator.pop(
       context,
       StockAdjustResult(
@@ -838,7 +839,7 @@ class _StockAdjustDialogState extends State<_StockAdjustDialog> {
                         _selected == null
                             ? 'Tanlash...'
                             : '${_selected!.name}'
-                                '${_selected!.type.isNotEmpty ? ' (${_selected!.type})' : ''}',
+                                '${_selected!.unit.isNotEmpty ? ' (${_selected!.unit})' : ''}',
                         style: TextStyle(
                           fontSize: 14,
                           color: _selected == null
@@ -895,7 +896,7 @@ class _StockAdjustDialogState extends State<_StockAdjustDialog> {
               ],
               decoration: InputDecoration(
                 labelText:
-                    'Miqdor${_selected != null && _selected!.type.isNotEmpty ? ' (${_selected!.type})' : ''}',
+                    'Miqdor${_selected != null && _selected!.unit.isNotEmpty ? ' (${_selected!.unit})' : ''}',
                 border: const OutlineInputBorder(),
                 errorText: _error,
               ),
@@ -935,7 +936,7 @@ class _StockAdjustDialogState extends State<_StockAdjustDialog> {
 
 // Mahsulot tanlash bottom sheet'i (qidiruv bilan).
 class _ProductPickerSheet extends StatefulWidget {
-  final List<CatalogProduct> items;
+  final List<Product> items;
 
   const _ProductPickerSheet({required this.items});
 
@@ -1009,10 +1010,10 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
                               p.name,
                               style: const TextStyle(fontSize: 14),
                             ),
-                            trailing: p.type.isEmpty
+                            trailing: p.unit.isEmpty
                                 ? null
                                 : Text(
-                                    p.type,
+                                    p.unit,
                                     style: TextStyle(
                                       fontSize: 12.5,
                                       color: Colors.grey.shade600,

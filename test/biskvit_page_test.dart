@@ -8,21 +8,22 @@ import 'package:get_it/get_it.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uz_ai_dev/admin/model/category_model.dart';
-import 'package:uz_ai_dev/admin/model/product_model.dart';
-import 'package:uz_ai_dev/admin/model/tech_card.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
+import 'package:uz_ai_dev/core/catalog/tech_card.dart';
 import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/shef/provider/shef_provider.dart';
 import 'package:uz_ai_dev/shef/ui/biskvit_page.dart';
 import 'package:uz_ai_dev/shef/ui/shef_cake_constructor_page.dart';
 import 'package:uz_ai_dev/shef/ui/shef_cakes_page.dart';
+import 'helpers/catalog_test_env.dart';
 
-ProductModelAdmin _product(int id, String name, int cat, String catName) =>
-    ProductModelAdmin(
+Product _product(int id, String name, int cat, String catName) =>
+    Product(
       id: id,
       name: name,
       categoryId: cat,
-      type: 'шт',
+      unit: 'шт',
       categoryName: catName,
       filials: const [],
       filialNames: const [],
@@ -44,6 +45,7 @@ void main() {
   });
 
   setUp(() {
+    registerTestCatalog();
     SharedPreferences.setMockInitialValues({});
     cats = CategoryProviderAdmin();
     products = ProductProviderAdmin();

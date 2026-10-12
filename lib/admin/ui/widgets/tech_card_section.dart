@@ -1,7 +1,7 @@
 // admin/ui/widgets/tech_card_section.dart — тех карта editori sub-fayli:
 // TechCardController — muharrir holatini (batchQty, bases, consumables,
 // profit/overhead, salePrice) boshqaradi va build() bilan TechCard yig'adi.
-import 'package:uz_ai_dev/admin/model/tech_card.dart';
+import 'package:uz_ai_dev/core/catalog/tech_card.dart';
 
 // Tex karta (тех карта) holatini boshqaradigan controller.
 // Parent ekran shuni yaratadi, save paytida build() chaqiradi va dispose qiladi.
@@ -109,9 +109,9 @@ class TechCardController {
         biscuitColor: biscuitColor,
       );
 
-  // «Состав» uchun showInSostav=true bo'lgan nomlar.
-  List<String> sostavNames({TechCard? Function(int productId)? pfCard}) =>
-      build().sostavNames(pfCard: pfCard);
+  // «Состав» uchun bazalardagi masalliq nomlari («Retseptdan to'ldirish»).
+  List<String> ingredientNames({TechCard? Function(int productId)? pfCard}) =>
+      build().ingredientNames(pfCard: pfCard);
 
   void dispose() {}
 }

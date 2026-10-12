@@ -5,7 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 import 'package:provider/provider.dart';
-import 'package:uz_ai_dev/admin/model/product_model.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/services/get_pdf_service.dart';
 import 'package:uz_ai_dev/admin/ui/admin_add_product_ui.dart';
@@ -300,7 +300,7 @@ class _AdminProductUiState extends State<AdminProductUi> {
                 return ListTile(
                   key: ValueKey(product.id),
                   leading: ClipOval(
-                    child: product.imageUrl != null
+                    child: product.imageUrl.isNotEmpty
                         ? AppNetworkImage(
                             imageUrl: "${AppUrls.baseUrl}${product.imageUrl}",
                             width: 55,
@@ -351,7 +351,7 @@ class _AdminProductUiState extends State<AdminProductUi> {
   }
 
   // Mahsulot ichida tarkib (tex karta) bormi — «i» ikonani shartli ko'rsatish uchun.
-  bool _hasTechCard(ProductModelAdmin product) {
+  bool _hasTechCard(Product product) {
     final tc = product.techCard;
     if (tc == null) return false;
     return tc.bases.any((b) => b.ingredients.isNotEmpty) ||
@@ -361,7 +361,7 @@ class _AdminProductUiState extends State<AdminProductUi> {
   // Tahrirlash/qo'shish/tex-karta saqlangach provider o'zini lokal yangilaydi
   // (updateProduct/createProduct + notifyListeners). Shuning uchun bu yerda
   // butun bazani QAYTA GET qilmaymiz — Consumer o'zi qayta chizadi.
-  Future<void> _openEditPage(ProductModelAdmin product) async {
+  Future<void> _openEditPage(Product product) async {
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -370,7 +370,7 @@ class _AdminProductUiState extends State<AdminProductUi> {
     );
   }
 
-  Future<void> _openTechCard(ProductModelAdmin product) async {
+  Future<void> _openTechCard(Product product) async {
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -380,7 +380,7 @@ class _AdminProductUiState extends State<AdminProductUi> {
   }
 
   Widget _buildProductListTile(
-      BuildContext context, ProductModelAdmin product) {
+      BuildContext context, Product product) {
     // Bitta bosish → mahsulotni tahrirlash (avalgi sahifa).
     // Ikki marta bosish (double-tap) → tex karta (состав) sahifasi.
     // Bosib turish → o'chirish. «i» ikona ham tex kartani ochadi (tarkibi bor bo'lsa).
@@ -400,7 +400,7 @@ class _AdminProductUiState extends State<AdminProductUi> {
         leading: ClipOval(
         child: GestureDetector(
           onTap: () {
-            if (product.imageUrl != null) {
+            if (product.imageUrl.isNotEmpty) {
               showDialog(
                 context: context,
                 builder: (_) => Dialog(
@@ -415,7 +415,7 @@ class _AdminProductUiState extends State<AdminProductUi> {
               );
             }
           },
-          child: product.imageUrl != null
+          child: product.imageUrl.isNotEmpty
               ? AppNetworkImage(
                   imageUrl: "${AppUrls.baseUrl}${product.imageUrl}",
                   width: 55,
@@ -436,7 +436,7 @@ class _AdminProductUiState extends State<AdminProductUi> {
           children: [
             Flexible(
               child: Text(
-                '${product.name} (${product.type})',
+                '${product.name} (${product.unit})',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
@@ -444,7 +444,7 @@ class _AdminProductUiState extends State<AdminProductUi> {
               ),
             ),
             // Полуфабрикат belgisi.
-            if (product.isSemiFinished)
+            if (product.isPf)
               Container(
                 margin: const EdgeInsets.only(left: 6),
                 padding:
@@ -470,7 +470,7 @@ class _AdminProductUiState extends State<AdminProductUi> {
   }
 
   void _showDeleteConfirmDialog(
-      BuildContext context, ProductModelAdmin product) {
+      BuildContext context, Product product) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(

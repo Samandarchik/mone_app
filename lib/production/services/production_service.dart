@@ -31,23 +31,7 @@ class ProductionService {
     throw Exception('Tarmoq xatosi: ${e.message ?? fallback}');
   }
 
-  // GET /api/production/products — tex kartali (ya'ni ISHLAB CHIQARILADIGAN)
-  // mahsulotlar, полуфабрикатlar ham shu ro'yxatda. Ombor tafsilotida
-  // «Yetishmaganidan buyurtma» oqimi pf qatorlarini chiqarib tashlash uchun
-  // ishlatadi (pf ishlab chiqariladi — sotib olinmaydi).
-  Future<List<ProductionProduct>> fetchProducts() async {
-    try {
-      final response = await dio.get(AppUrls.productionProducts);
-      if (response.statusCode == 200) {
-        final body = response.data;
-        if (body is Map) return ProductionProduct.listFromJson(body['data']);
-        return [];
-      }
-      throw Exception('Mahsulotlar yuklanmadi: ${response.statusCode}');
-    } on DioException catch (e) {
-      _throwDio(e, 'mahsulotlar yuklanmadi');
-    }
-  }
+
 
   // GET /api/production/orders -> rolga mos buyurtmalar ro'yxati.
   Future<List<ProductionOrder>> fetchOrders() async {

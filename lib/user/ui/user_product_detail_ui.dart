@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/utils/qty_units.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
 import 'package:uz_ai_dev/user/provider/provider.dart';
 
 class UserProductDetailUi extends StatelessWidget {
@@ -15,7 +16,7 @@ class UserProductDetailUi extends StatelessWidget {
   static const Color _buttonColor = Color(0xFFC5A97B);
   static const Color _bgColor = Color(0xFFFAF6F1);
 
-  ProductModel? _findProduct(ProductProvider provider) {
+  Product? _findProduct(ProductProvider provider) {
     for (var products in provider.productsByCategory.values) {
       for (var p in products) {
         if (p.id == productId) return p;
@@ -87,18 +88,17 @@ class UserProductDetailUi extends StatelessWidget {
                           color: Colors.black87,
                         ),
                       ),
-                      if (product.type != null) ...[
+                      if (product.unit.isNotEmpty) ...[
                         SizedBox(height: 6),
                         Text(
-                          product.type!,
+                          product.unit,
                           style: TextStyle(
                             fontSize: 14,
                             color: Colors.grey.shade500,
                           ),
                         ),
                       ],
-                      if (product.ingredients != null &&
-                          product.ingredients!.isNotEmpty) ...[
+                      if (product.sostav.isNotEmpty) ...[
                         SizedBox(height: 20),
                         Text(
                           'Tarkibi',
@@ -110,7 +110,7 @@ class UserProductDetailUi extends StatelessWidget {
                         ),
                         SizedBox(height: 8),
                         Text(
-                          product.ingredients!,
+                          product.sostav,
                           style: TextStyle(
                             fontSize: 15,
                             color: Colors.grey.shade700,
@@ -157,7 +157,7 @@ class UserProductDetailUi extends StatelessWidget {
                               EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                         ),
                         Text(
-                          formatQty(quantity, product.type),
+                          formatQty(quantity, product.unit),
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 20,

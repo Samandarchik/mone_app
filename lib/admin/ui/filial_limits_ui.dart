@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:uz_ai_dev/admin/model/filial_limit_model.dart';
-import 'package:uz_ai_dev/admin/model/product_model.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
 import 'package:uz_ai_dev/admin/provider/admin_filial_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/services/filial_limit_service.dart';
@@ -111,7 +111,7 @@ class _FilialLimitsUiState extends State<FilialLimitsUi> {
   }
 
   // Tanlangan filialga biriktirilgan mahsulotlar (+ nom bo'yicha qidiruv).
-  List<ProductModelAdmin> _filialProducts(ProductProviderAdmin provider) {
+  List<Product> _filialProducts(ProductProviderAdmin provider) {
     final filialId = _selectedFilialId;
     if (filialId == null) return const [];
     final q = _search.trim().toLowerCase();
@@ -124,16 +124,16 @@ class _FilialLimitsUiState extends State<FilialLimitsUi> {
 
   // ─────────────────────── Limit tahrirlash dialogi ───────────────────────
 
-  Future<void> _editLimit(ProductModelAdmin product) async {
+  Future<void> _editLimit(Product product) async {
     final filialId = _selectedFilialId;
     if (filialId == null) return;
 
     final existing = _limits[product.id];
     // кг/л — admin kg/l da kasr kiritadi (API'ga gr/ml butun ketadi);
     // шт va boshqalar — faqat butun son.
-    final allowDecimal = qtyUnitFactor(product.type) != 1;
+    final allowDecimal = qtyUnitFactor(product.unit) != 1;
     final controller = TextEditingController(
-      text: existing == null ? '' : formatQty(existing.limitQty, product.type),
+      text: existing == null ? '' : formatQty(existing.limitQty, product.unit),
     );
 
     final text = await showDialog<String>(
@@ -158,7 +158,7 @@ class _FilialLimitsUiState extends State<FilialLimitsUi> {
                 ),
               ],
               decoration: InputDecoration(
-                labelText: 'Limit (${product.type})',
+                labelText: 'Limit (${product.unit})',
                 hintText: allowDecimal ? 'Masalan: 1.5' : 'Masalan: 4',
                 border: const OutlineInputBorder(),
                 focusedBorder: const OutlineInputBorder(
@@ -208,7 +208,7 @@ class _FilialLimitsUiState extends State<FilialLimitsUi> {
     }
 
     // Gram kontrakt: кг/л -> ×1000 butun; шт -> butun dona. Har doim int.
-    final int apiQty = qtyFromUi(uiValue, product.type).round();
+    final int apiQty = qtyFromUi(uiValue, product.unit).round();
 
     // O'zgarish yo'q — server bezovta qilinmaydi.
     final int currentQty = existing?.limitQty ?? 0;
@@ -233,7 +233,7 @@ class _FilialLimitsUiState extends State<FilialLimitsUi> {
                 filialId: filialId,
                 productId: product.id,
                 productName: product.name,
-                unit: product.type,
+                unit: product.unit,
                 limitQty: apiQty,
                 updated: DateTime.now(),
               );
@@ -444,7 +444,7 @@ class _FilialLimitsUiState extends State<FilialLimitsUi> {
   }
 
   // Bitta mahsulot qatori: nom + birlik, o'ngda joriy limit yoki «—».
-  Widget _productRow(ProductModelAdmin product) {
+  Widget _productRow(Product product) {
     final limit = _limits[product.id];
     return Card(
       elevation: 0,
@@ -476,7 +476,7 @@ class _FilialLimitsUiState extends State<FilialLimitsUi> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      product.type,
+                      product.unit,
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey.shade600,
@@ -491,7 +491,7 @@ class _FilialLimitsUiState extends State<FilialLimitsUi> {
               Text(
                 limit == null
                     ? '—'
-                    : formatQtyUnit(limit.limitQty, product.type),
+                    : formatQtyUnit(limit.limitQty, product.unit),
                 style: limit == null
                     ? TextStyle(fontSize: 14, color: Colors.grey.shade400)
                     : const TextStyle(

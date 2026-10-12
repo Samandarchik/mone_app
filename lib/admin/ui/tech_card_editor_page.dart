@@ -24,8 +24,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import 'package:uz_ai_dev/admin/model/product_model.dart';
-import 'package:uz_ai_dev/admin/model/tech_card.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
+import 'package:uz_ai_dev/core/catalog/tech_card.dart';
 import 'package:uz_ai_dev/admin/model/tech_card_cost.dart';
 import 'package:uz_ai_dev/admin/model/tech_card_version.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
@@ -167,7 +167,7 @@ String _priceUnitLabel(String unit) {
 }
 
 class TechCardEditorPage extends StatefulWidget {
-  final ProductModelAdmin product;
+  final Product product;
 
   /// false — narx maydonlari FAQAT o'qiladi (shef rejimi): «Цена продажи»,
   /// «Прибыль», «Доп. расходы» tahrirlanmaydi va masalliqning qo'lda xarid
@@ -344,6 +344,48 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
       Navigator.pop(context, true);
     } else {
       final raw = provider.error ?? '';
+      // Server 400 + data.unlinked: retseptda mahsulotga bog'lanmagan
+      // qatorlar bor (UnlinkedRecipeLinesException) — nomlarini dialogda
+      // ko'rsatamiz (qatorlar muharrirda qizil «bog'lanmagan» chip bilan).
+      final unlinkedPrefix = 'Bog\'lanmagan masalliqlar: ';
+      if (raw.contains(unlinkedPrefix)) {
+        final names = raw
+            .substring(raw.indexOf(unlinkedPrefix) + unlinkedPrefix.length)
+            .split(', ')
+            .where((n) => n.trim().isNotEmpty)
+            .toList();
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Saqlanmadi — bog\'lanmagan masalliqlar'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Quyidagi qatorlar katalogdagi mahsulotga bog\'lanmagan. '
+                  'Qatorni o\'chirib, mahsulotni tanlab qayta qo\'shing:',
+                  style: TextStyle(fontSize: 13),
+                ),
+                const SizedBox(height: 8),
+                for (final n in names)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Text('• $n',
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Tushunarli'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
       // Backend ruxsat bermadi (masalan shef o'z kategoriyasidan tashqari
       // mahsulotni saqlamoqchi) — tushunarli xabar chiqaramiz.
       final msg = raw.contains('403')
@@ -533,21 +575,21 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
 
   // productId -> mahsulot xaritasi (полуфабрикат qatorlarini aniqlash,
   // og'irlik va rekursiv tannarx uchun). Bir marta yig'iladi.
-  Map<int, ProductModelAdmin>? _productByIdCache;
+  Map<int, Product>? _productByIdCache;
 
-  Map<int, ProductModelAdmin> get _productById => _productByIdCache ??=
+  Map<int, Product> get _productById => _productByIdCache ??=
       techProductsById(context.read<ProductProviderAdmin>().products);
 
   // Qator полуфабрикат mahsulotga bog'langanmi.
   bool _isPfItem(TechItem item) =>
-      _productById[item.productId]?.isSemiFinished == true;
+      _productById[item.productId]?.isPf == true;
 
   // Полуфабрикат qatorining birligi O'Z tex kartasidan kelib chiqadi:
   // batch_unit 'g' → гр ('g'), aks holda дона ('pcs'). Boshqa birlikka
   // o'tkazish taqiqlanadi (дона'dagi пф grammga o'tmaydi). null — ruxsat.
   String? _pfUnitBlockedMessage(TechItem item, String unit) {
     final pf = _productById[item.productId];
-    if (pf == null || !pf.isSemiFinished) return null;
+    if (pf == null || !pf.isPf) return null;
     final own = pf.techCard?.batchUnit == 'g' ? 'g' : 'pcs';
     if (unit == own) return null;
     return own == 'g'
@@ -561,11 +603,11 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
   // konvertini qila olmaydi). null — cheklov yo'q.
   String? _gramBlockedMessage(TechItem item) {
     final p = _productById[item.productId];
-    if (p == null || normalizeProductType(p.type) != 'шт') return null;
+    if (p == null || normalizeProductType(p.unit) != 'шт') return null;
     if (techEffectivePieceWeightG(item.productId, _productById) > 0) {
       return null;
     }
-    return p.isSemiFinished
+    return p.isPf
         ? 'Пф tex kartasida og\'irlik yo\'q — grammda kiritib bo\'lmaydi'
         : '«1 шт = X gr» kiritilmagan — avval mahsulot tahririda kiriting';
   }
@@ -1367,7 +1409,7 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
   // kataklari yangi пф retsepti bo'yicha darhol qayta hisoblanadi.
   Future<void> _openPfCard(TechItem item) async {
     final pf = _productById[item.productId];
-    if (pf == null || !pf.isSemiFinished) return;
+    if (pf == null || !pf.isPf) return;
     final saved = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
@@ -1534,6 +1576,7 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
+                              if (ing.isUnlinked) _unlinkedChip(),
                               if (canExpand)
                                 GestureDetector(
                                   behavior: HitTestBehavior.opaque,
@@ -1610,6 +1653,45 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
   }
 
   // «ПФ» chipi; withIcon=true bo'lsa ochish/yopish strelkasi qo'shiladi.
+  // «bog'lanmagan» belgisi — qator mahsulotga bog'lanmagan (product_id = 0):
+  // narxi/tannarxi hisoblanmaydi va server saqlashda 400 beradi; qatorni
+  // o'chirib, mahsulot tanlab qayta qo'shish kerak.
+  // Telefonda (tor nom ustuni) — faqat qizil «uzilgan zanjir» belgisi
+  // (tooltip bilan), keng ekranda — matnli chip.
+  Widget _unlinkedChip() {
+    const tip = 'Mahsulotga bog\'lanmagan — qatorni o\'chirib, mahsulot '
+        'tanlab qayta qo\'shing';
+    if (_compact) {
+      return Padding(
+        padding: const EdgeInsets.only(left: 3),
+        child: Tooltip(
+          message: tip,
+          child: Icon(Icons.link_off, size: 12, color: Colors.red.shade700),
+        ),
+      );
+    }
+    return Tooltip(
+      message: tip,
+      child: Container(
+        margin: const EdgeInsets.only(left: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+        decoration: BoxDecoration(
+          color: Colors.red.shade50,
+          border: Border.all(color: Colors.red.shade300),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          'bog\'lanmagan',
+          style: TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w600,
+            color: Colors.red.shade700,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _pfChip({bool withIcon = false, bool expanded = false}) {
     return Container(
       margin: const EdgeInsets.only(left: 5),
@@ -2039,7 +2121,7 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
   // --- Mahsulot rasmi (Excel'dagi eng tepadagi foto) ---
 
   Widget _productPhoto() {
-    final url = _fullImageUrl(widget.product.imageUrl ?? '');
+    final url = _fullImageUrl(widget.product.imageUrl);
     if (url.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -2431,7 +2513,7 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
 
   Widget _cuttingScheme() {
     if (!_schemeVisible) return const SizedBox.shrink();
-    final url = _fullImageUrl(widget.product.imageUrl ?? '');
+    final url = _fullImageUrl(widget.product.imageUrl);
     // Sxema BITTA LIST bo'yicha: bitta list batchQty (Штук) bo'lakka kesiladi.
     final pieces = _piecesPerList;
     final sizeText = CuttingSchemeView.pieceSizeText(
@@ -2884,7 +2966,7 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
               // Birlik yozuvi katakdan TASHQARIDA; полуфабрикатda bosilsa
               // шт ↔ гр almashadi (biskvit rejimida faqat шт — biskvit
               // donada sanaladi).
-              if (widget.product.isSemiFinished && !widget.biscuitMode)
+              if (widget.product.isPf && !widget.biscuitMode)
                 _unitToggle()
               else
                 Text(_unitShort, style: _kCellStyle),
@@ -3299,6 +3381,9 @@ class _TechCardEditorPageState extends State<TechCardEditorPage> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
+                                // Mahsulotga bog'lanmagan qator (eski/import)
+                                // — server saqlashga ruxsat bermaydi.
+                                if (item.isUnlinked) _unlinkedChip(),
                                 // Полуфабрикат belgisi — bosilsa ichidagi
                                 // masalliqlar SHU qator ostida ochiladi/yopiladi.
                                 if (isPf)
