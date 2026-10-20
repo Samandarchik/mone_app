@@ -63,18 +63,18 @@ const _bigUnits = {'кг', 'kg', 'л', 'l', 'литр', 'litr'};
 const _smallUnits = {'гр', 'г', 'gr', 'g', 'мл', 'ml'};
 
 /// Dona sonini qo'shib formatlaydi: "2шт = 1.8 кг", "2уп = 20 шт".
-/// Dona hajmi (eng kichik birlikda): sellStep (to'liq birlikdan farqli
-/// bo'lsa), aks holda nomdagi "1шт=900гр" / "1уп=10шт" (hajm birligi
-/// mahsulot birligiga mos kelsa). Dona nomi nomdan ("пачка"), topilmasa
-/// кг/л uchun "шт", qolganlarga "уп". Hajm noma'lum yoki miqdor donaga
-/// bo'linmasa — oddiy "1.8 кг".
+/// кг/л: dona hajmi FAQAT nomdagi "1шт=900гр" dan (bo'sh tortiladigan
+/// mahsulotda dona yo'q). Dona birliklari (шт, пачка…): sellStep (>1), aks
+/// holda nomdagi "1уп=10шт" (hajm birligi mahsulot birligiga mos kelsa).
+/// Dona nomi nomdan ("пачка"), topilmasa "уп". Hajm noma'lum yoki miqdor
+/// donaga bo'linmasa — oddiy "1.8 кг".
 String formatQtyWithPacks(num apiQty, String? type, int sellStep,
     {String name = ''}) {
   final plain = formatQtyUnit(apiQty, type);
   final f = qtyUnitFactor(type);
   if (apiQty <= 0) return plain;
 
-  var label = f == 1 ? 'уп' : 'шт';
+  var label = 'уп';
   num pack = 0;
   final m = _packInName.firstMatch(name);
   if (m != null) {
@@ -90,7 +90,9 @@ String formatQtyWithPacks(num apiQty, String? type, int sellStep,
       pack = (v * mul).round();
     }
   }
-  if (sellStep > 0 && sellStep != f) pack = sellStep;
+  // кг/л — faqat nomida pachka yozilgan bo'lsa (bo'sh tortiladigan
+  // mahsulotning 0.5 кг qadami dona emas). Dona birliklarida — sellStep ham.
+  if (f == 1 && sellStep > 1) pack = sellStep;
   if (pack == f) return plain;
   if (pack <= 0) return plain;
 
