@@ -53,33 +53,45 @@ String formatQty(num apiQty, String? type) {
 String formatQtyUnit(num apiQty, String? type) =>
     '${formatQty(apiQty, type)} ${type ?? ''}'.trim();
 
-// Nomdagi "1шт=900гр", "1пачка = 0.5 кг" — dona nomi va hajmi.
+// Nomdagi "1шт=900гр", "1пачка = 0.5 кг", "1уп=10шт" — dona nomi, hajmi va
+// hajm birligi.
 final _packInName = RegExp(
-  r'1\s*([^\s\d=()]+)\s*=\s*(\d+(?:[.,]\d+)?)\s*(кг|kg|гр|gr|г|g|мл|ml|л|l)',
-  caseSensitive: false,
+  r'1\s*([^\s\d=()]+)\s*=\s*(\d+(?:[.,]\d+)?)\s*([^\s\d=(),.]+)',
 );
 
-/// кг/л mahsulot uchun dona sonini qo'shib formatlaydi: "2шт = 1.8 кг".
+const _bigUnits = {'кг', 'kg', 'л', 'l', 'литр', 'litr'};
+const _smallUnits = {'гр', 'г', 'gr', 'g', 'мл', 'ml'};
+
+/// Dona sonini qo'shib formatlaydi: "2шт = 1.8 кг", "2уп = 20 шт".
 /// Dona hajmi (eng kichik birlikda): sellStep (to'liq birlikdan farqli
-/// bo'lsa), aks holda nomdagi "1шт=900гр". Dona nomi nomdan ("пачка"),
-/// topilmasa "шт". Hajm noma'lum yoki miqdor donaga bo'linmasa — "1.8 кг".
+/// bo'lsa), aks holda nomdagi "1шт=900гр" / "1уп=10шт" (hajm birligi
+/// mahsulot birligiga mos kelsa). Dona nomi nomdan ("пачка"), topilmasa
+/// кг/л uchun "шт", qolganlarga "уп". Hajm noma'lum yoki miqdor donaga
+/// bo'linmasa — oddiy "1.8 кг".
 String formatQtyWithPacks(num apiQty, String? type, int sellStep,
     {String name = ''}) {
   final plain = formatQtyUnit(apiQty, type);
   final f = qtyUnitFactor(type);
-  if (f == 1 || apiQty <= 0) return plain;
+  if (apiQty <= 0) return plain;
 
-  var label = 'шт';
+  var label = f == 1 ? 'уп' : 'шт';
   num pack = 0;
   final m = _packInName.firstMatch(name);
   if (m != null) {
-    label = m.group(1)!;
     final v = double.tryParse(m.group(2)!.replaceAll(',', '.')) ?? 0;
     final u = m.group(3)!.toLowerCase();
-    final big = u == 'кг' || u == 'kg' || u == 'л' || u == 'l';
-    pack = (v * (big ? 1000 : 1)).round();
+    final t = (type ?? '').trim().toLowerCase();
+    num mul = 0;
+    if (f != 1 && _bigUnits.contains(u)) mul = f;
+    if (f != 1 && _smallUnits.contains(u)) mul = 1;
+    if (f == 1 && t.isNotEmpty && u == t) mul = 1;
+    if (mul > 0) {
+      label = m.group(1)!;
+      pack = (v * mul).round();
+    }
   }
   if (sellStep > 0 && sellStep != f) pack = sellStep;
+  if (pack == f) return plain;
   if (pack <= 0) return plain;
 
   final packs = apiQty / pack;
