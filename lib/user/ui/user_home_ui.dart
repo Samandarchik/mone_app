@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:uz_ai_dev/admin/services/sh5_service.dart';
 import 'package:uz_ai_dev/admin/ui/sh5_ostatka_ui.dart';
 import 'package:uz_ai_dev/core/auth/session.dart';
+import 'package:uz_ai_dev/core/catalog/product.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/context_extension.dart';
 import 'package:uz_ai_dev/core/utils/qty_units.dart';
@@ -235,7 +236,10 @@ class _UserHomeUiState extends State<UserHomeUi> {
                             ),
                           ),
                           SizedBox(
-                            height: 280,
+                            // Nom to'liq ko'rinsin: balandlik eng uzun nomga
+                            // qarab hisoblanadi (gorizontal ro'yxat qat'iy
+                            // balandlik talab qiladi).
+                            height: _ProductCard.listHeight(context, products),
                             child: ListView.builder(
                               scrollDirection: Axis.horizontal,
                               padding: EdgeInsets.symmetric(horizontal: 12),
@@ -359,6 +363,36 @@ class _ProductCard extends StatelessWidget {
     required this.onRemove,
   });
 
+  static const double _width = 180;
+  static const TextStyle _nameStyle = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w600,
+    color: Colors.black87,
+  );
+
+  static String _title(String name, String? type) =>
+      type != null && type.isNotEmpty ? '$name ($type)' : name;
+
+  /// Kategoriya qatori balandligi: rasm + eng uzun nom + tugma.
+  /// Nom qisqartirilmaydi (ellipsis yo'q), shuning uchun qator eng uzun
+  /// nomga moslashadi; 280 dan kichik bo'lmaydi.
+  static double listHeight(BuildContext context, List<Product> products) {
+    final scaler = MediaQuery.textScalerOf(context);
+    double maxText = 0;
+    for (final p in products) {
+      final tp = TextPainter(
+        text: TextSpan(text: _title(p.name, p.unit), style: _nameStyle),
+        textDirection: TextDirection.ltr,
+        textScaler: scaler,
+      )..layout(maxWidth: _width - 20);
+      if (tp.height > maxText) maxText = tp.height;
+      tp.dispose();
+    }
+    // 160 rasm + 14 nom padding + 58 tugma (48 + 10) + 8 zaxira
+    final h = 160 + 14 + maxText + 58 + 8;
+    return h < 280 ? 280 : h;
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isSelected = quantity > 0;
@@ -403,14 +437,8 @@ class _ProductCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 10, 10, 4),
             child: Text(
-              type != null && type!.isNotEmpty ? '$name ($type)' : name,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
+              _title(name, type),
+              style: _nameStyle,
             ),
           ),
           Spacer(),

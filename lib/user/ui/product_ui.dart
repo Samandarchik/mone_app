@@ -90,8 +90,6 @@ class ProductsScreen extends StatelessWidget {
                         padding: EdgeInsets.fromLTRB(6, 6, 6, 4),
                         child: Text(
                           product.name,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
