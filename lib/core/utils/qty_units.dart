@@ -53,14 +53,36 @@ String formatQty(num apiQty, String? type) {
 String formatQtyUnit(num apiQty, String? type) =>
     '${formatQty(apiQty, type)} ${type ?? ''}'.trim();
 
-/// Seller qadami dona/pachka bo'lgan кг/л mahsulot uchun "2шт = 1.8 кг"
-/// (sellStep = 900 гр, apiQty = 1800). Qadam belgilanmagan, to'liq birlikka
-/// teng yoki miqdor qadamga bo'linmasa — oddiy "1.8 кг".
-String formatQtyWithPacks(num apiQty, String? type, int sellStep) {
+// Nomdagi "1шт=900гр", "1пачка = 0.5 кг" — dona nomi va hajmi.
+final _packInName = RegExp(
+  r'1\s*([^\s\d=()]+)\s*=\s*(\d+(?:[.,]\d+)?)\s*(кг|kg|гр|gr|г|g|мл|ml|л|l)',
+  caseSensitive: false,
+);
+
+/// кг/л mahsulot uchun dona sonini qo'shib formatlaydi: "2шт = 1.8 кг".
+/// Dona hajmi (eng kichik birlikda): sellStep (to'liq birlikdan farqli
+/// bo'lsa), aks holda nomdagi "1шт=900гр". Dona nomi nomdan ("пачка"),
+/// topilmasa "шт". Hajm noma'lum yoki miqdor donaga bo'linmasa — "1.8 кг".
+String formatQtyWithPacks(num apiQty, String? type, int sellStep,
+    {String name = ''}) {
   final plain = formatQtyUnit(apiQty, type);
   final f = qtyUnitFactor(type);
-  if (f == 1 || sellStep <= 0 || sellStep == f) return plain;
-  final packs = apiQty / sellStep;
+  if (f == 1 || apiQty <= 0) return plain;
+
+  var label = 'шт';
+  num pack = 0;
+  final m = _packInName.firstMatch(name);
+  if (m != null) {
+    label = m.group(1)!;
+    final v = double.tryParse(m.group(2)!.replaceAll(',', '.')) ?? 0;
+    final u = m.group(3)!.toLowerCase();
+    final big = u == 'кг' || u == 'kg' || u == 'л' || u == 'l';
+    pack = (v * (big ? 1000 : 1)).round();
+  }
+  if (sellStep > 0 && sellStep != f) pack = sellStep;
+  if (pack <= 0) return plain;
+
+  final packs = apiQty / pack;
   if ((packs - packs.round()).abs() > 1e-6 || packs.round() <= 0) return plain;
-  return '${packs.round()}шт = $plain';
+  return '${packs.round()}$label = $plain';
 }

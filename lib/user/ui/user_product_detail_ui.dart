@@ -157,7 +157,9 @@ class UserProductDetailUi extends StatelessWidget {
                               EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                         ),
                         Text(
-                          formatQty(quantity, product.unit),
+                          formatQtyWithPacks(
+                              quantity, product.unit, product.sellStep,
+                              name: product.name),
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 20,

@@ -210,7 +210,9 @@ class CartPage extends StatelessWidget {
                       children: [
                         if (quantity > 0)
                           Text(
-                            formatQty(quantity, product.unit),
+                            formatQtyWithPacks(
+                                quantity, product.unit, product.sellStep,
+                                name: product.name),
                             style: const TextStyle(fontSize: 16),
                           ),
                         IconButton(
@@ -219,7 +221,6 @@ class CartPage extends StatelessWidget {
                           onPressed: () =>
                               provider.decrementProduct(product.id),
                         ),
-                        Text(product.unit),
                       ],
                     ),
                     onLongPress: () => _showQuantityDialog(context, product),

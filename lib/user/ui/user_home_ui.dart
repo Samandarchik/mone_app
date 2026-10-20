@@ -254,7 +254,8 @@ class _UserHomeUiState extends State<UserHomeUi> {
                                   name: product.name,
                                   quantity: quantity,
                                   quantityText: formatQtyWithPacks(quantity,
-                                      product.unit, product.sellStep),
+                                      product.unit, product.sellStep,
+                                      name: product.name),
                                   type: product.unit,
                                   buttonColor: _buttonColor,
                                   onTap: () =>

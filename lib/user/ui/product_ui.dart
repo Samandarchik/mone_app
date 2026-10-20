@@ -163,7 +163,8 @@ class ProductsScreen extends StatelessWidget {
                                               child: Text(
                                                 formatQtyWithPacks(quantity,
                                                     product.unit,
-                                                    product.sellStep),
+                                                    product.sellStep,
+                                                    name: product.name),
                                                 style: TextStyle(
                                                   color: Colors.white,
                                                   fontSize: 14,
