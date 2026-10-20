@@ -52,3 +52,15 @@ String formatQty(num apiQty, String? type) {
 /// "1.5 кг" ko'rinishida formatlaydi.
 String formatQtyUnit(num apiQty, String? type) =>
     '${formatQty(apiQty, type)} ${type ?? ''}'.trim();
+
+/// Seller qadami dona/pachka bo'lgan кг/л mahsulot uchun "2шт = 1.8 кг"
+/// (sellStep = 900 гр, apiQty = 1800). Qadam belgilanmagan, to'liq birlikka
+/// teng yoki miqdor qadamga bo'linmasa — oddiy "1.8 кг".
+String formatQtyWithPacks(num apiQty, String? type, int sellStep) {
+  final plain = formatQtyUnit(apiQty, type);
+  final f = qtyUnitFactor(type);
+  if (f == 1 || sellStep <= 0 || sellStep == f) return plain;
+  final packs = apiQty / sellStep;
+  if ((packs - packs.round()).abs() > 1e-6 || packs.round() <= 0) return plain;
+  return '${packs.round()}шт = $plain';
+}

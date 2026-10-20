@@ -249,8 +249,8 @@ class _UserHomeUiState extends State<UserHomeUi> {
                                       "${AppUrls.baseUrl}${product.imageUrl}",
                                   name: product.name,
                                   quantity: quantity,
-                                  quantityText:
-                                      formatQty(quantity, product.unit),
+                                  quantityText: formatQtyWithPacks(quantity,
+                                      product.unit, product.sellStep),
                                   type: product.unit,
                                   buttonColor: _buttonColor,
                                   onTap: () =>
@@ -455,14 +455,22 @@ class _ProductCard extends StatelessWidget {
                               ),
                             ],
                           ),
+                          // "2шт = 1.8 кг" uzun bo'lishi mumkin — ±
+                          // ikonkalar ustiga chiqmasligi uchun kichrayadi.
                           IgnorePointer(
-                            child: Center(
-                              child: Text(
-                                type != null ? '$quantityText $type' : quantityText,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 38),
+                              child: Center(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    quantityText,
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),

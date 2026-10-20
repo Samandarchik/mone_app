@@ -153,15 +153,25 @@ class ProductsScreen extends StatelessWidget {
                                           ),
                                         ],
                                       ),
+                                      // "2шт = 1.8 кг" — tor katakda
+                                      // ikonkalar ustiga chiqmasin.
                                       IgnorePointer(
-                                        child: Center(
-                                          child: Text(
-                                            formatQty(
-                                                quantity, product.unit),
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.bold,
+                                        child: Padding(
+                                          padding: EdgeInsets.symmetric(
+                                              horizontal: 32),
+                                          child: Center(
+                                            child: FittedBox(
+                                              fit: BoxFit.scaleDown,
+                                              child: Text(
+                                                formatQtyWithPacks(quantity,
+                                                    product.unit,
+                                                    product.sellStep),
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),
