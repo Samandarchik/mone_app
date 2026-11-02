@@ -9,9 +9,9 @@ import 'package:uz_ai_dev/core/catalog/product.dart';
 String productKindHint(ProductKind kind) {
   switch (kind) {
     case ProductKind.raw:
-      return 'Un, shakar, tuxum, qadoq... — sotib olinadi, ishlab chiqarilmaydi';
+      return 'Un, shakar yoki tayyor ichimlik — tashqaridan olinadi';
     case ProductKind.pf:
-      return 'Biskvit, krem... — ishlab chiqariladi va retseptlarda sarflanadi; '
+      return 'Biskvit, krem — boshqa retseptlarda ishlatiladi; '
           'kataloglarda ko\'rinmaydi';
     case ProductKind.product:
       return 'Tort, pirojnoe... — retsept bo\'yicha ishlab chiqariladi va sotiladi';
@@ -34,7 +34,7 @@ class ProductKindRadioGroup extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Turi',
+          'Mahsulot turi',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         RadioGroup<ProductKind>(

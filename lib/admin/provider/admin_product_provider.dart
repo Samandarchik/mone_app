@@ -93,47 +93,34 @@ class ProductProviderAdmin extends ChangeNotifier with ClearableProvider {
     notifyListeners();
   }
 
-  // Create new product
-  Future<bool> createProduct(Product product) async {
+  // Bitta saqlash oqimi; yangi mahsulot ID'si retseptni darhol ochish uchun kerak.
+  Future<Product?> saveProduct(Product product) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final newProduct = await _service.createProduct(product);
+      final newProduct = product.id == 0
+          ? await _service.createProduct(product)
+          : await _service.updateProduct(product);
       _repo.upsertLocal(newProduct);
       _applyFilter();
       _isLoading = false;
       notifyListeners();
-      return true;
+      return newProduct;
     } catch (e) {
       _error = e.toString();
       _isLoading = false;
       notifyListeners();
-      return false;
+      return null;
     }
   }
 
-  // Update existing product
-  Future<bool> updateProduct(Product product) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
+  Future<bool> createProduct(Product product) async =>
+      await saveProduct(product) != null;
 
-    try {
-      final updatedProduct = await _service.updateProduct(product);
-      _repo.upsertLocal(updatedProduct);
-      _applyFilter();
-      _isLoading = false;
-      notifyListeners();
-      return true;
-    } catch (e) {
-      _error = e.toString();
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    }
-  }
+  Future<bool> updateProduct(Product product) async =>
+      await saveProduct(product) != null;
 
   // Bitta mahsulot (id bo'yicha). Topilmasa null.
   Product? productById(int id) => _repo.byId(id);
@@ -195,7 +182,8 @@ class ProductProviderAdmin extends ChangeNotifier with ClearableProvider {
   // Reorder products within category
   // Eslatma: onReorderItem callback'i newIndex'ni allaqachon to'g'irlab beradi,
   // shuning uchun bu yerda qo'lda kompensatsiya kerak emas.
-  Future<bool> reorderProducts(int categoryId, int oldIndex, int newIndex) async {
+  Future<bool> reorderProducts(
+      int categoryId, int oldIndex, int newIndex) async {
     final item = _filteredProducts.removeAt(oldIndex);
     _filteredProducts.insert(newIndex, item);
     notifyListeners();

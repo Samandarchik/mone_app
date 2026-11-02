@@ -27,10 +27,10 @@ import 'package:uz_ai_dev/core/utils/qty_units.dart';
 enum ProductKind {
   // Xomashyo / tovar: un, shakar, tuxum, qadoq, Coca-Cola. Sotib olinadi;
   // sotilishi ham mumkin (resale). Ishlab chiqarilmaydi.
-  raw('raw', 'Xomashyo'),
+  raw('raw', 'Xomashyo / tayyor tovar'),
   // Полуфабрикат: biskvit, krem, сироп. Ishlab chiqariladi va boshqa
   // retseptlarda sarflanadi. Kataloglarda ko'rinmaydi.
-  pf('pf', 'Полуфабрикат'),
+  pf('pf', 'Yarim tayyor mahsulot'),
   // Tayyor mahsulot: tort, pirojnoe. Retsepti bor, ishlab chiqariladi,
   // filiallarga sotiladi.
   product('product', 'Tayyor mahsulot');

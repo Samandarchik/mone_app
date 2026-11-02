@@ -3,26 +3,8 @@
 // 9 birlik ro'yxati + normalizeProductType (eski qiymatlarni to'g'rilash).
 import 'package:flutter/material.dart';
 
-/// Mahsulot birligi (type) uchun yagona kanonik ro'yxat — hammasi kichik harfda.
-const List<String> kProductTypeOptions = [
-  'шт',
-  'кг',
-  'гр',
-  'л',
-  'мл',
-  'пачка',
-  'порция',
-  'упаковка',
-  'м',
-];
-
-/// Eski/xato yozilgan qiymatlarni kanonik kichik-harf shaklga keltiradi
-/// (katta harf, ortiqcha probel, lotincha "p", "литр"→"л", "кл"→"кг").
-String normalizeProductType(String raw) {
-  final t = raw.trim().toLowerCase().replaceAll('p', 'р');
-  const map = {'литр': 'л', 'кл': 'кг'};
-  return map[t] ?? t;
-}
+import 'package:uz_ai_dev/core/catalog/product_unit.dart';
+export 'package:uz_ai_dev/core/catalog/product_unit.dart';
 
 /// Тип (birlik) tanlovi — radio buttonlar bilan.
 /// Ro'yxatda bo'lmagan eski qiymat kelsa, u ham variant sifatida ko'rsatiladi.
@@ -46,7 +28,7 @@ class ProductTypeRadioGroup extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Тип',
+          'O‘lchov birligi',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         RadioGroup<String>(
@@ -59,7 +41,7 @@ class ProductTypeRadioGroup extends StatelessWidget {
                 child: RadioListTile<String>(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  title: Text(t),
+                  title: Text(productUnitLabel(t)),
                   value: t,
                 ),
               );
