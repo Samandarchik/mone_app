@@ -7,7 +7,7 @@ REM   Avtomatik Windows release builder.
 REM   Ikki marta bosib ishga tushiring - qolganini o'zi qiladi.
 REM
 REM   ESLATMA (tekshirilgan ishlaydigan ketma-ketlik):
-REM     1) Loyiha ASCII papkaga (C:\uzbuild) ko'chiriladi, chunki
+REM     1) Loyiha ASCII papkaga (C:\samandar_app\auto_update\builds\uzbuild) ko'chiriladi, chunki
 REM        Cyrillic user-papka (Administrator) path da release build buziladi.
 REM     2) flutter pub get + flutter build windows --release.
 REM     3) Release bundle zip qilinib, shu papkaga qo'yiladi.
@@ -18,7 +18,7 @@ REM --- Manba papka (oxiridagi backslash olib tashlanadi, robocopy uchun) ---
 set "SRC=%~dp0"
 if "%SRC:~-1%"=="\" set "SRC=%SRC:~0,-1%"
 
-set "DEST=C:\uzbuild"
+set "DEST=C:\samandar_app\auto_update\builds\uzbuild"
 
 echo.
 echo ============================================================

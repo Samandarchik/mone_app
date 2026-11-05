@@ -1,0 +1,34 @@
+# Secrets / environment
+.env
+.env.*
+!.env.example
+
+# Go build artifacts
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.out
+*.test
+main
+pos_backend
+
+# Runtime-uploaded content
+/uploads/*
+!/uploads/.gitkeep
+/backups/
+/customer_web/
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Kompilyatsiya natijasi va lokal loglar (repo'ga kirmasin)
+konak-local-server
+/build/
+server_local.log
+*.log
