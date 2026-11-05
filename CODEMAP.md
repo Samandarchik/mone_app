@@ -89,8 +89,7 @@ hisoblama — o'sha helperlarni chaqir.
 | Ekran | Fayl | Nima uchun og'ir |
 |---|---|---|
 | Тех карта muharriri | `lib/admin/ui/tech_card_editor_page.dart` (~2200 qator) | Excel varag'iga 1:1 baza bloklari + расходник, jonli tannarx kataklari |
-| Mahsulot qo'shish | `lib/admin/ui/admin_add_product_ui.dart` | тип, mone/bozor, tozalash yo'qotishi, полуфабрикат, tex karta |
-| Mahsulot tahrirlash | `lib/admin/ui/admin_edit_product_ui.dart` | yuqoridagidek + rasm yuklash |
+| Mahsulot qo'shish / tahrirlash | `lib/admin/ui/product_form_page.dart` (`ProductFormPage`) | YAGONA forma: andoza (yangi) / tur (tahrir), 1-Asosiy, 2-Sotuv, 3-Xarid, Retsept, Qo'shimcha. Holat+tekshiruv — `lib/admin/model/product_form_draft.dart` (`ProductFormDraft`, `ProductTemplate`). `AddProductPage`/`EditProductPage` — shunga yupqa kirish nuqtalari. Birliklar — `lib/core/catalog/product_unit.dart`. Reja: `docs/PRODUCT_CATALOG_REDESIGN.md` |
 | Foyda nazorati | `lib/admin/ui/profit_control_ui.dart` | tannarx vs sotuv narxi, marja (`tech_card_cost.dart` bilan) |
 | Foyda analitikasi | `lib/admin/ui/profit_analytics_ui.dart` (~1200 qator) | tortlar bo'yicha tushum/tannarx/foyda grafiklari (`GET /api/analytics/profit`) |
 | Shef buyurtma | `lib/shef/ui/shef_create_order_ui.dart`, `shef_order_detail_ui.dart` | полуфабрикат limiti (`pf-availability`), bosqich qabul/rad. Ro'yxat kategoriya sarlavhalari bilan YASSI (flat) `ListView.builder` — guruhlash keshda (`_rebuildGroups`), har build'da qayta sortlanmaydi |

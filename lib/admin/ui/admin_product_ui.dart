@@ -16,7 +16,6 @@ import 'package:uz_ai_dev/core/constants/urls.dart';
 class AdminProductUi extends StatefulWidget {
   final int categoryId;
   final String categoryName;
-  
 
   const AdminProductUi({
     super.key,
@@ -249,7 +248,9 @@ class _AdminProductUiState extends State<AdminProductUi> {
               await Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => const AddProductPage(),
+                  builder: (context) => AddProductPage(
+                    initialCategoryId: widget.categoryId,
+                  ),
                 ),
               );
             },
@@ -350,14 +351,6 @@ class _AdminProductUiState extends State<AdminProductUi> {
     );
   }
 
-  // Mahsulot ichida tarkib (tex karta) bormi — «i» ikonani shartli ko'rsatish uchun.
-  bool _hasTechCard(Product product) {
-    final tc = product.techCard;
-    if (tc == null) return false;
-    return tc.bases.any((b) => b.ingredients.isNotEmpty) ||
-        tc.consumables.isNotEmpty;
-  }
-
   // Tahrirlash/qo'shish/tex-karta saqlangach provider o'zini lokal yangilaydi
   // (updateProduct/createProduct + notifyListeners). Shuning uchun bu yerda
   // butun bazani QAYTA GET qilmaymiz — Consumer o'zi qayta chizadi.
@@ -379,8 +372,7 @@ class _AdminProductUiState extends State<AdminProductUi> {
     );
   }
 
-  Widget _buildProductListTile(
-      BuildContext context, Product product) {
+  Widget _buildProductListTile(BuildContext context, Product product) {
     // Bitta bosish → mahsulotni tahrirlash (avalgi sahifa).
     // Ikki marta bosish (double-tap) → tex karta (состав) sahifasi.
     // Bosib turish → o'chirish. «i» ikona ham tex kartani ochadi (tarkibi bor bo'lsa).
@@ -389,49 +381,54 @@ class _AdminProductUiState extends State<AdminProductUi> {
       onDoubleTap: () => _openTechCard(product),
       onLongPress: () => _showDeleteConfirmDialog(context, product),
       child: ListTile(
-        trailing: _hasTechCard(product)
-            ? IconButton(
-                icon: const Icon(Icons.info_outline),
-                color: Theme.of(context).colorScheme.primary,
-                tooltip: 'Тех карта',
-                onPressed: () => _openTechCard(product),
-              )
-            : null,
-        leading: ClipOval(
-        child: GestureDetector(
-          onTap: () {
-            if (product.imageUrl.isNotEmpty) {
-              showDialog(
-                context: context,
-                builder: (_) => Dialog(
-                  backgroundColor: Colors.transparent,
-                  child: AppNetworkImage(
-                    imageUrl: "${AppUrls.baseUrl}${product.imageUrl}",
-                    fit: BoxFit.contain,
-                    errorWidget: (context) =>
-                        const Icon(Icons.error, size: 40, color: Colors.white),
-                  ),
-                ),
-              );
-            }
-          },
-          child: product.imageUrl.isNotEmpty
-              ? AppNetworkImage(
-                  imageUrl: "${AppUrls.baseUrl}${product.imageUrl}",
-                  width: 55,
-                  height: 55,
-                  fit: BoxFit.cover,
-                  errorWidget: (context) =>
-                      const Icon(Icons.image_not_supported),
-                )
-              : Container(
-                  width: 55,
-                  height: 55,
-                  color: Colors.grey.shade300,
-                  child: const Icon(Icons.image_not_supported),
-                ),
+        trailing: IconButton(
+          icon: Icon(product.hasRecipe ? Icons.menu_book : Icons.post_add),
+          color: Theme.of(context).colorScheme.primary,
+          tooltip: product.hasRecipe ? 'Retseptni ochish' : 'Retsept qo‘shish',
+          onPressed: () => _openTechCard(product),
         ),
-      ),
+        subtitle: Text([
+          product.kind.label,
+          if (product.sellable) 'Sotuv',
+          if (product.purchasable) 'Xarid',
+          if (product.kind != ProductKind.raw && !product.hasRecipe)
+            'Retsept kiritilmagan',
+        ].join(' · ')),
+        leading: ClipOval(
+          child: GestureDetector(
+            onTap: () {
+              if (product.imageUrl.isNotEmpty) {
+                showDialog(
+                  context: context,
+                  builder: (_) => Dialog(
+                    backgroundColor: Colors.transparent,
+                    child: AppNetworkImage(
+                      imageUrl: "${AppUrls.baseUrl}${product.imageUrl}",
+                      fit: BoxFit.contain,
+                      errorWidget: (context) => const Icon(Icons.error,
+                          size: 40, color: Colors.white),
+                    ),
+                  ),
+                );
+              }
+            },
+            child: product.imageUrl.isNotEmpty
+                ? AppNetworkImage(
+                    imageUrl: "${AppUrls.baseUrl}${product.imageUrl}",
+                    width: 55,
+                    height: 55,
+                    fit: BoxFit.cover,
+                    errorWidget: (context) =>
+                        const Icon(Icons.image_not_supported),
+                  )
+                : Container(
+                    width: 55,
+                    height: 55,
+                    color: Colors.grey.shade300,
+                    child: const Icon(Icons.image_not_supported),
+                  ),
+          ),
+        ),
         title: Row(
           children: [
             Flexible(
@@ -447,8 +444,7 @@ class _AdminProductUiState extends State<AdminProductUi> {
             if (product.isPf)
               Container(
                 margin: const EdgeInsets.only(left: 6),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: Colors.purple.shade50,
                   border: Border.all(color: Colors.purple.shade300),
@@ -469,8 +465,7 @@ class _AdminProductUiState extends State<AdminProductUi> {
     );
   }
 
-  void _showDeleteConfirmDialog(
-      BuildContext context, Product product) {
+  void _showDeleteConfirmDialog(BuildContext context, Product product) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
