@@ -122,7 +122,8 @@ class ApiProductService {
         } else if (e.response!.statusCode == 409) {
           // Server qaysi retseptlarda ishlatilganini aytadi — o'sha matnni ko'rsatamiz.
           throw Exception(parseDioError(e,
-              fallback: 'Mahsulot o\'chirib bo\'lmaydi, u retseptlarda ishlatilmoqda'));
+              fallback:
+                  'Mahsulot o\'chirib bo\'lmaydi, u retseptlarda ishlatilmoqda'));
         }
         throw Exception('Mahsulot o\'chirishda Ошибка: ${parseDioError(e)}');
       } else {
@@ -131,6 +132,28 @@ class ApiProductService {
     } catch (e) {
       debugPrint('Ошибка deleteProduct: $e');
       throw Exception('Mahsulot o\'chirishda kutilmagan Ошибка: $e');
+    }
+  }
+
+  // PUT /api/products/{id}/sale-price — SOTUV narxi (butun so'm), retsept
+  // o'zgarmaydi. Qaytaradi: saqlangan narx.
+  Future<int> setSalePrice(int productId, int price) async {
+    try {
+      final response = await dio.put(
+        AppUrls.productSalePrice(productId),
+        data: {'sale_price': price},
+      );
+      final body = response.data;
+      if (body is Map && body['data'] is Map) {
+        final v = (body['data'] as Map)['sale_price'];
+        if (v is num) return v.toInt();
+      }
+      return price;
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw Exception('Sotuv narxi saqlanmadi: ${parseDioError(e)}');
+      }
+      throw Exception('Tarmoq xatosi: ${e.message}');
     }
   }
 
@@ -170,7 +193,8 @@ class ApiProductService {
       if (data is! List) return [];
       return data
           .whereType<Map>()
-          .map((e) => TechCardVersionMeta.fromJson(Map<String, dynamic>.from(e)))
+          .map(
+              (e) => TechCardVersionMeta.fromJson(Map<String, dynamic>.from(e)))
           .toList();
     } on DioException catch (e) {
       throw Exception('Tarix yuklanmadi: ${parseDioError(e)}');

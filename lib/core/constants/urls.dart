@@ -29,6 +29,10 @@ abstract final class AppUrls {
   // o'chirish. Faqat admin.
   static String productManualPrice(int id) =>
       '$baseUrl/api/products/$id/manual-price';
+  // Sotuv narxi (tech_card.sale_price) — retseptga tegmaydi: PUT
+  // {"sale_price": N} butun so'm. POS katalogi shu narxni ishlatadi. Admin.
+  static String productSalePrice(int id) =>
+      '$baseUrl/api/products/$id/sale-price';
 
   // Retsept (tex karta) tarixi: GET — versiyalar ro'yxati (meta, kartasiz),
   // POST rollback {"version_id": N} — kartani tanlangan nusxaga qaytaradi.
@@ -97,7 +101,8 @@ abstract final class AppUrls {
 
   // Kunlik ishlab chiqarish rejasi (MRP): ?date=YYYY-MM-DD&sklad_id=N —
   // filial buyurtmalaridan tort → П/Ф → xomashyo ehtiyoji va defitsit.
-  static String get productionRequirements => '$baseUrl/api/production/requirements';
+  static String get productionRequirements =>
+      '$baseUrl/api/production/requirements';
   // Ishlab chiqarish buyurtmalari. Ost-yo'llar:
   //   /{id}                                   — bitta buyurtma
   //   /{id}/items/{pi}/stages/{si}/accept     — shef masalliqni qabul qildi

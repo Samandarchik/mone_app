@@ -8,6 +8,7 @@ import 'package:uz_ai_dev/admin/provider/admin_categoriy_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_filial_provider.dart';
 import 'package:uz_ai_dev/admin/provider/admin_product_provider.dart';
 import 'package:uz_ai_dev/admin/provider/upload_image_provider.dart';
+import 'package:uz_ai_dev/admin/services/api_product_service.dart';
 import 'package:uz_ai_dev/admin/ui/tech_card_editor_page.dart';
 import 'package:uz_ai_dev/admin/ui/widgets/product_kind_radio.dart';
 import 'package:uz_ai_dev/admin/ui/widgets/product_type_radio.dart';
@@ -15,6 +16,7 @@ import 'package:uz_ai_dev/core/catalog/product.dart';
 import 'package:uz_ai_dev/core/constants/urls.dart';
 import 'package:uz_ai_dev/core/data/sklad_registry.dart';
 import 'package:uz_ai_dev/core/utils/product_sources.dart';
+import 'package:uz_ai_dev/core/utils/money_input.dart';
 import 'package:uz_ai_dev/core/utils/qty_units.dart';
 import 'package:uz_ai_dev/core/widgets/app_network_image.dart';
 
@@ -38,6 +40,12 @@ class ProductFormPage extends StatefulWidget {
 class _ProductFormPageState extends State<ProductFormPage> {
   late final ProductFormDraft _draft;
   late final TextEditingController _sostav;
+  // Sotuv narxi (POS shu narxda sotadi). Faqat foydalanuvchi o'zgartirsa
+  // yuboriladi: katalog retseptsiz yuklangan bo'lsa joriy narx noma'lum —
+  // bo'sh maydon narxni 0 ga tushirib yubormasin.
+  late final TextEditingController _salePrice;
+  bool _salePriceDirty = false;
+  int? get _knownSalePrice => widget.product?.techCard?.salePrice;
   final _scroll = ScrollController();
   ProductTemplate? _template;
   File? _image;
@@ -66,6 +74,9 @@ class _ProductFormPageState extends State<ProductFormPage> {
     }
     _draft.unit = normalizeProductType(_draft.unit);
     _sostav = TextEditingController(text: _draft.sostav);
+    final sp = _knownSalePrice;
+    _salePrice = TextEditingController(
+        text: sp != null && sp > 0 ? formatMoneyInput(sp) : '');
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<CategoryProviderAdmin>().getCategories();
@@ -76,6 +87,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
   @override
   void dispose() {
     _sostav.dispose();
+    _salePrice.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -263,6 +275,25 @@ class _ProductFormPageState extends State<ProductFormPage> {
         value: _draft.hasSales,
         onChanged: (value) => _change(() => _draft.sellable = value),
       ),
+      if (_draft.hasSales && _draft.kind != ProductKind.pf) ...[
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: TextField(
+            controller: _salePrice,
+            keyboardType: TextInputType.number,
+            inputFormatters: [ThousandsSeparatorInputFormatter()],
+            decoration: InputDecoration(
+              labelText: 'Sotuv narxi (so‘m)',
+              helperText: _knownSalePrice == null && !_isNew
+                  ? 'Bo‘sh qoldirilsa narx o‘zgarmaydi. Kassa (POS) shu narxda sotadi.'
+                  : 'Kassa (POS) shu narxda sotadi. Retseptga tegmaydi.',
+              helperMaxLines: 2,
+              border: const OutlineInputBorder(),
+            ),
+            onChanged: (_) => _salePriceDirty = true,
+          ),
+        ),
+      ],
       if (_draft.hasSales) ...[
         _field('sellStep', 'Buyurtma qadami (${productUnitLabel(_draft.unit)})',
             _draft.sellStep, (v) => _draft.sellStep = v,
@@ -495,6 +526,17 @@ class _ProductFormPageState extends State<ProductFormPage> {
         await _scroll.animateTo(0,
             duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
         return;
+      }
+      // Sotuv narxi — alohida endpoint (retsept o'zgarmaydi). Faqat
+      // foydalanuvchi maydonga tekkan bo'lsa va matn bo'sh bo'lmasa.
+      if (_salePriceDirty &&
+          _salePrice.text.trim().isNotEmpty &&
+          saved.id > 0 &&
+          _draft.kind != ProductKind.pf) {
+        await ApiProductService()
+            .setSalePrice(saved.id, parseMoney(_salePrice.text));
+        if (!mounted) return;
+        _salePriceDirty = false;
       }
       // PopScope saqlash vaqtida qaytishni to'sadi; muvaffaqiyatda ochamiz.
       setState(() => _saving = false);
