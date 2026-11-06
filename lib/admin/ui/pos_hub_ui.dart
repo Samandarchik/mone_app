@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:uz_ai_dev/admin/ui/filial_limits_ui.dart';
 import 'package:uz_ai_dev/admin/ui/pos_menu_ui.dart';
+import 'package:uz_ai_dev/admin/ui/pos_mone_stations_ui.dart';
 import 'package:uz_ai_dev/admin/ui/pos_orders_ui.dart';
 import 'package:uz_ai_dev/admin/ui/pos_recons_ui.dart';
 import 'package:uz_ai_dev/admin/ui/pos_sales_ui.dart';
@@ -28,7 +29,7 @@ class PosHubUi extends StatelessWidget {
         backgroundColor: _kBgColor,
         elevation: 0,
         title: const Text(
-          'POS (Konak)',
+          'POS',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
       ),
@@ -39,6 +40,13 @@ class PosHubUi extends StatelessWidget {
         crossAxisSpacing: 12,
         childAspectRatio: 0.95,
         children: [
+          _hubCard(
+            context,
+            icon: Icons.settings_input_component,
+            title: 'POS kassalar',
+            subtitle: 'Filial, sklad va bar/oshxona bo\'limlari',
+            page: const PosMoneStationsUi(),
+          ),
           _hubCard(
             context,
             icon: Icons.point_of_sale,

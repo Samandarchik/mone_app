@@ -218,6 +218,14 @@ abstract final class AppUrls {
   // RK7 sotuv nuqtalari: GET — hammasi (mapping holati bilan);
   // POST {uot_guid, filial_id, sklad_id, active} — upsert.
   static String get rk7SalePlaces => '$baseUrl/api/rk7/sale-places';
+  // POS Mone — o'z kassalarimiz (mone_pos): GET — {stations:[...]};
+  // POST {station_id, name, filial_id, sklad_id, sklad_routes?} — filial/
+  // sklad bog'lash. sklad_routes: [{category_id|product_id, sklad_id}],
+  // yuborilmasa o'zgarmaydi, [] — tozalanadi. Faqat admin.
+  static String get posMoneStations => '$baseUrl/api/pos-mone/stations';
+  // POS Mone smenalari/cheklari: GET ?date=YYYY-MM-DD[&filial_id=].
+  static String get posMoneShifts => '$baseUrl/api/pos-mone/shifts';
+  static String get posMoneChecks => '$baseUrl/api/pos-mone/checks';
   // SH5 (StoreHouse) qoldiq ko'rinishi (faqat admin, PLAN_OSTATKA bosqich 0):
   // GET — omborlar ro'yxati {sklads:[{id, sh5_rid, name, taken_at,
   // goods_count}]}; manba vaqtincha StoreHouse, keyin Mone stock egallaydi.
