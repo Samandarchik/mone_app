@@ -23,10 +23,15 @@ class PosMoneSkladRoute {
   final int productId;
   final int skladId;
 
+  /// true — mahsulotning O'ZI yechiladi (tayyor tort skladda turadi);
+  /// false — tex karta bo'lsa masalliqlari (restoran: fresh, salat).
+  final bool self;
+
   const PosMoneSkladRoute({
     this.categoryId = 0,
     this.productId = 0,
     required this.skladId,
+    this.self = false,
   });
 
   bool get isProduct => productId > 0;
@@ -36,12 +41,14 @@ class PosMoneSkladRoute {
         categoryId: _int(j['category_id']),
         productId: _int(j['product_id']),
         skladId: _int(j['sklad_id']),
+        self: j['deduct_mode'] == 'self',
       );
 
   Map<String, dynamic> toJson() => {
         if (productId > 0) 'product_id': productId,
         if (productId <= 0) 'category_id': categoryId,
         'sklad_id': skladId,
+        if (self) 'deduct_mode': 'self',
       };
 }
 

@@ -196,6 +196,9 @@ class _PosMoneStationEditPageState extends State<PosMoneStationEditPage> {
   final Map<int, int> _catRoutes = {};
   // mahsulot id → sklad id.
   final Map<int, int> _prodRoutes = {};
+  // «Tayyor holda yechilsin» belgilangan kategoriya/mahsulotlar.
+  final Set<int> _catSelf = {};
+  final Set<int> _prodSelf = {};
 
   List<PosMoneCatalogItem> _cats = const [];
   List<PosMoneCatalogItem> _prods = const [];
@@ -213,8 +216,10 @@ class _PosMoneStationEditPageState extends State<PosMoneStationEditPage> {
     for (final r in st.routes) {
       if (r.isProduct) {
         _prodRoutes[r.productId] = r.skladId;
+        if (r.self) _prodSelf.add(r.productId);
       } else if (r.categoryId > 0) {
         _catRoutes[r.categoryId] = r.skladId;
+        if (r.self) _catSelf.add(r.categoryId);
       }
     }
     if (_filialId > 0) _loadCatalog();
@@ -262,9 +267,17 @@ class _PosMoneStationEditPageState extends State<PosMoneStationEditPage> {
     }
     final routes = <PosMoneSkladRoute>[
       for (final e in _catRoutes.entries)
-        if (e.value > 0) PosMoneSkladRoute(categoryId: e.key, skladId: e.value),
+        if (e.value > 0)
+          PosMoneSkladRoute(
+              categoryId: e.key,
+              skladId: e.value,
+              self: _catSelf.contains(e.key)),
       for (final e in _prodRoutes.entries)
-        if (e.value > 0) PosMoneSkladRoute(productId: e.key, skladId: e.value),
+        if (e.value > 0)
+          PosMoneSkladRoute(
+              productId: e.key,
+              skladId: e.value,
+              self: _prodSelf.contains(e.key)),
     ];
     if (_skladId <= 0 && routes.isEmpty) {
       rk7Snack(
@@ -403,18 +416,26 @@ class _PosMoneStationEditPageState extends State<PosMoneStationEditPage> {
             for (final c in _cats)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: _skladDropdown(
-                  label: c.name,
-                  value: _catRoutes[c.id] ?? 0,
-                  allowNone: true,
-                  noneText: 'asosiy sklad',
-                  onChanged: (v) => setState(() {
-                    if (v > 0) {
-                      _catRoutes[c.id] = v;
-                    } else {
-                      _catRoutes.remove(c.id);
-                    }
-                  }),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _skladDropdown(
+                      label: c.name,
+                      value: _catRoutes[c.id] ?? 0,
+                      allowNone: true,
+                      noneText: 'asosiy sklad',
+                      onChanged: (v) => setState(() {
+                        if (v > 0) {
+                          _catRoutes[c.id] = v;
+                        } else {
+                          _catRoutes.remove(c.id);
+                          _catSelf.remove(c.id);
+                        }
+                      }),
+                    ),
+                    if ((_catRoutes[c.id] ?? 0) > 0)
+                      _selfToggle(_catSelf, c.id),
+                  ],
                 ),
               ),
           const SizedBox(height: 14),
@@ -440,27 +461,49 @@ class _PosMoneStationEditPageState extends State<PosMoneStationEditPage> {
           for (final e in _prodRoutes.entries.toList())
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _skladDropdown(
-                      label: _prodName(e.key),
-                      value: e.value,
-                      allowNone: false,
-                      onChanged: (v) => setState(() => _prodRoutes[e.key] = v),
+              child: Column(children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _skladDropdown(
+                        label: _prodName(e.key),
+                        value: e.value,
+                        allowNone: false,
+                        onChanged: (v) =>
+                            setState(() => _prodRoutes[e.key] = v),
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    onPressed: () => setState(() => _prodRoutes.remove(e.key)),
-                    icon: Icon(Icons.close, color: Colors.red.shade400),
-                  ),
-                ],
-              ),
+                    IconButton(
+                      onPressed: () => setState(() {
+                        _prodRoutes.remove(e.key);
+                        _prodSelf.remove(e.key);
+                      }),
+                      icon: Icon(Icons.close, color: Colors.red.shade400),
+                    ),
+                  ],
+                ),
+                _selfToggle(_prodSelf, e.key),
+              ]),
             ),
         ],
       ),
     );
   }
+
+  // «Tayyor holda yechilsin» — mahsulotning o'zi skladdan (masalliqlari emas).
+  Widget _selfToggle(Set<int> set, int id) => CheckboxListTile(
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+        controlAffinity: ListTileControlAffinity.leading,
+        value: set.contains(id),
+        title: const Text('Tayyor holda yechilsin (masalliqlari emas)',
+            style: TextStyle(fontSize: 12.5)),
+        subtitle: const Text(
+            'Nonvoyxona: tayyor tort skladda turadi. Restoran (fresh, salat) uchun belgilamang.',
+            style: TextStyle(fontSize: 11)),
+        onChanged: (v) =>
+            setState(() => v == true ? set.add(id) : set.remove(id)),
+      );
 
   InputDecoration _dec(String label) => InputDecoration(
         labelText: label,
