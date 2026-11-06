@@ -69,3 +69,7 @@ IMAGE *.jpg
 .github_poll_state.json
 .telegram_bot.log
 .telegram_bot.log.old
+
+# Sirlar repoga tushmasin (2026-11-07)
+.env
+.env.bak*
