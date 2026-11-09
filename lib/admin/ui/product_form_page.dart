@@ -48,6 +48,8 @@ class _ProductFormPageState extends State<ProductFormPage> {
   // Qayerda tayyorlanadi (faqat Taom): 'center' | 'filial'.
   late String _madeAt = widget.product?.madeAt == 'center' ? 'center' : 'filial';
   bool _madeAtDirty = false;
+  late bool _autoSarf = widget.product?.autoSarf ?? false;
+  bool _autoSarfDirty = false;
   int? get _knownSalePrice => widget.product?.techCard?.salePrice;
   final _scroll = ScrollController();
   ProductTemplate? _template;
@@ -373,6 +375,18 @@ class _ProductFormPageState extends State<ProductFormPage> {
         value: _draft.hasPurchases,
         onChanged: (value) => _change(() => _draft.purchasable = value),
       ),
+      if (_draft.hasPurchases && _draft.kind == ProductKind.raw)
+        SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Avtomatik sarf (omborda saqlanmaydi)'),
+          subtitle: const Text(
+              'Gul, ofis buyumlari kabi: qabul qilinishi bilan o‘zi «ishlatildi» bo‘lib chiqim qilinadi. Kassada sotilmaydi.'),
+          value: _autoSarf,
+          onChanged: (v) => setState(() {
+            _autoSarf = v;
+            _autoSarfDirty = true;
+          }),
+        ),
       if (_draft.hasPurchases) ...[
         _field('buyStep', 'Xarid qadami (${productUnitLabel(_draft.unit)})',
             _draft.buyStep, (v) => _draft.buyStep = v,
@@ -571,6 +585,11 @@ class _ProductFormPageState extends State<ProductFormPage> {
             .setSalePrice(saved.id, parseMoney(_salePrice.text));
         if (!mounted) return;
         _salePriceDirty = false;
+      }
+      if (_autoSarfDirty && saved.id > 0 && _draft.kind == ProductKind.raw) {
+        await ApiProductService().setAutoSarf(saved.id, _autoSarf);
+        if (!mounted) return;
+        _autoSarfDirty = false;
       }
       if (_madeAtDirty && saved.id > 0 && _draft.kind == ProductKind.product) {
         await ApiProductService().setMadeAt(saved.id, _madeAt);

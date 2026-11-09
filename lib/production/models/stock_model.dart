@@ -119,6 +119,16 @@ String stockReasonLabel(String reason) {
       return 'Korreksiya';
     case StockReason.tayyorMahsulot:
       return 'Tayyor mahsulot';
+    case 'avto_sarf':
+      return 'Avtomatik sarf';
+    case 'spisaniya':
+      return 'Spisaniya';
+    case 'pos_sotuv':
+      return 'Kassa sotuvi';
+    case 'pos_bekor':
+      return 'Kassa bekor';
+    case 'pos_qayta_import':
+      return 'Kassa qayta hisob';
     default:
       return reason;
   }

@@ -211,6 +211,7 @@ abstract final class AppUrls {
   // Mone KASSASI menyusi (filial kassada nima sotadi) — Konak pos-menu'dan alohida.
   static String get kassaMenu => '$baseUrl/api/kassa-menu';
   static String productMadeAt(int id) => '$baseUrl/api/products/$id/made-at';
+  static String productAutoSarf(int id) => '$baseUrl/api/products/$id/auto-sarf';
   // RK7 integratsiyasi (faqat admin). Import qilingan smenalar: GET ?days=30 —
   // {shifts:[...]}, eng yangisi birinchi, days clamp [1,92].
   static String get rk7Shifts => '$baseUrl/api/rk7/shifts';
