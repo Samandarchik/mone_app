@@ -33,10 +33,9 @@ Eng ko'p kerak bo'ladiganlar:
   `splash_screen.dart` da bu rollar kelsa token tozalanib, xato dialogi chiqadi.
 
 ## Konvensiyalar
-- **⛔ FLOAT UMUMAN ISHLATILMAYDI (egasi qarori, 2026-11-09).** Miqdor, pul va har qanday
-  hisob-kitob (yig'indi, tannarx, qoldiq, chegirma) — butun son (`int`) eng kichik birlikda
-  (гр/мл, milli-dona, so'm). `double` faqat ekranga chiqarishda (kg ko'rinishi) va foydalanuvchi
-  kiritgan matnni butun songa o'girishda; hisob `double` da QILINMAYDI va `double` ga o'girilmaydi.
+- **⚖️ NATIJA TO'G'RI BO'LISHI SHART (egasi qarori, 2026-11-09).** Pul — butun so'm. `double` hisobda
+  bo'lishi mumkin, lekin natija yillar davomida siljimasin (1–4 yilda jami farq ≤ 10 000 so'm):
+  yig'indini butun milli-birlikda qil, ko'p marta yaxlitlama.
 - **⚠️ FLOAT SERVERGA YUBORILMAYDI.** Backend saqlaydigan hamma son — eng kichik birlikdagi
   BUTUN son: miqdor (кг/л → гр/мл, `lib/core/utils/qty_units.dart` → `qtyFromUi` bilan
   ×1000 butun; ko'rsatishda `qtyToUi`/`formatQty` bilan kg'ga qaytariladi), **pul — butun
