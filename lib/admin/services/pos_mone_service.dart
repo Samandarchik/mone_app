@@ -44,7 +44,7 @@ class PosMoneService {
   /// Filial POS katalogi: (kategoriyalar, mahsulotlar) — kassa aynan shuni sotadi.
   Future<(List<PosMoneCatalogItem>, List<PosMoneCatalogItem>)> fetchCatalog(
       int filialId) async {
-    final data = await _get(AppUrls.posMenu, query: {'filial_id': filialId});
+    final data = await _get(AppUrls.kassaMenu, query: {'filial_id': filialId});
     final cats = <PosMoneCatalogItem>[];
     final prods = <PosMoneCatalogItem>[];
     if (data is Map) {

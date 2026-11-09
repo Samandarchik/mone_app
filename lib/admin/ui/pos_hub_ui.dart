@@ -1,6 +1,7 @@
 // admin/ui/pos_hub_ui.dart — Konak POS markazi ekrani (faqat admin):
 // PosHubUi — 5 ta POS ekraniga (buyurtmalar, sotuvlar, solishtirish, filial
 // limitlari, menyu) yo'naltiruvchi grid hub, o'z mantig'i yo'q.
+import 'package:uz_ai_dev/admin/ui/departments_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:uz_ai_dev/admin/ui/filial_limits_ui.dart';
 import 'package:uz_ai_dev/admin/ui/pos_menu_ui.dart';
@@ -46,6 +47,13 @@ class PosHubUi extends StatelessWidget {
             title: 'POS kassalar',
             subtitle: 'Filial, sklad va bar/oshxona bo\'limlari',
             page: const PosMoneStationsUi(),
+          ),
+          _hubCard(
+            context,
+            icon: Icons.account_tree_outlined,
+            title: 'Bo‘limlar',
+            subtitle: 'Bar, oshxona, vitrina: ombor va kategoriyalar',
+            page: const DepartmentsUi(),
           ),
           _hubCard(
             context,

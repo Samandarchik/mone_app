@@ -210,6 +210,9 @@ abstract final class AppUrls {
   static String get posMenu => '$baseUrl/api/pos-menu';
   // Mone KASSASI menyusi (filial kassada nima sotadi) — Konak pos-menu'dan alohida.
   static String get kassaMenu => '$baseUrl/api/kassa-menu';
+  // Filial bo'limlari (Bar, Oshxona, Vitrina…): ombor + kategoriyalar.
+  static String filialDepartments(int filialId) => '$baseUrl/api/filials/$filialId/departments';
+  static String department(int id) => '$baseUrl/api/departments/$id';
   static String productMadeAt(int id) => '$baseUrl/api/products/$id/made-at';
   static String productAutoSarf(int id) => '$baseUrl/api/products/$id/auto-sarf';
   // RK7 integratsiyasi (faqat admin). Import qilingan smenalar: GET ?days=30 —
