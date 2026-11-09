@@ -45,6 +45,9 @@ class _ProductFormPageState extends State<ProductFormPage> {
   // bo'sh maydon narxni 0 ga tushirib yubormasin.
   late final TextEditingController _salePrice;
   bool _salePriceDirty = false;
+  // Qayerda tayyorlanadi (faqat Taom): 'center' | 'filial'.
+  late String _madeAt = widget.product?.madeAt == 'center' ? 'center' : 'filial';
+  bool _madeAtDirty = false;
   int? get _knownSalePrice => widget.product?.techCard?.salePrice;
   final _scroll = ScrollController();
   ProductTemplate? _template;
@@ -275,6 +278,37 @@ class _ProductFormPageState extends State<ProductFormPage> {
         value: _draft.hasSales,
         onChanged: (value) => _change(() => _draft.sellable = value),
       ),
+      if (_draft.kind == ProductKind.product) ...[
+        const Text('Qayerda tayyorlanadi?',
+            style: TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(
+                value: 'center',
+                label: Text('Markazda (sex)'),
+                icon: Icon(Icons.factory_outlined)),
+            ButtonSegment(
+                value: 'filial',
+                label: Text('Filialda'),
+                icon: Icon(Icons.storefront_outlined)),
+          ],
+          selected: {_madeAt},
+          onSelectionChanged: (s) => setState(() {
+            _madeAt = s.first;
+            _madeAtDirty = true;
+          }),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 6, bottom: 12),
+          child: Text(
+            _madeAt == 'center'
+                ? 'Sexda tayyorlanib filialga tayyor holda keladi. Kassada mahsulotning o‘zi yechiladi; filialda qoldiq yo‘q bo‘lsa sotilmaydi.'
+                : 'Filialda tayyorlanadi. Kassada sotilganda retsept masalliqlari bo‘lim omboridan yechiladi.',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+          ),
+        ),
+      ],
       if (_draft.hasSales && _draft.kind != ProductKind.pf) ...[
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
@@ -537,6 +571,11 @@ class _ProductFormPageState extends State<ProductFormPage> {
             .setSalePrice(saved.id, parseMoney(_salePrice.text));
         if (!mounted) return;
         _salePriceDirty = false;
+      }
+      if (_madeAtDirty && saved.id > 0 && _draft.kind == ProductKind.product) {
+        await ApiProductService().setMadeAt(saved.id, _madeAt);
+        if (!mounted) return;
+        _madeAtDirty = false;
       }
       // PopScope saqlash vaqtida qaytishni to'sadi; muvaffaqiyatda ochamiz.
       setState(() => _saving = false);

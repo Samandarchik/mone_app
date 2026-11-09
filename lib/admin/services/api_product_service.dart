@@ -157,6 +157,27 @@ class ApiProductService {
     }
   }
 
+  // PUT /api/products/{id}/made-at — tayyor mahsulot qayerda tayyorlanadi:
+  // 'center' (markaziy sex) yoki 'filial'. Qaytaradi: saqlangan qiymat.
+  Future<String> setMadeAt(int productId, String madeAt) async {
+    try {
+      final response = await dio.put(
+        AppUrls.productMadeAt(productId),
+        data: {'made_at': madeAt},
+      );
+      final body = response.data;
+      if (body is Map && body['data'] is Map) {
+        return (body['data'] as Map)['made_at']?.toString() ?? madeAt;
+      }
+      return madeAt;
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw Exception('Tayyorlanish joyi saqlanmadi: ${parseDioError(e)}');
+      }
+      throw Exception('Tarmoq xatosi: ${e.message}');
+    }
+  }
+
   // PUT /api/products/{id}/manual-price — masalliqning QO'LDA kiritilgan
   // xarid narxi (BUTUN so'm, mahsulotning TO'LIQ birligi uchun; 0 —
   // o'chirish). Javob data: {product_id, manual_price, manual_price_at}.

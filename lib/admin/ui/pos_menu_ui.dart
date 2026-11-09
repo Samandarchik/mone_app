@@ -2,6 +2,8 @@
 // PosMenuUi (StatefulWidget) — PosMenuService bilan katalogni tartiblash,
 // qo'shish/chiqarish; har o'zgarishda avto-saqlash (PUT /api/pos-menu).
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:uz_ai_dev/admin/provider/admin_filial_provider.dart';
 import 'package:uz_ai_dev/admin/model/pos_menu_model.dart';
 import 'package:uz_ai_dev/admin/services/pos_menu_service.dart';
 import 'package:uz_ai_dev/admin/ui/widgets/sale_price_dialog.dart';
@@ -28,14 +30,20 @@ const Color _kAccent = Color(0xFFC5A97B);
 const Color _kAccentDark = Color(0xFF8A6F45);
 
 class PosMenuUi extends StatefulWidget {
-  const PosMenuUi({super.key});
+  const PosMenuUi({super.key, this.kassa = false});
+
+  // kassa=true — Mone kassasi menyusi: filial tanlanadi, faqat Taom va Tovar.
+  final bool kassa;
 
   @override
   State<PosMenuUi> createState() => _PosMenuUiState();
 }
 
 class _PosMenuUiState extends State<PosMenuUi> {
-  final PosMenuService _service = PosMenuService();
+  late final PosMenuService _service = PosMenuService(kassa: widget.kassa);
+  // Kassa rejimida tanlangan filial (null — server birinchisini oladi / kassa
+  // rejimida filial tanlanmaguncha yuklanmaydi).
+  int? _filialId;
 
   PosMenuResult? _result;
   bool _loading = true;
@@ -48,7 +56,24 @@ class _PosMenuUiState extends State<PosMenuUi> {
   @override
   void initState() {
     super.initState();
-    _load();
+    if (widget.kassa) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final fp = context.read<FilialProviderAdmin>();
+        if (fp.filials.isEmpty) await fp.getFilials();
+        if (!mounted) return;
+        if (fp.filials.isNotEmpty) {
+          _filialId = fp.filials.first.id;
+          _load();
+        } else {
+          setState(() {
+            _loading = false;
+            _error = 'Filiallar topilmadi';
+          });
+        }
+      });
+    } else {
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -57,7 +82,7 @@ class _PosMenuUiState extends State<PosMenuUi> {
       _error = null;
     });
     try {
-      final result = await _service.fetchPosMenu();
+      final result = await _service.fetchPosMenu(filialId: _filialId);
       if (!mounted) return;
       setState(() {
         _result = result;
@@ -164,6 +189,29 @@ class _PosMenuUiState extends State<PosMenuUi> {
 
   // ─────────────────────────────── Build ───────────────────────────────
 
+  // Kassa rejimi: filial tanlash (menyu har filialda alohida, narx umumiy).
+  Widget _filialPicker() {
+    final filials = context.watch<FilialProviderAdmin>().filials;
+    return PopupMenuButton<int>(
+      tooltip: 'Filial',
+      icon: const Icon(Icons.store_mall_directory_outlined),
+      onSelected: (id) {
+        if (id == _filialId) return;
+        _filialId = id;
+        _selectedCategoryId = null;
+        _load();
+      },
+      itemBuilder: (_) => [
+        for (final f in filials)
+          CheckedPopupMenuItem<int>(
+            value: f.id,
+            checked: f.id == _filialId,
+            child: Text(f.name, maxLines: 2, overflow: TextOverflow.ellipsis),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final filialName = _result?.filialName ?? '';
@@ -175,8 +223,8 @@ class _PosMenuUiState extends State<PosMenuUi> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'POS menyu',
+            Text(
+              widget.kassa ? 'Kassa menyusi' : 'POS menyu',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             if (filialName.isNotEmpty)
@@ -187,6 +235,7 @@ class _PosMenuUiState extends State<PosMenuUi> {
           ],
         ),
         actions: [
+          if (widget.kassa) _filialPicker(),
           if (_saving)
             const Padding(
               padding: EdgeInsets.only(right: 12),

@@ -49,6 +49,13 @@ class PosHubUi extends StatelessWidget {
           ),
           _hubCard(
             context,
+            icon: Icons.restaurant_menu,
+            title: 'Kassa menyusi',
+            subtitle: 'Filial kassasida nima sotiladi',
+            page: const PosMenuUi(kassa: true),
+          ),
+          _hubCard(
+            context,
             icon: Icons.point_of_sale,
             title: 'POS buyurtmalari',
             subtitle: 'Bazadan yuborish va qabul holati',

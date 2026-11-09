@@ -208,6 +208,9 @@ abstract final class AppUrls {
   // default birinchi filial) — {filial_id, filial_name, categories, products}.
   // Faqat admin.
   static String get posMenu => '$baseUrl/api/pos-menu';
+  // Mone KASSASI menyusi (filial kassada nima sotadi) — Konak pos-menu'dan alohida.
+  static String get kassaMenu => '$baseUrl/api/kassa-menu';
+  static String productMadeAt(int id) => '$baseUrl/api/products/$id/made-at';
   // RK7 integratsiyasi (faqat admin). Import qilingan smenalar: GET ?days=30 —
   // {shifts:[...]}, eng yangisi birinchi, days clamp [1,92].
   static String get rk7Shifts => '$baseUrl/api/rk7/shifts';

@@ -81,6 +81,10 @@ class Product {
   // O'lchov birligi (JSON: type). Kanonik kichik harf: кг, шт, л ...
   final String unit;
   final ProductKind kind;
+  // Tayyor mahsulot QAYERDA tayyorlanadi: 'center' — markaziy sexda (filialga
+  // tayyor keladi, kassada o'zi yechiladi); '' — filialda. Yozish alohida
+  // endpoint orqali (ApiProductService.setMadeAt).
+  final String madeAt;
   // Kanallar (turdan ALOHIDA): sotiladimi / sotib olinadimi.
   final bool sellable;
   final bool purchasable;
@@ -127,6 +131,7 @@ class Product {
     this.categoryName = '',
     this.unit = '',
     this.kind = ProductKind.raw,
+    this.madeAt = '',
     this.sellable = false,
     this.purchasable = false,
     this.filials = const [],
@@ -221,6 +226,7 @@ class Product {
       categoryName: json['category_name']?.toString() ?? '',
       unit: unit,
       kind: kind,
+      madeAt: json['made_at']?.toString() ?? '',
       sellable: json['mone_app'] == true,
       purchasable: json['bozor'] == true,
       filials: _asIntList(json['filials']),
@@ -312,6 +318,7 @@ class Product {
       categoryName: categoryName ?? this.categoryName,
       unit: unit ?? this.unit,
       kind: kind ?? this.kind,
+      madeAt: madeAt,
       sellable: sellable ?? this.sellable,
       purchasable: purchasable ?? this.purchasable,
       filials: filials ?? this.filials,

@@ -10,14 +10,19 @@ import 'package:uz_ai_dev/core/network/error_handler.dart';
 // POS (Konak) menyu servisi (faqat admin, token global Dio interceptor
 // orqali qo'shiladi). Javob envelope: {success, message, data}.
 class PosMenuService {
+  PosMenuService({this.kassa = false});
+
+  // kassa=true → Mone kassasi menyusi (/api/kassa-menu), aks holda Konak POS menyusi.
+  final bool kassa;
   final Dio dio = sl<Dio>();
+  String get _url => kassa ? AppUrls.kassaMenu : AppUrls.posMenu;
 
   // POS ko'radigan katalog: kategoriyalar + mahsulotlar. filialId
   // berilmasa server birinchi filialni oladi.
   Future<PosMenuResult> fetchPosMenu({int? filialId}) async {
     try {
       final response = await dio.get(
-        AppUrls.posMenu,
+        _url,
         queryParameters: {
           if (filialId != null) 'filial_id': filialId,
         },
@@ -37,7 +42,7 @@ class PosMenuService {
   Future<PosMenuResult> savePosMenu(int? filialId, List<int> productIds) async {
     try {
       final response = await dio.put(
-        AppUrls.posMenu,
+        _url,
         queryParameters: {
           if (filialId != null) 'filial_id': filialId,
         },
