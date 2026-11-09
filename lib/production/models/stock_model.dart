@@ -121,6 +121,10 @@ String stockReasonLabel(String reason) {
       return 'Tayyor mahsulot';
     case 'avto_sarf':
       return 'Avtomatik sarf';
+    case 'kochirish_chiqim':
+      return 'Ko‘chirish (chiqim)';
+    case 'kochirish_kirim':
+      return 'Ko‘chirish (kirim)';
     case 'spisaniya':
       return 'Spisaniya';
     case 'pos_sotuv':
@@ -158,7 +162,11 @@ class StockMove {
     this.userId = 0,
     this.comment = '',
     this.created = '',
+    this.cost = 0,
   });
+
+  // FIFO tannarxi (butun so'm): kirimda kirgan, chiqimda olingan partiyalar.
+  final int cost;
 
   factory StockMove.fromJson(Map<String, dynamic> json) {
     return StockMove(
@@ -172,6 +180,7 @@ class StockMove {
       userId: _asInt(json['user_id']),
       comment: json['comment']?.toString() ?? '',
       created: json['created']?.toString() ?? '',
+      cost: _asInt(json['cost']),
     );
   }
 

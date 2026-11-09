@@ -11,6 +11,8 @@ import 'package:uz_ai_dev/ombor/ui/ombor_low_stock_ui.dart';
 import 'package:uz_ai_dev/ombor/ui/ombor_orders_ui.dart';
 import 'package:uz_ai_dev/ombor/ui/ombor_production_ui.dart';
 import 'package:uz_ai_dev/ombor/ui/ombor_stock_ui.dart';
+import 'package:uz_ai_dev/ombor/ui/ombor_transfer_ui.dart';
+import 'package:uz_ai_dev/core/data/sklad_registry.dart';
 import 'package:uz_ai_dev/production/models/stock_model.dart';
 import 'package:uz_ai_dev/production/provider/stock_provider.dart';
 
@@ -75,11 +77,45 @@ class _OmborHomeUiState extends State<OmborHomeUi>
       appBar: AppBar(
         backgroundColor: _bgColor,
         elevation: 0,
-        title: const Text(
-          'Ombor',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        title: Consumer<OmborProvider>(
+          builder: (context, p, _) {
+            // Bir nechta skladli omborchi: buyurtma qaysi skladga — tanlanadi.
+            if (p.skladIds.length < 2) {
+              return const Text('Ombor',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold));
+            }
+            return PopupMenuButton<int>(
+              tooltip: 'Sklad',
+              onSelected: p.selectSklad,
+              itemBuilder: (_) => [
+                for (final id in p.skladIds)
+                  CheckedPopupMenuItem<int>(
+                      value: id,
+                      checked: id == p.primarySkladId,
+                      child: Text(SkladRegistry.nameOf(id))),
+              ],
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Flexible(
+                  child: Text(SkladRegistry.nameOf(p.primarySkladId ?? 0),
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+                const Icon(Icons.arrow_drop_down),
+              ]),
+            );
+          },
         ),
         actions: [
+          // Ichki ko'chirish (markaz → filial bo'limi), FIFO tannarxi bilan.
+          IconButton(
+            onPressed: () {
+              final sk = context.read<OmborProvider>().skladIds;
+              if (sk.isEmpty) return;
+              context.push(OmborTransferUi(fromSklads: sk));
+            },
+            tooltip: 'Ichki ko‘chirish',
+            icon: const Icon(Icons.local_shipping_outlined),
+          ),
           // Ombor 2.0 (mone_core) hujjatlari — perms bo'yicha.
           const CoreEntryMenu(),
           // Ishlab chiqarish buyurtmalari (shef → ombor masalliq berish).

@@ -42,8 +42,20 @@ class OmborProvider extends ChangeNotifier with ClearableProvider {
   List<int> skladIds = [];
   bool _skladsLoaded = false;
 
-  // Birinchi (asosiy) sklad — kartochkada qoldiq shu sklad bo'yicha ko'rinadi.
-  int? get primarySkladId => skladIds.isEmpty ? null : skladIds.first;
+  // Tanlangan sklad (bir nechta skladli omborchi uchun) — buyurtma shu
+  // skladga yuboriladi va qoldiq shu bo'yicha ko'rinadi. null — birinchisi.
+  int? selectedSkladId;
+
+  // Joriy (tanlangan, bo'lmasa birinchi) sklad — kartochkada qoldiq shu bo'yicha.
+  int? get primarySkladId => (selectedSkladId != null && skladIds.contains(selectedSkladId))
+      ? selectedSkladId
+      : (skladIds.isEmpty ? null : skladIds.first);
+
+  void selectSklad(int id) {
+    if (!skladIds.contains(id) || id == selectedSkladId) return;
+    selectedSkladId = id;
+    notifyListeners();
+  }
 
   Future<void> ensureSklads() async {
     if (_skladsLoaded) return;
@@ -411,7 +423,8 @@ class OmborProvider extends ChangeNotifier with ClearableProvider {
           'source': e.key.source,
         };
       }).toList();
-      final message = await _service.submitOrder(items);
+      final message = await _service.submitOrder(items,
+          skladId: skladIds.length > 1 ? primarySkladId : null);
       _cart.clear();
       return message;
     } finally {
@@ -559,6 +572,7 @@ class OmborProvider extends ChangeNotifier with ClearableProvider {
     isLoading = false;
     errorMessage = null;
     skladIds = [];
+    selectedSkladId = null;
     _skladsLoaded = false;
     _cart.clear();
     isSubmitting = false;

@@ -1,6 +1,7 @@
 // production/ui/widgets/stock_widgets.dart — sklad qoldig'i (stock) uchun umumiy
 // vidjetlar: StockSkladView (qidiruv+qoldiq+korreksiya), showStockMovesSheet
 // (harakatlar tarixi), showStockAdjustDialog; StockProvider ustida.
+import 'package:uz_ai_dev/core/utils/money_input.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -661,7 +662,8 @@ class _MoveRow extends StatelessWidget {
                     ),
                   ),
                 Text(
-                  '${_date(move.created)} • ${stockReasonLabel(move.reason)}',
+                  '${_date(move.created)} • ${stockReasonLabel(move.reason)}'
+                  '${move.cost > 0 ? ' • ${formatMoneyInput(move.cost)} so‘m' : ''}',
                   style:
                       TextStyle(fontSize: 12, color: Colors.grey.shade600),
                 ),

@@ -18,11 +18,14 @@ class OmborService {
   // source HAR qatorda; bitta product_id turli manbalar bilan bir necha
   // marta kelishi mumkin (backend har manbaga alohida buyurtma yaratadi).
   // Javob: {"success": true, "message": "...", "data": {order}}
-  Future<String> submitOrder(List<Map<String, dynamic>> items) async {
+  Future<String> submitOrder(List<Map<String, dynamic>> items,
+      {int? skladId}) async {
     try {
+      // skladId — bir nechta skladli omborchi qaysi sklad uchun buyurtma
+      // berayotgani (null — server birinchi skladni oladi).
       final response = await dio.post(
         AppUrls.orders,
-        data: {'items': items},
+        data: {'items': items, if (skladId != null) 'sklad_id': skladId},
       );
 
       final status = response.statusCode ?? 0;

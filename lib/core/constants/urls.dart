@@ -131,6 +131,8 @@ abstract final class AppUrls {
   static String get stockAdjust => '$baseUrl/api/stock/adjust';
   // GET ?sklad_id=N[&product_id=M][&limit=K] — harakatlar tarixi (desc).
   static String get stockMoves => '$baseUrl/api/stock/moves';
+  // Ichki ko'chirish (FIFO tannarx bilan): {from_sklad_id, to_sklad_id, items}.
+  static String get stockTransfer => '$baseUrl/api/stock/transfer';
   // POST {sklad_id, product_id, qty(+), reason} — SPISANIYA (brak/yo'qotish):
   // skladdan chiqim + audit ("spisaniya" — POS spisaniyasi bilan bitta hisobot).
   static String get stockWriteOff => '$baseUrl/api/stock/write-off';
