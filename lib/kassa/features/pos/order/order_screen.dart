@@ -2180,7 +2180,20 @@ class _OrderScreenState extends State<OrderScreen> {
   Widget _buildCategorySidebar(List<List<dynamic>> pages) {
     final count = _categories.length;
     int countAt(int i) => i >= 0 && i < pages.length ? pages[i].length : 0;
-    final visible = [for (var i = 0; i < count; i++) if (countAt(i) > 0) i];
+    // Mone guruhi (БАР / КУХНЯ / МАГАЗИН…) bo'yicha jamlanadi: guruh birinchi
+    // uchragan tartibda, ichida server tartibi. Guruh bo'lmasa — oddiy ro'yxat.
+    final byGroup = <String, List<int>>{};
+    for (var i = 0; i < count; i++) {
+      if (countAt(i) == 0) continue;
+      final g = (_categories[i]['group'] ?? '').toString().trim();
+      byGroup.putIfAbsent(g, () => []).add(i);
+    }
+    final showHeaders = byGroup.keys.any((g) => g.isNotEmpty);
+    final entries = <Object>[]; // String = sarlavha, int = kategoriya indeksi
+    byGroup.forEach((g, ids) {
+      if (showHeaders) entries.add(g.isEmpty ? 'BOSHQA' : g);
+      entries.addAll(ids);
+    });
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
@@ -2188,9 +2201,26 @@ class _OrderScreenState extends State<OrderScreen> {
       ),
       child: ListView.builder(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-        itemCount: visible.length,
+        itemCount: entries.length,
         itemBuilder: (ctx, k) {
-          final i = visible[k];
+          final e = entries[k];
+          if (e is String) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(6, k == 0 ? 4 : 14, 6, 6),
+              child: Text(
+                e.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.6,
+                  color: AppColors.textFaint,
+                ),
+              ),
+            );
+          }
+          final i = e as int;
           final sel = _selectedCatIndex == i && _search.isEmpty;
           return Padding(
             padding: const EdgeInsets.only(bottom: 4),
