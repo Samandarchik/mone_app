@@ -242,6 +242,14 @@ abstract final class AppUrls {
   // sklad bog'lash. sklad_routes: [{category_id|product_id, sklad_id}],
   // yuborilmasa o'zgarmaydi, [] — tozalanadi. Faqat admin.
   static String get posMoneStations => '$baseUrl/api/pos-mone/stations';
+  // Markaz → filial ta'minoti (backend filial_supply.go, admin):
+  // PUT {supply_sklad_id} — kategoriya filialga qaysi ombordan jo'natiladi.
+  static String categorySupplySklad(int id) => '$baseUrl/api/categories/$id/supply-sklad';
+  // GET ?filial_id=&days= — filial buyurtmalari qabul holati.
+  static String get filialIncoming => '$baseUrl/api/filial-incoming';
+  // GET ?filial_id=&days= — smena qoldig'i sanashlari (kamomad), /{id} — to'liq.
+  static String get stockCounts => '$baseUrl/api/pos-mone/stock-counts';
+  static String stockCount(int id) => '$baseUrl/api/pos-mone/stock-counts/$id';
   // POS Mone smenalari/cheklari: GET ?date=YYYY-MM-DD[&filial_id=].
   static String get posMoneShifts => '$baseUrl/api/pos-mone/shifts';
   static String get posMoneChecks => '$baseUrl/api/pos-mone/checks';

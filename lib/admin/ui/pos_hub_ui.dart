@@ -4,6 +4,7 @@
 import 'package:uz_ai_dev/admin/ui/departments_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:uz_ai_dev/admin/ui/filial_limits_ui.dart';
+import 'package:uz_ai_dev/admin/ui/filial_supply_ui.dart';
 import 'package:uz_ai_dev/admin/ui/kassa_staff_ui.dart';
 import 'package:uz_ai_dev/admin/ui/pos_menu_ui.dart';
 import 'package:uz_ai_dev/admin/ui/pos_mone_stations_ui.dart';
@@ -70,6 +71,13 @@ class PosHubUi extends StatelessWidget {
             title: 'Bo‘limlar',
             subtitle: 'Bar, oshxona, vitrina: ombor va kategoriyalar',
             page: const DepartmentsUi(),
+          ),
+          _hubCard(
+            context,
+            icon: Icons.local_shipping_outlined,
+            title: 'Filial ta‘minoti',
+            subtitle: 'Manba ombor, qabullar, smena kamomadi',
+            page: const FilialSupplyUi(),
           ),
           _hubCard(
             context,
