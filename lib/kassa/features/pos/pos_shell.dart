@@ -8,6 +8,7 @@ import '../../core/widgets/tutorial_widgets.dart';
 import 'tables/tables_screen.dart';
 import 'order/orders_panel.dart';
 import 'shift/shift_screen.dart';
+import 'supply/supply_screen.dart';
 import 'expenses/pos_expenses_screen.dart';
 import 'cooking/cooking_screen.dart';
 import '../admin/menu_management/products_screen.dart';
@@ -70,6 +71,15 @@ class _PosShellState extends State<PosShell> {
         Icons.schedule_rounded,
         'Smena',
         const ShiftScreen(),
+      ));
+    }
+    // Markazdan kelgan yuk + smena qoldig'i (Mone) — smena ochadigan kassir.
+    if (_can('shifts', 'open')) {
+      tabs.add(_TabItem(
+        Icons.local_shipping_rounded,
+        Icons.local_shipping_outlined,
+        'Yuk',
+        const SupplyScreen(),
       ));
     }
     if (_has('products') || _has('categories')) {

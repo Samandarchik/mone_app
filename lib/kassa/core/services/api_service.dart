@@ -1599,6 +1599,44 @@ class ApiService {
     return {'ok': false, 'error': 'HTTP ${res.statusCode}'};
   }
 
+  // ===== Markazdan kelgan yuk va smena qoldig'i (Mone filial_supply) =====
+  // Miqdorlar MILLI butun son: кг/л → гр/мл, шт → dona×1000.
+
+  /// Filialga kelgan, hali qabul qilinmagan buyurtmalar: {orders:[...]}.
+  Future<List<Map<String, dynamic>>> getMoneIncoming() async {
+    final res = await _dio.get('/api/mone/incoming');
+    final list = (res.data is Map ? res.data['orders'] : null) as List? ?? const [];
+    return [for (final e in list) if (e is Map) Map<String, dynamic>.from(e)];
+  }
+
+  /// Kelgan sonni tasdiqlash. items: [{product_id, received_milli}] —
+  /// ro'yxatda yo'q qator = to'liq keldi.
+  Future<Map<String, dynamic>> acceptMoneIncoming(
+      int orderId, List<Map<String, dynamic>> items) async {
+    final res = await _dio.post('/api/mone/incoming/accept',
+        data: {'order_id': orderId, 'items': items});
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  /// Bo'lim qoldig'i (tizim soni) + oldingi smena kassiri.
+  Future<Map<String, dynamic>> getMoneStockCountDraft({int? departmentId}) async {
+    final res = await _dio.get('/api/mone/stock-count/draft',
+        queryParameters: {if (departmentId != null) 'department_id': departmentId},
+        options: Options(receiveTimeout: const Duration(minutes: 2)));
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  /// Sanalgan son. items: [{product_id, counted_milli}] — yuborilmagan qator
+  /// tizimdagidek qoladi.
+  Future<Map<String, dynamic>> saveMoneStockCount(
+      int? departmentId, List<Map<String, dynamic>> items) async {
+    final res = await _dio.post('/api/mone/stock-count', data: {
+      if (departmentId != null) 'department_id': departmentId,
+      'items': items,
+    });
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
   Future<List<Map<String, dynamic>>> getMoneRejected() async {
     final res = await _dio.get('/api/mone/rejected');
     final list = res.data is List ? res.data as List : const [];
