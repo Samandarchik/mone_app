@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -74,12 +75,32 @@ class _UzqrPayDialogState extends State<_UzqrPayDialog> {
     super.dispose();
   }
 
+  /// Server javobi (JSON; ba'zi 401/403 javoblar matn sifatida keladi).
+  static Map? _errData(Object e) {
+    if (e is! DioException) return null;
+    var data = e.response?.data;
+    if (data is String) {
+      try {
+        data = jsonDecode(data);
+      } catch (_) {
+        return null;
+      }
+    }
+    return data is Map ? data : null;
+  }
+
   String _errText(Object e) {
     if (e is DioException) {
-      final data = e.response?.data;
-      if (data is Map && data['message'] is String) {
+      final data = _errData(e);
+      if (data != null && data['message'] is String) {
         return data['message'] as String;
       }
+      final code = e.response?.statusCode;
+      if (code == 403) return 'Bu xodimda to\'lov qabul qilish ruxsati yo\'q';
+      if (code == 404) {
+        return 'Kassa serveri eski versiyada — UzQR uchun serverni yangilang';
+      }
+      if (code != null) return 'Server xatosi ($code)';
       return 'Server bilan aloqa yo\'q';
     }
     return '$e';
@@ -111,8 +132,8 @@ class _UzqrPayDialogState extends State<_UzqrPayDialog> {
       _timer = Timer.periodic(_pollEvery, (_) => _poll());
     } catch (e) {
       if (!mounted) return;
-      final data = e is DioException ? e.response?.data : null;
-      if (data is Map && data['error'] == 'uzqr_paid_exists') {
+      final data = _errData(e);
+      if (data != null && data['error'] == 'uzqr_paid_exists') {
         setState(() {
           _paidInvoiceId = data['invoice_id']?.toString();
           _paidAmount = (data['amount'] as num?)?.toInt() ?? 0;
