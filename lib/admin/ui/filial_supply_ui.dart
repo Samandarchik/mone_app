@@ -49,7 +49,7 @@ class FilialSupplyUi extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Filial ta‘minoti', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
@@ -57,9 +57,10 @@ class FilialSupplyUi extends StatelessWidget {
             Tab(text: 'Manba ombor'),
             Tab(text: 'Qabullar'),
             Tab(text: 'Smena qoldig‘i'),
+            Tab(text: 'Kategoriya daraxti'),
           ]),
         ),
-        body: const TabBarView(children: [_SupplySkladTab(), _ReceiptsTab(), _CountsTab()]),
+        body: const TabBarView(children: [_SupplySkladTab(), _ReceiptsTab(), _CountsTab(), _CategoryTreeTab()]),
       ),
     );
   }
@@ -174,6 +175,189 @@ class _SupplySkladTabState extends State<_SupplySkladTab> {
                           if (v != null && v != _int(c['supply_sklad_id'])) _set(c, v);
                         },
                       ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ======================= KATEGORIYA DARAXTI =======================
+// Ota kategoriya (БАР → КОФЕ). Kassa yon panelida ildiz nomi guruh sarlavhasi
+// bo'ladi. Server sikl va yo'q otani rad etadi (400).
+
+class _CategoryTreeTab extends StatefulWidget {
+  const _CategoryTreeTab();
+
+  @override
+  State<_CategoryTreeTab> createState() => _CategoryTreeTabState();
+}
+
+class _CategoryTreeTabState extends State<_CategoryTreeTab> {
+  final Dio _dio = sl<Dio>();
+  List<Map<String, dynamic>> _cats = [];
+  bool _loading = true;
+  String? _error;
+  final Set<int> _saving = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final data = await _call(() => _dio.get(AppUrls.category));
+      final list = data is List ? data : const [];
+      if (!mounted) return;
+      setState(() {
+        _cats = [for (final c in list) if (c is Map) Map<String, dynamic>.from(c)];
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _loading = false;
+      });
+    }
+  }
+
+  /// Daraxt tartibi: ildizlar server tartibida, har birining ostida bolalari.
+  List<(Map<String, dynamic>, int)> _tree() {
+    final ids = {for (final c in _cats) _int(c['id'])};
+    final kids = <int, List<Map<String, dynamic>>>{};
+    for (final c in _cats) {
+      final p = _int(c['parent_id']);
+      kids.putIfAbsent(ids.contains(p) ? p : 0, () => []).add(c);
+    }
+    final out = <(Map<String, dynamic>, int)>[];
+    final seen = <int>{};
+    void walk(int parent, int depth) {
+      for (final c in kids[parent] ?? const <Map<String, dynamic>>[]) {
+        final id = _int(c['id']);
+        if (!seen.add(id)) continue;
+        out.add((c, depth));
+        walk(id, depth + 1);
+      }
+    }
+
+    walk(0, 0);
+    for (final c in _cats) {
+      if (!seen.contains(_int(c['id']))) out.add((c, 0)); // sikl himoyasi
+    }
+    return out;
+  }
+
+  Set<int> _descendants(int id) {
+    final out = <int>{id};
+    var grew = true;
+    while (grew) {
+      grew = false;
+      for (final c in _cats) {
+        if (out.contains(_int(c['parent_id'])) && out.add(_int(c['id']))) grew = true;
+      }
+    }
+    return out;
+  }
+
+  Future<void> _pickParent(Map<String, dynamic> c) async {
+    final id = _int(c['id']);
+    final banned = _descendants(id);
+    final options = [for (final x in _cats) if (!banned.contains(_int(x['id']))) x];
+    var q = '';
+    final picked = await showDialog<int>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) {
+          final shown = q.isEmpty
+              ? options
+              : options.where((x) => '${x['name']}'.toLowerCase().contains(q.toLowerCase())).toList();
+          return AlertDialog(
+            title: Text('«${c['name']}» — ota kategoriya'),
+            content: SizedBox(
+              width: 420,
+              height: 460,
+              child: Column(children: [
+                TextField(
+                  decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Qidirish'),
+                  onChanged: (v) => setD(() => q = v.trim()),
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  leading: const Icon(Icons.vertical_align_top),
+                  title: const Text('— Ildiz (otasiz)'),
+                  onTap: () => Navigator.pop(ctx, 0),
+                ),
+                Expanded(
+                  child: ListView(children: [
+                    for (final x in shown)
+                      ListTile(
+                        dense: true,
+                        title: Text('${x['name']}'),
+                        selected: _int(x['id']) == _int(c['parent_id']),
+                        onTap: () => Navigator.pop(ctx, _int(x['id'])),
+                      ),
+                  ]),
+                ),
+              ]),
+            ),
+            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Bekor'))],
+          );
+        },
+      ),
+    );
+    if (picked == null || picked == _int(c['parent_id'])) return;
+    setState(() => _saving.add(id));
+    try {
+      await _call(() => _dio.put('${AppUrls.category}/$id', data: {'parent_id': picked}));
+      if (!mounted) return;
+      setState(() => c['parent_id'] = picked);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+    } finally {
+      if (mounted) setState(() => _saving.remove(id));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_error != null) return _errorView(_error!, _load);
+    final rows = _tree();
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Text(
+              'Kategoriyani bosib ota kategoriyasini tanlang. Kassada eng yuqori ota (БАР, КУХНЯ, МАГАЗИН…) '
+              'yon panelda guruh sarlavhasi bo‘ladi.',
+              style: TextStyle(color: Colors.black54, fontSize: 13),
+            ),
+          ),
+          for (final (c, depth) in rows)
+            Card(
+              margin: EdgeInsets.only(bottom: 4, left: depth * 20.0),
+              child: ListTile(
+                dense: true,
+                leading: Icon(depth == 0 ? Icons.folder : Icons.subdirectory_arrow_right, size: 20),
+                title: Text('${c['name'] ?? ''}',
+                    style: TextStyle(fontWeight: depth == 0 ? FontWeight.w700 : FontWeight.w500)),
+                trailing: _saving.contains(_int(c['id']))
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.edit_outlined, size: 18),
+                onTap: () => _pickParent(c),
               ),
             ),
         ],
