@@ -8,6 +8,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/ui_kit.dart';
 import '../../../core/utils/business_day.dart';
 import '../../../core/utils/order_number.dart';
+import '../../../core/utils/payment_label.dart';
 import '../../../core/utils/search_fold.dart';
 import '../../../core/widgets/other_payment_comment_dialog.dart';
 import '../../admin/widgets/admin_page.dart';
@@ -254,16 +255,10 @@ class _OrdersPanelState extends State<OrdersPanel> {
   String _srcLabel(Map<String, dynamic> o) =>
       _isYandex(o) ? 'Yandex Eda' : _typeLabel(o['type'] as String? ?? '');
 
-  /// To'lov usullari — yopilgan chekda keyin almashtirish mumkin bo'lganlari.
-  static const _payMethods = [
-    ('cash', 'Naqd', Icons.payments_rounded),
-    ('card', 'Karta', Icons.credit_card_rounded),
-    ('payme', 'Payme', Icons.qr_code_rounded),
-    ('click', 'Click', Icons.qr_code_scanner_rounded),
-    ('nilufar', 'Nilyufar opa', Icons.person_rounded),
-    ('bobur', 'Bobur aka', Icons.person_rounded),
-    ('other', 'Boshqa', Icons.more_horiz_rounded),
-  ];
+  /// To'lov usullari — yopilgan chekda keyin almashtirish mumkin bo'lganlari
+  /// (asoschilar qilinadigan_ishlar'dan — qarang kPaymentMethods).
+  static List<(String, String, IconData)> get _payMethods =>
+      [for (final m in kPaymentMethods) (m.$1, m.$2, m.$3)];
 
   /// «2026-08-21T18:50:12+05:00» → «18:50».
   static String _hhmm(dynamic ts) {
@@ -299,28 +294,9 @@ class _OrdersPanelState extends State<OrdersPanel> {
     _ => AppColors.textMuted,
   };
 
-  static String _payLabel(String? m) {
-    switch (m) {
-      case 'cash':
-        return 'Naqd';
-      case 'card':
-        return 'Karta';
-      case 'payme':
-        return 'Payme';
-      case 'click':
-        return 'Click';
-      case 'nilufar':
-        return 'Nilyufar opa';
-      case 'bobur':
-        return 'Bobur aka';
-      case 'other':
-        return 'Boshqa';
-      case 'split':
-        return 'Aralash';
-      default:
-        return m ?? '';
-    }
-  }
+  static String _payLabel(String? m) =>
+      (m == null || m.isEmpty) ? '' : paymentLabel(m);
+
 
   /// Yopilgan chekni qaytarish mumkinmi: faqat smena OCHIQ bo'lsa va chek
   /// shu smenada ochilgan bo'lsa (server ham xuddi shuni tekshiradi —

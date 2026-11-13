@@ -4,6 +4,7 @@ import '../../../core/services/api_service.dart';
 import '../../../core/services/app_state.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/ui_kit.dart';
+import '../../../core/utils/payment_label.dart';
 import 'write_off_screen.dart';
 import '../../../core/widgets/tutorial_widgets.dart';
 
@@ -370,6 +371,7 @@ class _ShiftScreenState extends State<ShiftScreen> {
 
     final stats = _shift!['current_stats'] as Map<String, dynamic>? ?? {};
     final byPayment = stats['by_payment'] as Map<String, dynamic>? ?? {};
+    final payMethods = reportPaymentMethods(byPayment);
     final byType = stats['by_type'] as Map<String, dynamic>? ?? {};
     final dineIn = byType['dine_in'] as Map<String, dynamic>? ?? {};
     final takeaway = byType['takeaway'] as Map<String, dynamic>? ?? {};
@@ -483,20 +485,9 @@ class _ShiftScreenState extends State<ShiftScreen> {
           title: 'To\'lov usullari',
           icon: Icons.account_balance_wallet_rounded,
           children: [
-            _payRow(Icons.payments_rounded, 'Naqd',
-                byPayment['cash'], AppColors.success),
-            _payRow(Icons.credit_card_rounded, 'Karta',
-                byPayment['card'], AppColors.info),
-            _payRow(Icons.qr_code_2_rounded, 'Payme',
-                byPayment['payme'], const Color(0xFF00C9A7)),
-            _payRow(Icons.qr_code_2_rounded, 'Click',
-                byPayment['click'], const Color(0xFF1A65EB)),
-            _payRow(Icons.person_rounded, 'Nilyufar opa',
-                byPayment['nilufar'], const Color(0xFFD6336C)),
-            _payRow(Icons.person_rounded, 'Bobur aka',
-                byPayment['bobur'], const Color(0xFF7048E8)),
-            _payRow(Icons.more_horiz_rounded, 'Boshqa',
-                byPayment['other'], AppColors.textFaint, last: true),
+            for (final (i, m) in payMethods.indexed)
+              _payRow(m.$3, m.$2, byPayment[m.$1], m.$4,
+                  last: i == payMethods.length - 1),
           ],
         ),
         const SizedBox(height: 12),

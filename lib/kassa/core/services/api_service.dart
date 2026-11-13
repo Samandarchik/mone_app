@@ -1643,6 +1643,15 @@ class ApiService {
     return [for (final e in list) if (e is Map) Map<String, dynamic>.from(e)];
   }
 
+  // ===== Asoschilar — to'lov oynasidagi «ichki hisob» usullari =====
+  // Manba: qilinadigan_ishlar «Получатель расхода (владелец)», Mone orqali
+  // kassa serveriga sinxron (pos_backend db/owners.go).
+
+  Future<Map<String, dynamic>> getKassaOwners() async {
+    final res = await _dio.get('/api/kassa/owners');
+    return res.data is Map ? Map<String, dynamic>.from(res.data) : const {};
+  }
+
   // ===== Qoldiq nazorati rejimi: strict (qat'iy) / soft (test, minusga ruxsat) =====
 
   Future<String> getStockMode() async {

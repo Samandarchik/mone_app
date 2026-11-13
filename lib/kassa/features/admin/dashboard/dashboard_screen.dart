@@ -434,7 +434,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final byPayment =
         _finance!['income']?['by_payment_method'] as Map<String, dynamic>? ??
             {};
-    const methods = kPaymentMethods;
+    final methods = reportPaymentMethods(byPayment);
     return _SectionCard(
       title: 'To\'lov usullari',
       icon: Icons.account_balance_wallet_rounded,

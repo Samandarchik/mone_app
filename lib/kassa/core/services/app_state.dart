@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'api_service.dart';
 import 'wss_service.dart';
 import 'local_db.dart';
+import 'kassa_owners.dart';
 
 /// Global app state — WSS orqali real-time yangiendilanadi
 /// Menu/categories/tables — SQLite dan (version bilan sync)
@@ -324,6 +325,10 @@ class AppState extends ChangeNotifier {
       case 'menu:refresh':
         _scheduleMenuSync();
 
+      // ===== Asoschilar ro'yxati (qilinadigan_ishlar → Mone → kassa) =====
+      case 'owners:changed':
+        KassaOwners.instance.load();
+
       // ===== Zonalar/stollar (sync yoki admin o'zgartirgan) =====
       case 'zones:updated':
         _scheduleTablesSync();
@@ -348,6 +353,8 @@ class AppState extends ChangeNotifier {
 
   /// WSS init:ok dan keyin chaqiriladi
   Future<void> onInitOK(Map<String, dynamic> data) async {
+    // Asoschilar (to'lov usullari) — fon rejimida, init'ni kutdirmaydi.
+    KassaOwners.instance.load();
     // Versions from server
     final serverVersions = data['versions'] as Map<String, dynamic>? ?? {};
     final serverMenuV = serverVersions['menu'] as int? ?? 0;

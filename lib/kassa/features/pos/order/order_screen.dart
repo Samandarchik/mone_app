@@ -4126,13 +4126,14 @@ class _SplitPaymentDialog extends StatefulWidget {
 }
 
 class _SplitPaymentDialogState extends State<_SplitPaymentDialog> {
-  static const _methods = kPaymentMethods;
+  // Dialog ochilgan paytdagi ro'yxat (asoschilar qilinadigan_ishlar'dan).
+  final _methods = kPaymentMethods;
 
   // Backend qoidasi: 2..3 ta usul, har biri > 0, yig'indi == jami
   static const _minParts = 2;
   static const _maxParts = 3;
 
-  final Map<String, TextEditingController> _amounts = {
+  late final Map<String, TextEditingController> _amounts = {
     for (final m in _methods) m.$1: TextEditingController(),
   };
 
