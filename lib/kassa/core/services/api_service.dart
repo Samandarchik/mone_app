@@ -17,7 +17,7 @@ const String kServerUrl = 'https://moneapp.monebakeryuz.uz';
 
 /// Local server porti. Windows master'da ilova serverning o'zi bilan bitta
 /// mashinada turadi — shuning uchun manzil so'ralmaydi, `localhost` tekshiriladi.
-const int kLocalServerPort = 3000;
+const int kLocalServerPort = 8085;
 const String kLocalhostUrl = 'http://localhost:$kLocalServerPort';
 
 /// Restoran WiFi'sidagi Windows master manzili — planshet/boshqa terminallar
