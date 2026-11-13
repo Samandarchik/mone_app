@@ -1795,7 +1795,7 @@ class _OrderScreenState extends State<OrderScreen> {
           ? Row(
               children: [
                 SizedBox(
-                  width: (width * 0.14).clamp(150.0, 210.0),
+                  width: (width * 0.19).clamp(200.0, 280.0),
                   child: _buildCategorySidebar(_catPages),
                 ),
                 Expanded(child: _buildMenuArea(wide: true)),
@@ -2187,15 +2187,15 @@ class _OrderScreenState extends State<OrderScreen> {
         border: Border(right: BorderSide(color: AppColors.border)),
       ),
       child: ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
         itemCount: visible.length,
         itemBuilder: (ctx, k) {
           final i = visible[k];
           final sel = _selectedCatIndex == i && _search.isEmpty;
           return Padding(
-            padding: const EdgeInsets.only(bottom: 3),
+            padding: const EdgeInsets.only(bottom: 4),
             child: Material(
-              color: sel ? AppColors.primary : Colors.transparent,
+              color: sel ? AppColors.primary : AppColors.surfaceAlt,
               borderRadius: BorderRadius.circular(AppRadius.sm),
               child: InkWell(
                 borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -2207,7 +2207,7 @@ class _OrderScreenState extends State<OrderScreen> {
                   _selectCategory(i, count);
                 },
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
                   child: Row(
                     children: [
                       Expanded(
@@ -2216,8 +2216,8 @@ class _OrderScreenState extends State<OrderScreen> {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 13,
-                            height: 1.15,
+                            fontSize: 16,
+                            height: 1.2,
                             fontWeight: sel ? FontWeight.w800 : FontWeight.w600,
                             color: sel ? Colors.white : AppColors.text,
                           ),
@@ -2227,7 +2227,7 @@ class _OrderScreenState extends State<OrderScreen> {
                       Text(
                         '${countAt(i)}',
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: sel ? Colors.white70 : AppColors.textFaint,
                         ),
