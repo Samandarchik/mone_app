@@ -4,6 +4,7 @@
 import 'package:uz_ai_dev/admin/ui/departments_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:uz_ai_dev/admin/ui/filial_limits_ui.dart';
+import 'package:uz_ai_dev/admin/ui/kassa_staff_ui.dart';
 import 'package:uz_ai_dev/admin/ui/pos_menu_ui.dart';
 import 'package:uz_ai_dev/admin/ui/pos_mone_stations_ui.dart';
 import 'package:uz_ai_dev/admin/ui/pos_orders_ui.dart';
@@ -48,6 +49,13 @@ class PosHubUi extends StatelessWidget {
             title: 'Kassa',
             subtitle: 'Kassa, ofitsiant, stollar, smena (filial serveri)',
             onTap: () => openKassa(context),
+          ),
+          _hubCard(
+            context,
+            icon: Icons.badge_outlined,
+            title: 'Kassa xodimlari',
+            subtitle: 'HR dan: rol, filial, PIN',
+            page: const KassaStaffUi(),
           ),
           _hubCard(
             context,

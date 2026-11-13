@@ -215,6 +215,11 @@ abstract final class AppUrls {
   // Filial bo'limlari (Bar, Oshxona, Vitrina…): ombor + kategoriyalar.
   static String filialDepartments(int filialId) => '$baseUrl/api/filials/$filialId/departments';
   static String department(int id) => '$baseUrl/api/departments/$id';
+  // Kassa xodimlari (HR → rol + filial + PIN) — backend kassa_staff.go
+  static String get kassaStaff => '$baseUrl/api/kassa-staff';
+  static String kassaStaffOne(int id) => '$baseUrl/api/kassa-staff/$id';
+  static String kassaStaffResetPin(int id) => '$baseUrl/api/kassa-staff/$id/reset-pin';
+  static String get hrPersons => '$baseUrl/api/hr/persons';
   static String productMadeAt(int id) => '$baseUrl/api/products/$id/made-at';
   static String productAutoSarf(int id) => '$baseUrl/api/products/$id/auto-sarf';
   // RK7 integratsiyasi (faqat admin). Import qilingan smenalar: GET ?days=30 —
