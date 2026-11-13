@@ -438,6 +438,7 @@ class _CountTabState extends State<_CountTab> {
       }
     });
     final prev = (_draft?['prev'] as Map?)?['staff']?.toString() ?? '';
+    final opening = _draft?['opening'] == true;
     final go = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -445,7 +446,9 @@ class _CountTabState extends State<_CountTab> {
         content: SingleChildScrollView(
           child: Text(diffs.isEmpty
               ? 'Hamma qoldiq tizimdagidek. Saqlaysizmi?'
-              : '${diffs.join('\n')}\n\nKamomad ${prev.isEmpty ? 'oldingi smena' : '«$prev»'} hisobiga yoziladi.'),
+              : opening
+                  ? '${diffs.join('\n')}\n\nBirinchi sanash: bu sonlar boshlang‘ich qoldiq bo‘ladi, hech kimga kamomad yozilmaydi.'
+                  : '${diffs.join('\n')}\n\nKamomad ${prev.isEmpty ? 'oldingi smena' : '«$prev»'} hisobiga yoziladi.'),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Orqaga')),
@@ -512,12 +515,18 @@ class _CountTabState extends State<_CountTab> {
               ]),
             ),
           const SizedBox(height: 8),
-          Text(
-            prev['staff'] == null || '${prev['staff']}'.isEmpty
-                ? 'Oldingi smena topilmadi — kamomad egasi noma‘lum'
-                : 'Oldingi smena: ${prev['staff']} — kamomad shu kassirga yoziladi',
-            style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
-          ),
+          if (_draft?['opening'] == true)
+            const Text(
+              'Birinchi sanash — hamma mahsulotni sanab kiriting: bu boshlang‘ich qoldiq bo‘ladi, kamomad yozilmaydi.',
+              style: TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w600),
+            )
+          else
+            Text(
+              prev['staff'] == null || '${prev['staff']}'.isEmpty
+                  ? 'Oldingi smena topilmadi — kamomad egasi noma‘lum'
+                  : 'Oldingi smena: ${prev['staff']} — kamomad shu kassirga yoziladi',
+              style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+            ),
           if (warn != null && warn.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 4),
