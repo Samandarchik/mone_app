@@ -38,6 +38,8 @@ dependencies:
   sqflite_common_ffi: ^2.4.2+1
   path: ^1.9.1
   file_selector: ^1.0.3
+  # Kassa: UzQR to'lov QR kodi (kassa/core/widgets/uzqr_pay_dialog.dart)
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:

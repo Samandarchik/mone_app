@@ -14,6 +14,7 @@ import '../../../core/theme/ui_kit.dart';
 import '../../../core/utils/search_fold.dart';
 import '../../../core/widgets/media_image.dart';
 import '../../../core/widgets/other_payment_comment_dialog.dart';
+import '../../../core/widgets/uzqr_pay_dialog.dart';
 
 class OrderScreen extends StatefulWidget {
   final String? tableSKU;
@@ -1515,6 +1516,7 @@ class _OrderScreenState extends State<OrderScreen> {
           discount: result['discount'] ?? 0,
           payments: payments,
           paymentComment: result['comment'] as String?,
+          uzqrInvoiceId: result['uzqr_invoice_id'] as String?,
         );
       } else {
         final orderNum = _checks.isNotEmpty
@@ -1527,6 +1529,7 @@ class _OrderScreenState extends State<OrderScreen> {
             discount: result['discount'] ?? 0,
             payments: payments,
             paymentComment: result['comment'] as String?,
+            uzqrInvoiceId: result['uzqr_invoice_id'] as String?,
           );
         }
       }
@@ -1554,7 +1557,27 @@ class _OrderScreenState extends State<OrderScreen> {
   // To'lov usullari — kartochkalar to'ri (qator-qator ro'yxat emas):
   // ko'z bilan tez topiladi, barmoq bilan bosish oson.
   List<Widget> _paymentMethods(BuildContext ctx) {
+    // UzQR: QR ko'rsatiladi va to'lov tasdiqlanishi kutiladi. Invoys server
+    // chekni yopadigan kalit bilan ochiladi (stol yoki chek raqami).
+    Future<String?> payUzqr(int amount) {
+      final sku = widget.tableSKU;
+      return showUzqrPayDialog(
+        ctx,
+        amount: amount,
+        tableSku: sku,
+        orderNumber: sku != null || _checks.isEmpty
+            ? null
+            : _checks.first['order_number'] as String?,
+      );
+    }
+
     Future<void> pick(String method) async {
+      if (method == 'uzqr') {
+        final invoiceId = await payUzqr(_payableTotal());
+        if (invoiceId == null || !ctx.mounted) return;
+        Navigator.pop(ctx, {'method': 'uzqr', 'uzqr_invoice_id': invoiceId});
+        return;
+      }
       // «Boshqa» — izoh shart (summa bilan guruhga ketadi)
       if (method == 'other') {
         final comment = await askOtherPaymentComment(
@@ -1613,7 +1636,20 @@ class _OrderScreenState extends State<OrderScreen> {
         );
         if (comment == null || !ctx.mounted) return;
       }
-      Navigator.pop(ctx, {'payments': payments, 'comment': ?comment});
+      // Aralashda UzQR qismi bo'lsa — shu summaga QR, to'lov kutiladi
+      final uzqr = payments
+          .where((p) => p['method'] == 'uzqr')
+          .fold<int>(0, (s, p) => s + ((p['amount'] as num?)?.toInt() ?? 0));
+      String? invoiceId;
+      if (uzqr > 0) {
+        invoiceId = await payUzqr(uzqr);
+        if (invoiceId == null || !ctx.mounted) return;
+      }
+      Navigator.pop(ctx, {
+        'payments': payments,
+        'comment': ?comment,
+        'uzqr_invoice_id': ?invoiceId,
+      });
     }
 
     final methods = kPaymentMethods;

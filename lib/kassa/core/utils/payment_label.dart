@@ -24,6 +24,9 @@ List<(String, String, IconData, Color)> get kPaymentMethods {
   return [
     ('cash', 'Naqd', Icons.payments_rounded, AppColors.success),
     ('card', 'Karta', Icons.credit_card_rounded, AppColors.info),
+    // UzQR — dinamik QR (uzqr_pay_dialog.dart); faqat serverda sozlangan bo'lsa.
+    if (KassaOwners.instance.uzqrEnabled)
+      ('uzqr', 'UzQR', Icons.qr_code_2_rounded, _uzqrColor),
     for (var i = 0; i < owners.length; i++)
       (
         owners[i].$1,
@@ -34,6 +37,8 @@ List<(String, String, IconData, Color)> get kPaymentMethods {
     ('other', 'Boshqa', Icons.more_horiz_rounded, AppColors.textFaint),
   ];
 }
+
+const _uzqrColor = Color(0xFF0B8457);
 
 /// Asoschi profil rasmi (bo'lmasa null).
 String? ownerPhoto(String method) => KassaOwners.instance.photos[method];
@@ -50,6 +55,7 @@ Color ownerColor(String method) {
 String paymentLabel(String? value) => switch (value ?? '') {
   'cash' => 'Naqd',
   'card' => 'Karta',
+  'uzqr' => 'UzQR',
   'payme' => 'Payme',
   'click' => 'Click',
   'split' => 'Aralash',
@@ -60,9 +66,11 @@ String paymentLabel(String? value) => switch (value ?? '') {
         (v.startsWith('owner:') ? 'Asoschi #${v.substring(6)}' : v),
 };
 
-/// To'lov oynasidan olib tashlangan usullar — yangi chek bularga yopilmaydi,
+/// To'lov oynasida hozir yo'q usullar — yangi chek bularga yopilmaydi,
 /// lekin eski cheklar hisobotda ko'rinishi kerak.
 const _legacyMethods = <String, Color>{
+  // UzQR o'chirilgan kassada ham eski UzQR cheklari hisobotda qolsin.
+  'uzqr': _uzqrColor,
   'payme': Color(0xFF00C9A7),
   'click': Color(0xFF1A65EB),
 };
@@ -78,7 +86,9 @@ List<(String, String, IconData, Color)> reportPaymentMethods(
   final known = {for (final m in base) m.$1};
   final extra = <(String, String, IconData, Color)>[
     for (final e in _legacyMethods.entries)
-      if (byPayment[e.key] is num && (byPayment[e.key] as num) != 0)
+      if (!known.contains(e.key) &&
+          byPayment[e.key] is num &&
+          (byPayment[e.key] as num) != 0)
         (e.key, paymentLabel(e.key), Icons.qr_code_2_rounded, e.value),
     for (final e in byPayment.entries)
       if (!known.contains(e.key) &&

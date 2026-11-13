@@ -266,7 +266,11 @@ class _OrdersPanelState extends State<OrdersPanel> {
   /// To'lov usullari — yopilgan chekda keyin almashtirish mumkin bo'lganlari
   /// (asoschilar qilinadigan_ishlar'dan — qarang kPaymentMethods).
   static List<(String, String, IconData)> get _payMethods =>
-      [for (final m in kPaymentMethods) (m.$1, m.$2, m.$3)];
+      // UzQR'ga qo'lda o'tkazib bo'lmaydi — faqat QR orqali haqiqiy to'lov.
+      [
+        for (final m in kPaymentMethods)
+          if (m.$1 != 'uzqr') (m.$1, m.$2, m.$3),
+      ];
 
   /// «2026-08-21T18:50:12+05:00» → «18:50».
   static String _hhmm(dynamic ts) {

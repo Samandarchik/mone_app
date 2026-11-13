@@ -712,6 +712,7 @@ class ApiService {
     int discount = 0,
     List<Map<String, dynamic>>? payments,
     String? paymentComment,
+    String? uzqrInvoiceId,
   }) async {
     final res = await _dio.post(
       '/api/order/close',
@@ -721,6 +722,7 @@ class ApiService {
         'discount': discount,
         'payments': ?payments,
         'payment_comment': ?paymentComment,
+        'uzqr_invoice_id': ?uzqrInvoiceId,
       },
     );
     return res.data;
@@ -792,6 +794,61 @@ class ApiService {
     return res.data;
   }
 
+  // ===== UzQR — dinamik QR orqali to'lov (pos_backend api/uzqr.go) =====
+
+  /// QR ochadi. Javob: {invoice_id, status (1 kutilmoqda / 2 to'langan),
+  /// amount, qr_text}. Summasi boshqa to'langan invoys bo'lsa 409
+  /// `uzqr_paid_exists` {invoice_id, amount}.
+  Future<Map<String, dynamic>> uzqrCreateInvoice({
+    required int amount,
+    String? tableSku,
+    String? orderNumber,
+  }) async {
+    final res = await _dio.post(
+      '/api/uzqr/invoice',
+      data: {
+        'amount': amount,
+        'table_sku': ?tableSku,
+        'order_number': ?orderNumber,
+      },
+    );
+    return Map<String, dynamic>.from(res.data);
+  }
+
+  Future<Map<String, dynamic>> uzqrInvoiceStatus(String invoiceId) async {
+    final res = await _dio.get(
+      '/api/uzqr/invoice/status',
+      queryParameters: {'invoice_id': invoiceId},
+    );
+    return Map<String, dynamic>.from(res.data);
+  }
+
+  /// Kutishni bekor qiladi; status=2 qaytsa mijoz ulgurib to'lagan.
+  Future<Map<String, dynamic>> uzqrCancelInvoice(String invoiceId) async {
+    final res = await _dio.post(
+      '/api/uzqr/invoice/cancel',
+      data: {'invoice_id': invoiceId},
+    );
+    return Map<String, dynamic>.from(res.data);
+  }
+
+  /// Chekka yozilmagan to'lovni mijozga qaytaradi (asinxron: refund_status).
+  Future<Map<String, dynamic>> uzqrRefund(String invoiceId) async {
+    final res = await _dio.post(
+      '/api/uzqr/refund',
+      data: {'invoice_id': invoiceId},
+    );
+    return Map<String, dynamic>.from(res.data);
+  }
+
+  Future<Map<String, dynamic>> uzqrRefundStatus(String invoiceId) async {
+    final res = await _dio.get(
+      '/api/uzqr/refund/status',
+      queryParameters: {'invoice_id': invoiceId},
+    );
+    return Map<String, dynamic>.from(res.data);
+  }
+
   // Order close by order_number (Saboy/Dostafka)
   Future<Map<String, dynamic>> closeOrderByNumber(
     String orderNumber,
@@ -799,6 +856,7 @@ class ApiService {
     int discount = 0,
     List<Map<String, dynamic>>? payments,
     String? paymentComment,
+    String? uzqrInvoiceId,
   }) async {
     final res = await _dio.post(
       '/api/order/close',
@@ -808,6 +866,7 @@ class ApiService {
         'discount': discount,
         'payments': ?payments,
         'payment_comment': ?paymentComment,
+        'uzqr_invoice_id': ?uzqrInvoiceId,
       },
     );
     return res.data;

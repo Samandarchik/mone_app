@@ -25,6 +25,10 @@ class KassaOwners extends ChangeNotifier {
   /// Asoschi kaliti → profil rasmi URL (qilinadigan_ishlar /uploads).
   Map<String, String> photos = const {};
 
+  /// Kassa serverida UzQR sozlanganmi (UZQR_INN / UZQR_API_KEY) — to'lov
+  /// oynasida «UzQR» tugmasi faqat shunda chiqadi.
+  bool uzqrEnabled = false;
+
   Future<void>? _loading;
 
   Future<void> load() =>
@@ -55,6 +59,7 @@ class KassaOwners extends ChangeNotifier {
       active = list;
       photos = ph;
       labels = lbl;
+      uzqrEnabled = data['uzqr_enabled'] == true;
       notifyListeners();
     } catch (e) {
       // Server eski versiya yoki tarmoq yo'q — oldingi ro'yxat qoladi.
