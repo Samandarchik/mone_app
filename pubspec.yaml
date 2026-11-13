@@ -4,7 +4,7 @@ publish_to: 'none'
 version: 0.8.8+88
 
 environment:
-  sdk: ^3.6.1
+  sdk: ^3.9.2
 
 dependencies:
   archive: ^4.0.0
@@ -32,6 +32,12 @@ dependencies:
   easy_video_editor: ^0.1.6
   wakelock_plus: ^1.4.0
   web_socket_channel: ^3.0.3
+  # Kassa moduli (lib/kassa, mone_pos/pos_flutter dan ko'chirilgan)
+  google_fonts: ^8.0.2
+  sqflite: ^2.4.2
+  sqflite_common_ffi: ^2.4.2+1
+  path: ^1.9.1
+  file_selector: ^1.0.3
 
 dev_dependencies:
   flutter_test:

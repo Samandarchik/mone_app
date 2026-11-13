@@ -10,6 +10,7 @@ import 'package:uz_ai_dev/admin/ui/pos_orders_ui.dart';
 import 'package:uz_ai_dev/admin/ui/pos_recons_ui.dart';
 import 'package:uz_ai_dev/admin/ui/pos_sales_ui.dart';
 import 'package:uz_ai_dev/core/context_extension.dart';
+import 'package:uz_ai_dev/kassa/kassa_app.dart';
 
 // POS (Konak) markazi — admin bosh menyusini soddalash uchun POS'ga oid
 // 5 ta ekran bitta hub'ga yig'ilgan: buyurtmalar, sotuvlar, solishtirish,
@@ -41,6 +42,13 @@ class PosHubUi extends StatelessWidget {
         crossAxisSpacing: 12,
         childAspectRatio: 0.95,
         children: [
+          _hubCard(
+            context,
+            icon: Icons.point_of_sale,
+            title: 'Kassa',
+            subtitle: 'Kassa, ofitsiant, stollar, smena (filial serveri)',
+            onTap: () => openKassa(context),
+          ),
           _hubCard(
             context,
             icon: Icons.settings_input_component,
@@ -108,7 +116,8 @@ class PosHubUi extends StatelessWidget {
     required IconData icon,
     required String title,
     required String subtitle,
-    required Widget page,
+    Widget? page,
+    VoidCallback? onTap,
   }) {
     return Material(
       color: Colors.white,
@@ -118,7 +127,7 @@ class PosHubUi extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => context.push(page),
+        onTap: onTap ?? () => context.push(page!),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(

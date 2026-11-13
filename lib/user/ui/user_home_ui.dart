@@ -21,6 +21,7 @@ import 'package:uz_ai_dev/user/ui/order_ui.dart';
 import 'package:uz_ai_dev/user/ui/orders_page.dart';
 import 'package:uz_ai_dev/user/ui/product_ui.dart';
 import 'package:uz_ai_dev/user/ui/user_product_detail_ui.dart';
+import 'package:uz_ai_dev/kassa/kassa_app.dart';
 
 class UserHomeUi extends StatefulWidget {
   const UserHomeUi({super.key});
@@ -100,6 +101,11 @@ class _UserHomeUiState extends State<UserHomeUi> {
           IconButton(
               onPressed: () => logoutAndClear(context),
               icon: Icon(Icons.logout)),
+          // Kassa (lib/kassa): filial kassa serveriga PIN bilan kirish.
+          IconButton(
+              tooltip: 'Kassa',
+              onPressed: () => openKassa(context),
+              icon: const Icon(Icons.point_of_sale)),
           // Ombor 2.0 (mone_core): Hujjatlar / Qoldiq / Bozor приход —
           // perms bo'yicha; yadro sessiyasi bo'lmasa ko'rinmaydi.
           const CoreEntryMenu(),
