@@ -207,7 +207,9 @@ class _OrderScreenState extends State<OrderScreen> {
       // Yumshoq (test) rejimda qoldiqsiz mahsulot ham ko'rinadi va sotiladi.
       if (AppState().stockSoft) return true;
       final c = AppState().getStockCount(p['id']);
-      return c != null && c > 0;
+      // Qoldiq qatori yo'q (null) = kuzatilmaydi, cheksiz — server ham shunday
+      // (ReserveStock). Mone rejimida retseptli mahsulotlarda qator bo'lmaydi.
+      return c == null || c > 0;
     }).toList();
   }
 
@@ -1787,11 +1789,17 @@ class _OrderScreenState extends State<OrderScreen> {
           ),
         ),
       ),
+      // Keng ekran: CHAPDA kategoriyalar (tik ro'yxat), o'rtada menyu,
+      // O'NGDA chek paneli (savat + yuborilgan cheklar + to'lov).
       body: wide
           ? Row(
               children: [
-                SizedBox(width: panelWidth, child: _buildOrderPanel()),
+                SizedBox(
+                  width: (width * 0.14).clamp(150.0, 210.0),
+                  child: _buildCategorySidebar(_catPages),
+                ),
                 Expanded(child: _buildMenuArea(wide: true)),
+                SizedBox(width: panelWidth, child: _buildOrderPanel()),
               ],
             )
           : _buildMenuArea(wide: false),
@@ -1957,7 +1965,7 @@ class _OrderScreenState extends State<OrderScreen> {
         _buildSearchField(),
         // Qidiruv yozilganda kategoriya tanlagich kerak emas —
         // natija butun menyu bo'yicha chiqadi
-        if (!searching) _buildCategoryPicker(pages),
+        if (!searching && !wide) _buildCategoryPicker(pages),
         Expanded(
           child: searching
               ? _buildProductGrid(
@@ -2084,17 +2092,20 @@ class _OrderScreenState extends State<OrderScreen> {
             // Ustun kengligi ekranga moslashadi: telefonda 3 ta, planshetda
             // kartochka kattaroq (barmoq bilan urish qulay bo'lsin).
             // `scale` — kassir sozlamadan tanlagan masshtab (UiPrefs).
+            // Keng ekranda kartochka ixcham (menyu katta — ko'proq sig'sin).
             final target =
                 (c.maxWidth >= 1000
-                    ? 168.0
+                    ? 128.0
+                    : wide
+                    ? 118.0
                     : c.maxWidth >= AppBreakpoints.phone
                     ? 152.0
                     : c.maxWidth < 360
                     ? 104.0
                     : 118.0) *
                 scale;
-            final gap = c.maxWidth >= AppBreakpoints.phone ? 10.0 : 8.0;
-            final pad = wide ? 12.0 : ctx.gutter;
+            final gap = wide ? 6.0 : (c.maxWidth >= AppBreakpoints.phone ? 10.0 : 8.0);
+            final pad = wide ? 8.0 : ctx.gutter;
             final cols = ((c.maxWidth - pad * 2 + gap) / (target + gap))
                 .floor()
                 .clamp(2, scale < 0.99 ? 12 : 8);
@@ -2103,7 +2114,9 @@ class _OrderScreenState extends State<OrderScreen> {
             // balandlikdagi matn bloki (nom 2 qator + narx). Matn bloki
             // qat'iy bo'lgani uchun bir qatordagi hamma kartochkada rasm
             // bir xil o'lchamda chiqadi.
-            final tileH = tileW * 0.60 + (tileW < 120 ? 56 : 64);
+            final tileH = wide
+                ? tileW * 0.42 + 54
+                : tileW * 0.60 + (tileW < 120 ? 56 : 64);
 
             return GridView.builder(
               padding: EdgeInsets.fromLTRB(pad, 6, pad, wide ? 16 : 100),
@@ -2131,7 +2144,7 @@ class _OrderScreenState extends State<OrderScreen> {
                   soldOut: soldOut,
                   inactive: inactive,
                   inCart: inCart,
-                  compact: tileW < 120,
+                  compact: wide || tileW < 120,
                   buildImage: () =>
                       _productMedia(p, soldOut, stockCount, inactive: inactive),
                   // Nofaolga bosilsa _addToCart tushuntirish snackbar'ini
@@ -2160,6 +2173,74 @@ class _OrderScreenState extends State<OrderScreen> {
       // to'g'ridan-to'g'ri sakraydi
       _catPageController.jumpToPage(i);
     }
+  }
+
+  /// Keng ekran: CHAP tomondagi tik kategoriya ro'yxati (bo'sh kategoriya
+  /// ko'rsatilmaydi). Tanlash PageView sahifasini almashtiradi.
+  Widget _buildCategorySidebar(List<List<dynamic>> pages) {
+    final count = _categories.length;
+    int countAt(int i) => i >= 0 && i < pages.length ? pages[i].length : 0;
+    final visible = [for (var i = 0; i < count; i++) if (countAt(i) > 0) i];
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(right: BorderSide(color: AppColors.border)),
+      ),
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+        itemCount: visible.length,
+        itemBuilder: (ctx, k) {
+          final i = visible[k];
+          final sel = _selectedCatIndex == i && _search.isEmpty;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 3),
+            child: Material(
+              color: sel ? AppColors.primary : Colors.transparent,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                onTap: () {
+                  if (_search.isNotEmpty) {
+                    _searchCtrl.clear();
+                    _search = '';
+                  }
+                  _selectCategory(i, count);
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _catName(i),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            height: 1.15,
+                            fontWeight: sel ? FontWeight.w800 : FontWeight.w600,
+                            color: sel ? Colors.white : AppColors.text,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${countAt(i)}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: sel ? Colors.white70 : AppColors.textFaint,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   /// Kategoriya tanlagich — bitta qatorda, gorizontal aylantiriladi
@@ -2199,7 +2280,7 @@ class _OrderScreenState extends State<OrderScreen> {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
-        border: Border(right: BorderSide(color: AppColors.border)),
+        border: Border(left: BorderSide(color: AppColors.border)),
       ),
       child: ValueListenableBuilder<int>(
         valueListenable: _cartVersion,
