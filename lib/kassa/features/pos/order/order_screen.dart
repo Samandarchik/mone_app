@@ -8,6 +8,7 @@ import '../../../core/services/local_db.dart';
 import '../../../core/services/app_state.dart';
 import '../../../core/services/ui_prefs.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/services/kassa_owners.dart';
 import '../../../core/utils/payment_label.dart';
 import '../../../core/theme/ui_kit.dart';
 import '../../../core/utils/search_fold.dart';
@@ -1591,14 +1592,20 @@ class _OrderScreenState extends State<OrderScreen> {
       Navigator.pop(ctx, {'payments': payments, 'comment': ?comment});
     }
 
+    final methods = kPaymentMethods;
+    final owners = [
+      for (final m in methods)
+        if (KassaOwners.isOwnerMethod(m.$1)) m,
+    ];
     final cards = <Widget>[
-      for (final m in kPaymentMethods)
-        _PayMethodCard(
-          label: m.$2,
-          icon: m.$3,
-          color: m.$4,
-          onTap: () => pick(m.$1),
-        ),
+      for (final m in methods)
+        if (!KassaOwners.isOwnerMethod(m.$1))
+          _PayMethodCard(
+            label: m.$2,
+            icon: m.$3,
+            color: m.$4,
+            onTap: () => pick(m.$1),
+          ),
       // Aralash to'lov — bitta chekni 2-3 usul bilan yopish
       _PayMethodCard(
         label: 'Aralash',
@@ -1624,6 +1631,43 @@ class _OrderScreenState extends State<OrderScreen> {
           );
         },
       ),
+      // Asoschilar (qilinadigan_ishlar «Получатель») — katta, rasmi bilan
+      if (owners.isNotEmpty) ...[
+        const SizedBox(height: 14),
+        const Text(
+          'ASOSCHILAR',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.6,
+            color: AppColors.textMuted,
+          ),
+        ),
+        const SizedBox(height: 8),
+        LayoutBuilder(
+          builder: (context, c) {
+            const gap = 8.0;
+            final cols = owners.length == 1 ? 1 : (c.maxWidth >= 480 ? 3 : 2);
+            final w = (c.maxWidth - gap * (cols - 1)) / cols;
+            return Wrap(
+              spacing: gap,
+              runSpacing: gap,
+              children: [
+                for (final m in owners)
+                  SizedBox(
+                    width: w,
+                    child: _OwnerPayCard(
+                      name: m.$2,
+                      photoUrl: ownerPhoto(m.$1),
+                      color: m.$4,
+                      onTap: () => pick(m.$1),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
     ];
   }
 
@@ -2104,7 +2148,9 @@ class _OrderScreenState extends State<OrderScreen> {
                     ? 104.0
                     : 118.0) *
                 scale;
-            final gap = wide ? 6.0 : (c.maxWidth >= AppBreakpoints.phone ? 10.0 : 8.0);
+            final gap = wide
+                ? 6.0
+                : (c.maxWidth >= AppBreakpoints.phone ? 10.0 : 8.0);
             final pad = wide ? 8.0 : ctx.gutter;
             final cols = ((c.maxWidth - pad * 2 + gap) / (target + gap))
                 .floor()
@@ -2237,7 +2283,10 @@ class _OrderScreenState extends State<OrderScreen> {
                   _selectCategory(i, count);
                 },
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 15,
+                  ),
                   child: Row(
                     children: [
                       Expanded(
@@ -4928,6 +4977,104 @@ class _PayMethodCard extends StatelessWidget {
                   height: 1.15,
                   fontWeight: FontWeight.w700,
                   color: highlighted ? AppColors.primary : AppColors.text,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Asoschi to'lov kartasi — katta profil rasmi + ism (rasm bo'lmasa yoki
+/// yuklanmasa bosh harflar).
+class _OwnerPayCard extends StatelessWidget {
+  final String name;
+  final String? photoUrl;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _OwnerPayCard({
+    required this.name,
+    required this.photoUrl,
+    required this.color,
+    required this.onTap,
+  });
+
+  String get _initials {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    final a = parts.isNotEmpty && parts[0].isNotEmpty ? parts[0][0] : '';
+    final b = parts.length > 1 && parts[1].isNotEmpty ? parts[1][0] : '';
+    return (a + b).toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(AppRadius.md);
+    const size = 96.0;
+    final fallback = Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      color: color.withValues(alpha: 0.14),
+      child: Text(
+        _initials,
+        style: TextStyle(
+          fontSize: 32,
+          fontWeight: FontWeight.w800,
+          color: color,
+        ),
+      ),
+    );
+    return Material(
+      color: AppColors.surface,
+      borderRadius: radius,
+      child: InkWell(
+        borderRadius: radius,
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(8, 14, 8, 12),
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: size,
+                height: size,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: color, width: 3),
+                ),
+                child: ClipOval(
+                  child: (photoUrl == null || photoUrl!.isEmpty)
+                      ? fallback
+                      : Image.network(
+                          photoUrl!,
+                          width: size,
+                          height: size,
+                          fit: BoxFit.cover,
+                          cacheWidth: 300,
+                          errorBuilder: (_, _, _) => fallback,
+                          loadingBuilder: (_, child, p) =>
+                              p == null ? child : fallback,
+                        ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                name,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 14,
+                  height: 1.2,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.text,
                 ),
               ),
             ],

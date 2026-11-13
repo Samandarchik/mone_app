@@ -37,6 +37,9 @@ List<(String, String, IconData, Color)> get kPaymentMethods {
   ];
 }
 
+/// Asoschi profil rasmi (bo'lmasa null).
+String? ownerPhoto(String method) => KassaOwners.instance.photos[method];
+
 /// Asoschi kaliti uchun rang (hisobot qatorlari).
 Color ownerColor(String method) {
   final i = KassaOwners.instance.active.indexWhere((o) => o.$1 == method);

@@ -22,6 +22,9 @@ class KassaOwners extends ChangeNotifier {
     'bobur': 'Bobur aka',
   };
 
+  /// Asoschi kaliti → profil rasmi URL (qilinadigan_ishlar /uploads).
+  Map<String, String> photos = const {};
+
   Future<void>? _loading;
 
   Future<void> load() => _loading ??= _load().whenComplete(() => _loading = null);
@@ -30,12 +33,15 @@ class KassaOwners extends ChangeNotifier {
     try {
       final data = await ApiService().getKassaOwners();
       final list = <(String, String)>[];
+      final ph = <String, String>{};
       for (final o in (data['owners'] as List? ?? const [])) {
         if (o is! Map) continue;
         final method = o['method']?.toString() ?? '';
         final name = o['name']?.toString() ?? '';
         if (method.startsWith('owner:') && name.isNotEmpty) {
           list.add((method, name));
+          final url = o['photo_url']?.toString() ?? '';
+          if (url.isNotEmpty) ph[method] = url;
         }
       }
       final lbl = <String, String>{...labels};
@@ -46,6 +52,7 @@ class KassaOwners extends ChangeNotifier {
         });
       }
       active = list;
+      photos = ph;
       labels = lbl;
       notifyListeners();
     } catch (e) {
