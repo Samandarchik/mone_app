@@ -1652,6 +1652,13 @@ class ApiService {
     return res.data is Map ? Map<String, dynamic>.from(res.data) : const {};
   }
 
+  /// Asoschiga so'rovlar holati (so'nggi 3 kun).
+  Future<List<Map<String, dynamic>>> getOwnerRequests() async {
+    final res = await _dio.get('/api/kassa/owner-requests');
+    final list = res.data is List ? res.data as List : const [];
+    return [for (final e in list) if (e is Map) Map<String, dynamic>.from(e)];
+  }
+
   // ===== Qoldiq nazorati rejimi: strict (qat'iy) / soft (test, minusga ruxsat) =====
 
   Future<String> getStockMode() async {

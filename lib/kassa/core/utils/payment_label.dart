@@ -24,8 +24,6 @@ List<(String, String, IconData, Color)> get kPaymentMethods {
   return [
     ('cash', 'Naqd', Icons.payments_rounded, AppColors.success),
     ('card', 'Karta', Icons.credit_card_rounded, AppColors.info),
-    ('payme', 'Payme', Icons.qr_code_2_rounded, const Color(0xFF00C9A7)),
-    ('click', 'Click', Icons.qr_code_2_rounded, const Color(0xFF1A65EB)),
     for (var i = 0; i < owners.length; i++)
       (
         owners[i].$1,
@@ -43,7 +41,9 @@ String? ownerPhoto(String method) => KassaOwners.instance.photos[method];
 /// Asoschi kaliti uchun rang (hisobot qatorlari).
 Color ownerColor(String method) {
   final i = KassaOwners.instance.active.indexWhere((o) => o.$1 == method);
-  return i >= 0 ? _ownerColors[i % _ownerColors.length] : const Color(0xFF7048E8);
+  return i >= 0
+      ? _ownerColors[i % _ownerColors.length]
+      : const Color(0xFF7048E8);
 }
 
 /// Server to'lov usuli kaliti (cash/card/…) → ekrandagi o'zbekcha nom.
@@ -55,25 +55,82 @@ String paymentLabel(String? value) => switch (value ?? '') {
   'split' => 'Aralash',
   'other' => 'Boshqa',
   '' => 'Boshqa',
-  final v => KassaOwners.instance.labels[v] ??
-      (v.startsWith('owner:') ? 'Asoschi #${v.substring(6)}' : v),
+  final v =>
+    KassaOwners.instance.labels[v] ??
+        (v.startsWith('owner:') ? 'Asoschi #${v.substring(6)}' : v),
+};
+
+/// To'lov oynasidan olib tashlangan usullar — yangi chek bularga yopilmaydi,
+/// lekin eski cheklar hisobotda ko'rinishi kerak.
+const _legacyMethods = <String, Color>{
+  'payme': Color(0xFF00C9A7),
+  'click': Color(0xFF1A65EB),
 };
 
 /// Hisobot qatorlari: `kPaymentMethods` + hisobotda summasi bor, lekin hozir
-/// faol bo'lmagan asoschi kalitlari (eski nilufar/bobur, ro'yxatdan chiqqan
-/// `owner:<id>`) — jami bilan qatorlar yig'indisi mos tushsin.
+/// tanlab bo'lmaydigan kalitlar (olib tashlangan Payme/Click, eski
+/// nilufar/bobur, ro'yxatdan chiqqan `owner:<id>`) — jami bilan qatorlar
+/// yig'indisi mos tushsin.
 List<(String, String, IconData, Color)> reportPaymentMethods(
-    Map<String, dynamic> byPayment) {
+  Map<String, dynamic> byPayment,
+) {
   final base = kPaymentMethods;
   final known = {for (final m in base) m.$1};
   final extra = <(String, String, IconData, Color)>[
+    for (final e in _legacyMethods.entries)
+      if (byPayment[e.key] is num && (byPayment[e.key] as num) != 0)
+        (e.key, paymentLabel(e.key), Icons.qr_code_2_rounded, e.value),
     for (final e in byPayment.entries)
       if (!known.contains(e.key) &&
           KassaOwners.isOwnerMethod(e.key) &&
           e.value is num &&
           (e.value as num) != 0)
         (e.key, paymentLabel(e.key), Icons.person_rounded, ownerColor(e.key)),
-  ]..sort((a, b) => a.$1.compareTo(b.$1));
+  ];
   final i = base.indexWhere((m) => m.$1 == 'other');
   return [...base.sublist(0, i), ...extra, ...base.sublist(i)];
+}
+
+/// Asoschiga so'rov holati → belgi (matn, rang, ikonka). `cancelled` — null.
+(String, Color, IconData)? ownerRequestBadge(Map<String, dynamic> r) {
+  final name = (r['name']?.toString() ?? '').split(' ').first;
+  final who = name.isEmpty ? '' : '$name: ';
+  return switch (r['status']?.toString() ?? '') {
+    'queued' => (
+      '${who}yuborilmoqda',
+      AppColors.textMuted,
+      Icons.schedule_send_rounded,
+    ),
+    'pending' => (
+      '${who}kutilmoqda',
+      AppColors.warning,
+      Icons.hourglass_top_rounded,
+    ),
+    'accepted' => (
+      '${who}qabul qildi',
+      AppColors.success,
+      Icons.check_circle_rounded,
+    ),
+    'rejected' => ('${who}rad etdi', AppColors.danger, Icons.cancel_rounded),
+    'day_closed' => (
+      '${who}kun yopildi',
+      const Color(0xFF7048E8),
+      Icons.lock_clock_rounded,
+    ),
+    'error' => (
+      '${who}yuborilmadi',
+      AppColors.danger,
+      Icons.error_outline_rounded,
+    ),
+    _ => null,
+  };
+}
+
+/// Belgi ustiga bosilganda/tooltip — xato yoki rad sababi.
+String ownerRequestTooltip(Map<String, dynamic> r) {
+  final err = r['error']?.toString() ?? '';
+  final reason = r['reject_reason']?.toString() ?? '';
+  if (err.isNotEmpty) return err;
+  if (reason.isNotEmpty) return 'Sabab: $reason';
+  return '';
 }

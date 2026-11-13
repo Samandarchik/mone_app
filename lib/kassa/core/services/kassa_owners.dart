@@ -27,7 +27,8 @@ class KassaOwners extends ChangeNotifier {
 
   Future<void>? _loading;
 
-  Future<void> load() => _loading ??= _load().whenComplete(() => _loading = null);
+  Future<void> load() =>
+      _loading ??= _load().whenComplete(() => _loading = null);
 
   Future<void> _load() async {
     try {
@@ -63,4 +64,35 @@ class KassaOwners extends ChangeNotifier {
 
   static bool isOwnerMethod(String m) =>
       m.startsWith('owner:') || m == 'nilufar' || m == 'bobur';
+}
+
+/// Asoschiga so'rovlar holati (chek yonidagi belgi) — kassa serveri
+/// `GET /api/kassa/owner-requests`; WSS `owner_requests:changed` da qayta
+/// yuklanadi. Kalit — chek raqami.
+class OwnerRequests extends ChangeNotifier {
+  OwnerRequests._();
+  static final OwnerRequests instance = OwnerRequests._();
+
+  Map<String, List<Map<String, dynamic>>> byOrder = const {};
+
+  Future<void>? _loading;
+
+  Future<void> load() =>
+      _loading ??= _load().whenComplete(() => _loading = null);
+
+  Future<void> _load() async {
+    try {
+      final list = await ApiService().getOwnerRequests();
+      final m = <String, List<Map<String, dynamic>>>{};
+      for (final r in list) {
+        final n = r['order_number']?.toString() ?? '';
+        if (n.isEmpty || r['status'] == 'cancelled') continue;
+        (m[n] ??= []).add(r);
+      }
+      byOrder = m;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('OwnerRequests: yuklanmadi: $e');
+    }
+  }
 }

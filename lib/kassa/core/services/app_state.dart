@@ -328,6 +328,9 @@ class AppState extends ChangeNotifier {
       // ===== Asoschilar ro'yxati (qilinadigan_ishlar → Mone → kassa) =====
       case 'owners:changed':
         KassaOwners.instance.load();
+    OwnerRequests.instance.load();
+      case 'owner_requests:changed':
+        OwnerRequests.instance.load();
 
       // ===== Zonalar/stollar (sync yoki admin o'zgartirgan) =====
       case 'zones:updated':

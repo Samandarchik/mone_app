@@ -8,6 +8,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/ui_kit.dart';
 import '../../../core/utils/business_day.dart';
 import '../../../core/utils/order_number.dart';
+import '../../../core/services/kassa_owners.dart';
 import '../../../core/utils/payment_label.dart';
 import '../../../core/utils/search_fold.dart';
 import '../../../core/widgets/other_payment_comment_dialog.dart';
@@ -65,9 +66,15 @@ class _OrdersPanelState extends State<OrdersPanel> {
     return !t.isBefore(_windowStart) && t.isBefore(_windowEnd);
   }
 
+  void _onOwnerRequests() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
+    OwnerRequests.instance.addListener(_onOwnerRequests);
+    OwnerRequests.instance.load();
     _load();
     _wssSub = WssService().eventStream.listen((e) {
       final ev = e['event'];
@@ -82,6 +89,7 @@ class _OrdersPanelState extends State<OrdersPanel> {
 
   @override
   void dispose() {
+    OwnerRequests.instance.removeListener(_onOwnerRequests);
     _wssSub?.cancel();
     super.dispose();
   }
@@ -425,6 +433,19 @@ class _OrdersPanelState extends State<OrdersPanel> {
                               icon: Icons.payment_rounded,
                               label: _payLabel(o['payment_method']?.toString()),
                             ),
+                          for (final r in OwnerRequests.instance
+                                  .byOrder[o['order_number']?.toString()] ??
+                              const <Map<String, dynamic>>[])
+                            if (ownerRequestBadge(r) case final b?)
+                              KMetaChip(
+                                icon: b.$3,
+                                color: b.$2,
+                                label: [
+                                  b.$1,
+                                  if (ownerRequestTooltip(r).isNotEmpty)
+                                    ownerRequestTooltip(r),
+                                ].join(' — '),
+                              ),
                           if (o['table_sku'] != null)
                             KMetaChip(
                               icon: Icons.table_restaurant_rounded,
@@ -574,8 +595,8 @@ class _OrdersPanelState extends State<OrdersPanel> {
                     ),
                     if (_canRevert(o)) ...[
                       // To'lov usulini keyin almashtirish: kassir chekni
-                      // adashib Click deb yopgan bo'lsa, shu yerdan Naqd/
-                      // Payme'ga o'tkazadi. Shartlari revert bilan bir xil —
+                      // adashib Karta deb yopgan bo'lsa, shu yerdan Naqd/
+                      // Boshqa'ga o'tkazadi. Shartlari revert bilan bir xil —
                       // faqat ochiq smenaning cheki (yopiq smena hisoboti
                       // muzlatilgan).
                       const SizedBox(height: 14),
@@ -834,10 +855,12 @@ class _OrdersPanelState extends State<OrdersPanel> {
     if (ok != true || !mounted) return;
     // «Boshqa» ga o'tkazilsa — izoh shart (summa bilan guruhga ketadi)
     String? comment;
-    if (method == 'other') {
+    final toOwner = KassaOwners.isOwnerMethod(method);
+    if (method == 'other' || toOwner) {
       comment = await askOtherPaymentComment(
         context,
         amount: (o['total'] as num?)?.toInt() ?? 0,
+        ownerName: toOwner ? paymentLabel(method) : null,
       );
       if (comment == null || !mounted) return;
     }
@@ -1100,6 +1123,20 @@ class _OrdersPanelState extends State<OrdersPanel> {
                                 color: AppColors.textMuted,
                                 icon: Icons.payments_rounded,
                               ),
+                            // Asoschiga so'rov holati (qilinadigan_ishlar «Бепул»)
+                            if (!isCancelled)
+                              for (final r in OwnerRequests.instance
+                                      .byOrder[o['order_number']?.toString()] ??
+                                  const <Map<String, dynamic>>[])
+                                if (ownerRequestBadge(r) case final b?)
+                                  Tooltip(
+                                    message: ownerRequestTooltip(r),
+                                    child: StatusBadge(
+                                      label: b.$1,
+                                      color: b.$2,
+                                      icon: b.$3,
+                                    ),
+                                  ),
                           ],
                         ),
                         const SizedBox(height: 3),

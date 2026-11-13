@@ -1565,6 +1565,18 @@ class _OrderScreenState extends State<OrderScreen> {
         Navigator.pop(ctx, {'method': 'other', 'comment': comment});
         return;
       }
+      // Asoschi — izoh shart: qilinadigan_ishlar'da unga «Бепул» so'rovi
+      // bo'lib (rasm/golos o'rniga) boradi.
+      if (KassaOwners.isOwnerMethod(method)) {
+        final comment = await askOtherPaymentComment(
+          ctx,
+          amount: _payableTotal(),
+          ownerName: paymentLabel(method),
+        );
+        if (comment == null || !ctx.mounted) return;
+        Navigator.pop(ctx, {'method': method, 'comment': comment});
+        return;
+      }
       Navigator.pop(ctx, {'method': method});
     }
 
@@ -1584,9 +1596,21 @@ class _OrderScreenState extends State<OrderScreen> {
       final other = payments
           .where((p) => p['method'] == 'other')
           .fold<int>(0, (s, p) => s + ((p['amount'] as num?)?.toInt() ?? 0));
+      // Asoschi qismi bo'lsa ham izoh shart (asoschiga so'rov bilan boradi).
+      final ownerParts = payments
+          .where((p) => KassaOwners.isOwnerMethod('${p['method']}'))
+          .toList();
+      final ownerSum = ownerParts.fold<int>(
+          0, (s, p) => s + ((p['amount'] as num?)?.toInt() ?? 0));
       String? comment;
-      if (other > 0) {
-        comment = await askOtherPaymentComment(ctx, amount: other);
+      if (other > 0 || ownerSum > 0) {
+        comment = await askOtherPaymentComment(
+          ctx,
+          amount: other + ownerSum,
+          ownerName: ownerSum > 0 && other == 0
+              ? ownerParts.map((p) => paymentLabel('${p['method']}')).join(', ')
+              : null,
+        );
         if (comment == null || !ctx.mounted) return;
       }
       Navigator.pop(ctx, {'payments': payments, 'comment': ?comment});
